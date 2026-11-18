@@ -16,6 +16,7 @@ import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -70,6 +71,7 @@ class MainActivity : AppCompatActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private var lastDismissedClipUrl: String? = null
+    private var hasCheckedUpdateThisSession = false
 
     companion object {
         private const val TAG = "MainActivity"
@@ -252,6 +254,117 @@ class MainActivity : AppCompatActivity() {
 
         // 4. Always re-read actual hardware/OS state on resume; never infer
         updateServiceState()
+
+        // 5. Silent background auto-update check (once per app session)
+        checkSilentAutoUpdate()
+    }
+
+    private fun checkSilentAutoUpdate() {
+        if (hasCheckedUpdateThisSession) return
+        hasCheckedUpdateThisSession = true
+
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val info = com.instadown.assist.util.AppUpdateManager.checkForUpdates(this@MainActivity)
+                if (info != null && info.isAvailable) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        showUpdateAvailablePrompt(info)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "Silent update check notice: ${e.message}")
+            }
+        }
+    }
+
+    private fun showUpdateAvailablePrompt(info: com.instadown.assist.util.AppUpdateInfo) {
+        if (isFinishing || isDestroyed) return
+        val dialogView = layoutInflater.inflate(R.layout.dialog_in_app_update, null)
+        val tvTitle = dialogView.findViewById<TextView>(R.id.tvUpdateDialogTitle)
+        val tvSubtitle = dialogView.findViewById<TextView>(R.id.tvUpdateDialogSubtitle)
+        val pbChecking = dialogView.findViewById<ProgressBar>(R.id.pbUpdateChecking)
+        val layoutReleaseNotes = dialogView.findViewById<View>(R.id.layoutReleaseNotes)
+        val tvReleaseVersion = dialogView.findViewById<TextView>(R.id.tvReleaseVersion)
+        val tvReleaseSize = dialogView.findViewById<TextView>(R.id.tvReleaseSize)
+        val tvReleaseNotes = dialogView.findViewById<TextView>(R.id.tvReleaseNotes)
+        val layoutProgress = dialogView.findViewById<View>(R.id.layoutUpdateProgress)
+        val tvProgressStatus = dialogView.findViewById<TextView>(R.id.tvDownloadProgressStatus)
+        val tvUpdatePercent = dialogView.findViewById<TextView>(R.id.tvUpdatePercent)
+        val pbDownload = dialogView.findViewById<ProgressBar>(R.id.pbUpdateDownload)
+        val btnNegative = dialogView.findViewById<Button>(R.id.btnUpdateNegative)
+        val btnPositive = dialogView.findViewById<Button>(R.id.btnUpdatePositive)
+
+        pbChecking.visibility = View.GONE
+        tvTitle.text = "Update Available! 🚀"
+        tvSubtitle.text = "A new version of InstaSave is ready to install."
+        layoutReleaseNotes.visibility = View.VISIBLE
+        tvReleaseVersion.text = "Version v${info.versionName}"
+        val sizeMb = if (info.fileSizeBytes > 0) String.format(java.util.Locale.US, "%.1f MB", info.fileSizeBytes / (1024.0 * 1024.0)) else ""
+        tvReleaseSize.text = sizeMb
+        tvReleaseNotes.text = info.releaseNotes
+
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(true)
+            .create()
+
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        dialog.show()
+
+        btnNegative.text = "Later"
+        btnNegative.setOnClickListener { dialog.dismiss() }
+
+        btnPositive.text = "Update Now"
+        btnPositive.setOnClickListener {
+            btnPositive.isEnabled = false
+            btnPositive.text = "Downloading..."
+            btnNegative.isEnabled = false
+            dialog.setCancelable(false)
+            layoutProgress.visibility = View.VISIBLE
+
+            lifecycleScope.launch {
+                val apk = com.instadown.assist.util.AppUpdateManager.downloadUpdate(
+                    this@MainActivity,
+                    info
+                ) { percent, bytesRead, totalBytes ->
+                    runOnUiThread {
+                        pbDownload.progress = percent
+                        tvUpdatePercent.text = "$percent%"
+                        val readMb = String.format(java.util.Locale.US, "%.1f", bytesRead / (1024.0 * 1024.0))
+                        val totMb = String.format(java.util.Locale.US, "%.1f MB", totalBytes / (1024.0 * 1024.0))
+                        tvProgressStatus.text = "Downloading... ($readMb of $totMb)"
+                    }
+                }
+
+                if (apk != null && apk.exists()) {
+                    tvTitle.text = "Ready to Install"
+                    tvSubtitle.text = "Opening installer..."
+                    tvProgressStatus.text = "Download complete"
+                    pbDownload.progress = 100
+                    tvUpdatePercent.text = "100%"
+
+                    btnPositive.isEnabled = true
+                    btnPositive.text = "Install Now"
+                    btnNegative.isEnabled = true
+                    btnNegative.text = "Dismiss"
+                    dialog.setCancelable(true)
+
+                    com.instadown.assist.util.AppUpdateManager.promptInstall(this@MainActivity, apk)
+
+                    btnPositive.setOnClickListener {
+                        com.instadown.assist.util.AppUpdateManager.promptInstall(this@MainActivity, apk)
+                    }
+                } else {
+                    tvTitle.text = "Download Failed"
+                    tvSubtitle.text = "Please check your network and try again."
+                    btnPositive.isEnabled = true
+                    btnPositive.text = "Retry"
+                    btnNegative.isEnabled = true
+                    btnNegative.text = "Cancel"
+                    dialog.setCancelable(true)
+                }
+            }
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

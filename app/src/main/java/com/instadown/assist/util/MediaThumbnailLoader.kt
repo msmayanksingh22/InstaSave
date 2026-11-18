@@ -222,6 +222,8 @@ object MediaThumbnailLoader {
         imageView: ImageView,
         isVideo: Boolean = false,
         placeholderResId: Int = android.R.drawable.ic_menu_gallery,
+        targetWidth: Int = 300,
+        targetHeight: Int = 300,
         scope: CoroutineScope
     ) {
         imageView.scaleType = ImageView.ScaleType.CENTER_CROP
@@ -231,7 +233,7 @@ object MediaThumbnailLoader {
             return
         }
 
-        val cacheKey = "${uriString}_400x400"
+        val cacheKey = "${uriString}_${targetWidth}x${targetHeight}"
         synchronized(memoryCache) {
             val cached = memoryCache.get(cacheKey)
             if (cached != null && !cached.isRecycled) {
@@ -245,7 +247,7 @@ object MediaThumbnailLoader {
         imageView.setImageResource(placeholderResId)
 
         scope.launch {
-            val bmp = loadThumbnail(context, uriString, isVideo, 400, 400)
+            val bmp = loadThumbnail(context, uriString, isVideo, targetWidth, targetHeight)
             if (imageView.tag == uriString && bmp != null) {
                 imageView.setImageBitmap(bmp)
             }

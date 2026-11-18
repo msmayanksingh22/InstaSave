@@ -348,9 +348,57 @@ class HeadlessWebBridgeResolver(
             (function() {
                 console.log('InstaSave bridge injection started');
                 
-                function tryExtract() {
+                function tryExtractFromVue() {
+                    try {
+                        var targets = document.querySelectorAll('.output-list, .output-list__list, #app, div[class*="output"]');
+                        for (var i = 0; i < targets.length; i++) {
+                            var comp = targets[i].__vueParentComponent;
+                            while (comp) {
+                                var state = comp.ctx || comp.setupState || comp.data;
+                                if (state && state.data && Array.isArray(state.data) && state.data.length > 0) {
+                                    var vueItems = [];
+                                    for (var j = 0; j < state.data.length; j++) {
+                                        var d = state.data[j];
+                                        var isVid = !!(d.downloadableVideoUrl || (d.video_versions && d.video_versions.length > 0) || d.type === 'video');
+                                        var vUrl = d.downloadableVideoUrl || (d.video_versions && d.video_versions[0] && d.video_versions[0].url);
+                                        var iUrl = d.downloadableImageUrl || d.previewImageUrl || (d.url && d.url[0] && d.url[0].url);
+                                        var dlUrl = (isVid && vUrl) ? vUrl : (iUrl || vUrl);
+                                        if (dlUrl) {
+                                            vueItems.push({
+                                                downloadUrl: dlUrl,
+                                                thumbUrl: d.previewImageUrl || iUrl || '',
+                                                isVideo: isVid
+                                            });
+                                        }
+                                    }
+                                    if (vueItems.length > 0) {
+                                        return vueItems;
+                                    }
+                                }
+                                comp = comp.parent;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Vue extraction warning:', e);
+                    }
+                    return null;
+                }
+                
+                function expandDomItems() {
+                    try {
+                        var lists = document.querySelectorAll('.output-list__list, .output-list');
+                        for (var i = 0; i < lists.length; i++) {
+                            var el = lists[i];
+                            if (el && el.__vueParentComponent && el.__vueParentComponent.ctx) {
+                                el.__vueParentComponent.ctx.visibleDataCount = 999;
+                            }
+                        }
+                    } catch (_) {}
+                    window.scrollTo(0, document.body.scrollHeight || 99999);
+                }
+                
+                function tryExtractDom() {
                     var results = [];
-                    // 1. Try structured items
                     var items = document.querySelectorAll('.output-list__item, .media-content, .search-result__item, .download-items');
                     if (items.length > 0) {
                         items.forEach(function(item) {
@@ -370,7 +418,6 @@ class HeadlessWebBridgeResolver(
                         });
                     }
                     
-                    // 2. Fallback to any download link
                     if (results.length === 0) {
                         var btns = document.querySelectorAll('a.button--download, a[href*="media.fastdl.app/get"]');
                         btns.forEach(function(btn) {
@@ -397,7 +444,7 @@ class HeadlessWebBridgeResolver(
                     return null;
                 }
 
-                // Input URL into search field
+                // Input URL into search field and trigger search immediately
                 var input = document.querySelector('.search-form__input, input[name="url"], input[type="text"]');
                 var btn = document.querySelector('.search-form__button, button[type="submit"]');
                 if (input && btn) {
@@ -407,21 +454,46 @@ class HeadlessWebBridgeResolver(
                     setTimeout(function() {
                         btn.click();
                         console.log('Search button clicked');
-                    }, 400);
+                    }, 50);
                 } else {
                     console.log('Search input or button not found');
                 }
 
                 var attempts = 0;
+                var lastCount = 0;
+                var stableTicks = 0;
                 var pollInterval = setInterval(function() {
                     attempts++;
-                    var media = tryExtract();
-                    if (media.length > 0) {
+                    expandDomItems();
+                    
+                    // 1. Check direct Vue state first (contains full carousel immediately!)
+                    var vueMedia = tryExtractFromVue();
+                    if (vueMedia && vueMedia.length > 0) {
                         clearInterval(pollInterval);
-                        console.log('Media found: ' + media.length + ' items');
-                        AndroidBridge.onMediaFound(JSON.stringify(media));
+                        console.log('Media extracted via Vue state: ' + vueMedia.length + ' items');
+                        AndroidBridge.onMediaFound(JSON.stringify(vueMedia));
                         return;
                     }
+                    
+                    // 2. Check DOM extraction
+                    var media = tryExtractDom();
+                    if (media.length > 0) {
+                        if (media.length === lastCount) {
+                            stableTicks++;
+                        } else {
+                            stableTicks = 0;
+                            lastCount = media.length;
+                        }
+                        
+                        // Single items return at once; multi-item carousels wait until stabilized
+                        if (media.length === 1 || stableTicks >= 3) {
+                            clearInterval(pollInterval);
+                            console.log('Media extracted via DOM: ' + media.length + ' items');
+                            AndroidBridge.onMediaFound(JSON.stringify(media));
+                            return;
+                        }
+                    }
+                    
                     var err = checkError();
                     if (err) {
                         clearInterval(pollInterval);
@@ -429,11 +501,16 @@ class HeadlessWebBridgeResolver(
                         AndroidBridge.onError(err);
                         return;
                     }
-                    if (attempts >= 36) { // ~18 seconds
+                    
+                    if (attempts >= 60) { // ~12 seconds
                         clearInterval(pollInterval);
-                        AndroidBridge.onError("Extraction timed out on web bridge");
+                        if (media.length > 0) {
+                            AndroidBridge.onMediaFound(JSON.stringify(media));
+                        } else {
+                            AndroidBridge.onError("Extraction timed out on web bridge");
+                        }
                     }
-                }, 500);
+                }, 200);
             })();
         """.trimIndent()
     }

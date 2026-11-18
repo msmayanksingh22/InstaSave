@@ -131,6 +131,11 @@ object InstagramMetadataFetcher {
                 }
             }
 
+            // Universal zero-auth fallback: Fetch direct Instagram CDN thumbnail
+            if (thumbnailPath == null) {
+                thumbnailPath = downloadDirectThumbnail(context, shortcode)
+            }
+
             val result = InstagramMetadata(
                 shortcode = shortcode,
                 authorUsername = authorUsername,
@@ -152,8 +157,26 @@ object InstagramMetadataFetcher {
             result
         } catch (e: Exception) {
             Log.e(TAG, "fetchMetadata error for $shortcode: ${e.message}")
-            null
+            // Still attempt direct zero-auth thumbnail download
+            val directThumb = downloadDirectThumbnail(context, shortcode)
+            if (directThumb != null) {
+                val repo = DownloadRepository.getInstance(context)
+                repo.updateMetadata(shortcode = shortcode, thumbnailPath = directThumb)
+                InstagramMetadata(shortcode = shortcode, thumbnailPath = directThumb)
+            } else {
+                null
+            }
         }
+    }
+
+    /**
+     * Downloads low-resolution cover thumbnail directly from Instagram's zero-auth media endpoint.
+     * Works for all public Instagram photos, carousels, and reels.
+     */
+    fun downloadDirectThumbnail(context: Context, shortcode: String): String? {
+        if (shortcode.isBlank()) return null
+        val directMediaUrl = "https://www.instagram.com/p/$shortcode/media/?size=m"
+        return downloadAndSaveThumbnail(context, shortcode, directMediaUrl)
     }
 
     private fun downloadAndSaveThumbnail(context: Context, shortcode: String, imageUrl: String): String? {

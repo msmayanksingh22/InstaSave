@@ -166,13 +166,24 @@ class DownloadHistoryAdapter(
             }
         }
 
-        // Thumbnail Loader: Load local media or cached thumbnail cleanly without dimming
+        // Thumbnail Loader: Load local media, persistent thumbnail, or direct CDN thumbnail
         val context = holder.itemView.context
-        val localThumbFile = if (record.shortcode.isNotBlank()) java.io.File(context.filesDir, "thumbnails/${record.shortcode}.jpg") else null
-        val legacyThumbFile = if (record.shortcode.isNotBlank()) java.io.File(context.cacheDir, "thumbnails/${record.shortcode}.jpg") else null
-        val uri = record.representativeUri
-            ?: (if (localThumbFile != null && localThumbFile.exists()) localThumbFile.absolutePath else null)
-            ?: (if (legacyThumbFile != null && legacyThumbFile.exists()) legacyThumbFile.absolutePath else null)
+        val shortcode = record.shortcode
+        val localThumbFile = if (shortcode.isNotBlank()) java.io.File(context.filesDir, "thumbnails/$shortcode.jpg") else null
+        val legacyThumbFile = if (shortcode.isNotBlank()) java.io.File(context.cacheDir, "thumbnails/$shortcode.jpg") else null
+
+        val uri = when {
+            // 1. If post is NOT deleted and local media URI exists and is valid, load local file
+            !isDeleted && !record.representativeUri.isNullOrBlank() -> record.representativeUri
+            // 2. Persistent internal disk thumbnail
+            localThumbFile != null && localThumbFile.exists() -> localThumbFile.absolutePath
+            legacyThumbFile != null && legacyThumbFile.exists() -> legacyThumbFile.absolutePath
+            // 3. Stored thumbnailPath in DB
+            !record.thumbnailPath.isNullOrBlank() -> record.thumbnailPath
+            // 4. Zero-auth direct Instagram CDN thumbnail fallback for all deleted posts and reels
+            shortcode.isNotBlank() -> "https://www.instagram.com/p/$shortcode/media/?size=m"
+            else -> null
+        }
 
         if (uri != null) {
             MediaThumbnailLoader.loadInto(
@@ -180,6 +191,8 @@ class DownloadHistoryAdapter(
                 uriString = uri,
                 imageView = holder.ivThumbnail,
                 isVideo = isVideo,
+                targetWidth = 240,
+                targetHeight = 240,
                 scope = scope
             )
         } else {

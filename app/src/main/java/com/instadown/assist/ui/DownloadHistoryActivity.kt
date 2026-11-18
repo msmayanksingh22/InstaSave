@@ -194,13 +194,8 @@ class DownloadHistoryActivity : AppCompatActivity() {
 
     private fun loadHistory(forceReconcile: Boolean) {
         lifecycleScope.launch {
-            if (forceReconcile) {
-                withContext(Dispatchers.IO) {
-                    repo.reconcileWithMediaStore()
-                }
-            }
-
-            allHistoryRecords = repo.getFullHistory()
+            // 1. Fast immediate display from SQLite: 0ms UI delay!
+            allHistoryRecords = withContext(Dispatchers.IO) { repo.getFullHistory() }
 
             val totalCount = allHistoryRecords.size
             val onDeviceCount = allHistoryRecords.count { !it.isDeletedFromDevice }
@@ -213,7 +208,28 @@ class DownloadHistoryActivity : AppCompatActivity() {
             tvHeaderSummary.text = "$totalCount items recorded • $deletedCount available to re-download"
             applyFilter()
 
-            // Enrich creator handle & thumbnails in background for any unpopulated records
+            // 2. Background MediaStore reconciliation without blocking UI load
+            if (forceReconcile) {
+                launch(Dispatchers.IO) {
+                    val changed = repo.reconcileWithMediaStore()
+                    if (changed > 0) {
+                        val refreshed = repo.getFullHistory()
+                        withContext(Dispatchers.Main) {
+                            allHistoryRecords = refreshed
+                            val newTotal = refreshed.size
+                            val newOnDevice = refreshed.count { !it.isDeletedFromDevice }
+                            val newDeleted = refreshed.count { it.isDeletedFromDevice }
+                            chipFilterAll.text = "All ($newTotal)"
+                            chipFilterOnDevice.text = "On Device ($newOnDevice)"
+                            chipFilterDeleted.text = "Deleted ($newDeleted)"
+                            tvHeaderSummary.text = "$newTotal items recorded • $newDeleted available to re-download"
+                            applyFilter()
+                        }
+                    }
+                }
+            }
+
+            // 3. Enrich creator handle & thumbnails in background for any unpopulated records
             enrichMetadataInBackground(allHistoryRecords)
         }
     }

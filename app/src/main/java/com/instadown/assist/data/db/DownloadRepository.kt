@@ -52,6 +52,19 @@ class DownloadRepository private constructor(private val context: Context) {
                 existingId = cursor.use { if (it.moveToFirst()) it.getLong(0) else null }
             }
 
+            // Check if event.totalBytes is 0 (e.g. skipped duplicate), preserve existing bytes if available
+            var bytesToSave = event.totalBytes
+            if (bytesToSave == 0L && existingId != null) {
+                val prevBytesCursor = db.query(
+                    InstaSaveDatabaseHelper.TABLE_DOWNLOADS,
+                    arrayOf(InstaSaveDatabaseHelper.COL_DL_TOTAL_BYTES),
+                    "${InstaSaveDatabaseHelper.COL_DL_ID} = ?",
+                    arrayOf(existingId.toString()),
+                    null, null, null
+                )
+                bytesToSave = prevBytesCursor.use { if (it.moveToFirst()) it.getLong(0) else 0L }
+            }
+
             val dlValues = ContentValues().apply {
                 put(InstaSaveDatabaseHelper.COL_DL_TX_ID, event.transactionId)
                 put(InstaSaveDatabaseHelper.COL_DL_SHORTCODE, event.shortcode)
@@ -62,7 +75,7 @@ class DownloadRepository private constructor(private val context: Context) {
                 put(InstaSaveDatabaseHelper.COL_DL_CREATED_AT, event.timestamp)
                 put(InstaSaveDatabaseHelper.COL_DL_CAROUSEL_COUNT, if (event.items.isNotEmpty()) event.items.size else 1)
                 put(InstaSaveDatabaseHelper.COL_DL_STATUS, event.status.name)
-                put(InstaSaveDatabaseHelper.COL_DL_TOTAL_BYTES, event.totalBytes)
+                put(InstaSaveDatabaseHelper.COL_DL_TOTAL_BYTES, bytesToSave)
             }
 
             val dlId: Long
@@ -94,6 +107,9 @@ class DownloadRepository private constructor(private val context: Context) {
             }
 
             if (dlId != -1L && event.items.isNotEmpty()) {
+                val previousItems = if (existingId != null) getItemsForDownload(db, dlId) else emptyList()
+                val prevUriMap = previousItems.associate { it.itemIndex to it.mediaUri }
+
                 // Remove existing items for this download to refresh cleanly with new URIs
                 db.delete(
                     InstaSaveDatabaseHelper.TABLE_DOWNLOAD_ITEMS,
@@ -102,16 +118,18 @@ class DownloadRepository private constructor(private val context: Context) {
                 )
 
                 for (item in event.items) {
+                    val finalUri = item.mediaUri ?: prevUriMap[item.itemIndex]
+                    val itemStatus = if (finalUri != null) ItemStatus.AVAILABLE else item.status
                     val itemValues = ContentValues().apply {
                         put(InstaSaveDatabaseHelper.COL_ITEM_DOWNLOAD_ID, dlId)
                         put(InstaSaveDatabaseHelper.COL_ITEM_INDEX, item.itemIndex)
                         put(InstaSaveDatabaseHelper.COL_ITEM_MEDIA_TYPE, item.mediaType)
-                        put(InstaSaveDatabaseHelper.COL_ITEM_MEDIA_URI, item.mediaUri)
+                        put(InstaSaveDatabaseHelper.COL_ITEM_MEDIA_URI, finalUri)
                         put(InstaSaveDatabaseHelper.COL_ITEM_FILE_NAME, item.fileName)
                         put(InstaSaveDatabaseHelper.COL_ITEM_WIDTH, item.width)
                         put(InstaSaveDatabaseHelper.COL_ITEM_HEIGHT, item.height)
                         put(InstaSaveDatabaseHelper.COL_ITEM_SIZE_BYTES, item.sizeBytes)
-                        put(InstaSaveDatabaseHelper.COL_ITEM_STATUS, item.status.name)
+                        put(InstaSaveDatabaseHelper.COL_ITEM_STATUS, itemStatus.name)
                     }
                     db.insertWithOnConflict(
                         InstaSaveDatabaseHelper.TABLE_DOWNLOAD_ITEMS,

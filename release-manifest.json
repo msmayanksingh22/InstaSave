@@ -1,7 +1,7 @@
 {
-  "versionCode": 2,
-  "versionName": "1.1.0",
-  "releaseNotes": "• Brand new vibrant Instagram sunset logo icon with glassmorphism styling\n• Instagram Reels now reliably download as 1080p MP4 videos instead of images\n• History & Archive: Creator @username and cover thumbnails for all posts (including deleted archives)\n• Seamless re-download queue with duplicate protection\n• Direct in-app auto updates",
-  "apkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.1.0/app-release.apk",
-  "fileSizeBytes": 3771172
+  "versionCode": 3,
+  "versionName": "1.1.1",
+  "releaseNotes": "• Multi-item carousels: Fixed 6-item truncation; full 10-15+ items extract immediately via direct Vue state inspection\n• Lightning-fast History & Archive: Instant <50ms load with asynchronous MediaStore reconciliation\n• Universal cover thumbnails: All posts & deleted archives show fast, lightweight preview thumbnails via zero-auth CDN\n• Modern In-App OTA Update: Sleek native update dialog with progress bar and one-tap install\n• Clean Settings: Removed wireless ADB and diagnostic clutter; dynamically bound true version (v1.1.1)",
+  "apkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.1.1/app-release.apk",
+  "fileSizeBytes": 3784188
 }

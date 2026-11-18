@@ -134,14 +134,22 @@ class MediaSelectionActivity : AppCompatActivity() {
             selectedIndices.clear()
             for (i in resolvedItems.indices) selectedIndices.add(i)
 
-            // Fast concurrent thumbnail prefetch
+            // High-throughput parallel thumbnail prefetch
             lifecycleScope.launch(Dispatchers.IO) {
-                resolvedItems.forEach { item ->
-                    val thumb = if (item.mediaType == MediaType.VIDEO) item.thumbnailUrl else (item.thumbnailUrl ?: item.mediaUrl)
-                    if (!thumb.isNullOrBlank() && (thumb.startsWith("http://") || thumb.startsWith("https://"))) {
-                        try {
-                            MediaThumbnailLoader.loadThumbnail(this@MediaSelectionActivity, thumb, isVideo = item.mediaType == MediaType.VIDEO)
-                        } catch (ignored: Exception) {}
+                resolvedItems.map { item ->
+                    launch {
+                        val thumb = if (item.mediaType == MediaType.VIDEO) item.thumbnailUrl else (item.thumbnailUrl ?: item.mediaUrl)
+                        if (!thumb.isNullOrBlank() && (thumb.startsWith("http://") || thumb.startsWith("https://"))) {
+                            try {
+                                MediaThumbnailLoader.loadThumbnail(
+                                    this@MediaSelectionActivity,
+                                    thumb,
+                                    isVideo = item.mediaType == MediaType.VIDEO,
+                                    targetWidth = 240,
+                                    targetHeight = 240
+                                )
+                            } catch (ignored: Exception) {}
+                        }
                     }
                 }
             }
@@ -269,6 +277,8 @@ class MediaSelectionActivity : AppCompatActivity() {
                     uriString = previewUrl,
                     imageView = holder.ivThumbnail,
                     isVideo = isVideo,
+                    targetWidth = 240,
+                    targetHeight = 240,
                     scope = lifecycleScope
                 )
             } else {
