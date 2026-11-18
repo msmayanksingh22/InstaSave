@@ -1,8 +1,8 @@
 {
-  "versionCode": 6,
-  "versionName": "1.1.4",
-  "releaseNotes": "• Google Play Protect Security Hardening: Signed with dedicated RSA-2048 production release key and secured internal components to eliminate harmful app warnings\n• Ultra-Fast 1-Second Link Resolution: Pre-warmed background engine with Desktop User-Agent eliminating ads and mobile app popups\n• Instant Media Selection & Background Saving: Media selection opens instantly with zero re-resolution delay; downloads save in background\n• Rapid Parallel Thumbnails in History: Deleted posts now populate cover thumbnails simultaneously in seconds",
+  "versionCode": 8,
+  "versionName": "1.1.5",
+  "releaseNotes": "• Progress dialog shown while resolving any Instagram link\n• Friendly error messages with Retry button on resolve failure\n• Play Protect hardening: REQUEST_INSTALL_PACKAGES removed from manifest\n• AppLogger buffer raised to 1,000 entries\n• Faster parallel thumbnail backfill with Semaphore(3)\n• Ultra-fast pre-warmed WebView engine (Desktop UA, Vue proxy, carousel 15+ items)\n• V2/V3 APK signing for security",
   "apkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
-  "fallbackApkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.1.4/app-release.apk",
-  "fileSizeBytes": 3842477
+  "fallbackApkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.1.5/app-release.apk",
+  "fileSizeBytes": 3844708
 }

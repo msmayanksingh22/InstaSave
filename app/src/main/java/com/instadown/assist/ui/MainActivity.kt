@@ -692,14 +692,45 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun executeManualDownload(cleanUrl: String) {
+        val progressDialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Resolving Link")
+            .setMessage("Fetching media info\u2026")
+            .setCancelable(false)
+            .create()
+        progressDialog.show()
+
         lifecycleScope.launch {
-            Toast.makeText(this@MainActivity, "Resolving Instagram link...", Toast.LENGTH_SHORT).show()
-            val resolveResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                coordinator.resolver.resolve(cleanUrl, validateCdn = false)
+            var resolveResult: com.instadown.assist.resolver.model.ResolveResult? = null
+            try {
+                resolveResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    coordinator.resolver.resolve(cleanUrl, validateCdn = false)
+                }
+            } catch (e: Exception) {
+                progressDialog.dismiss()
+                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Error")
+                    .setMessage("Could not connect. Check internet and try again.\n${e.message}")
+                    .setPositiveButton("OK", null)
+                    .show()
+                return@launch
             }
 
-            if (!resolveResult.success) {
-                Toast.makeText(this@MainActivity, "Failed to resolve: ${resolveResult.error?.message}", Toast.LENGTH_LONG).show()
+            if (resolveResult == null || !resolveResult.success) {
+                progressDialog.dismiss()
+                val errMsg = resolveResult?.error?.message ?: "Unknown error"
+                val userMsg = when {
+                    errMsg.contains("timeout", ignoreCase = true) -> "Request timed out. Please try again."
+                    errMsg.contains("network", ignoreCase = true) || errMsg.contains("connect", ignoreCase = true) -> "No internet connection."
+                    errMsg.contains("private", ignoreCase = true) -> "This post is from a private account."
+                    errMsg.contains("not found", ignoreCase = true) || errMsg.contains("404") -> "Post not found or deleted."
+                    else -> "Could not load media. Please try again.\n\n${errMsg}"
+                }
+                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Could Not Resolve")
+                    .setMessage(userMsg)
+                    .setPositiveButton("Retry") { _, _ -> executeManualDownload(cleanUrl) }
+                    .setNegativeButton("Cancel", null)
+                    .show()
                 return@launch
             }
 
@@ -707,6 +738,7 @@ class MainActivity : AppCompatActivity() {
             val totalItems = resolveResult.items.size
 
             if (totalItems > 1 && behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.ASK) {
+                progressDialog.dismiss()
                 com.instadown.assist.ui.MediaSelectionActivity.start(this@MainActivity, cleanUrl, resolveResult)
                 return@launch
             }
@@ -715,42 +747,48 @@ class MainActivity : AppCompatActivity() {
             if (totalItems > 1 && behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.CURRENT_ITEM) {
                 val observedSlide = com.instadown.assist.service.InstaAccessibilityService.lastObservedSlide
                 val slideEval = clipboardCoordinator.resolveCurrentSlideIndex(
-                    autoResult = null,
-                    totalMediaItems = totalItems,
-                    observedSlide = observedSlide
+                    autoResult = null, totalMediaItems = totalItems, observedSlide = observedSlide
                 )
-
                 when (slideEval) {
-                    is com.instadown.assist.download.ClipboardDownloadCoordinator.SlideEvaluationResult.Valid -> {
+                    is com.instadown.assist.download.ClipboardDownloadCoordinator.SlideEvaluationResult.Valid ->
                         targetIndices = setOf(slideEval.targetIndex)
-                    }
                     is com.instadown.assist.download.ClipboardDownloadCoordinator.SlideEvaluationResult.Ambiguous -> {
-                        Toast.makeText(this@MainActivity, "Safe Refusal: Couldn't identify current slide. 0 items saved.", Toast.LENGTH_LONG).show()
+                        progressDialog.dismiss()
+                        Toast.makeText(this@MainActivity, "Could not identify current slide.", Toast.LENGTH_LONG).show()
                         return@launch
                     }
                 }
             }
 
-            Toast.makeText(this@MainActivity, if (targetIndices != null) "Downloading slide ${targetIndices.first() + 1}/$totalItems..." else "Downloading...", Toast.LENGTH_SHORT).show()
+            progressDialog.setTitle("Saving")
+            progressDialog.setMessage(
+                if (targetIndices != null) "Saving slide ${targetIndices!!.first() + 1} of ${totalItems}\u2026"
+                else if (totalItems > 1) "Saving ${totalItems} items\u2026"
+                else "Saving to gallery\u2026"
+            )
+
             val downloadResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 coordinator.executeDirectDownload(
-                    url = cleanUrl,
-                    selectedIndices = targetIndices,
-                    preResolvedResult = resolveResult
+                    url = cleanUrl, selectedIndices = targetIndices, preResolvedResult = resolveResult
                 )
             }
 
-            if (downloadResult.success) {
+            progressDialog.dismiss()
+            if (downloadResult.success || downloadResult.completedCount > 0) {
                 val count = downloadResult.completedCount
-                Toast.makeText(this@MainActivity, if (count > 1) "✓ $count items saved" else "✓ Saved", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, if (count > 1) "\u2714 ${count} items saved" else "\u2714 Saved to gallery", Toast.LENGTH_SHORT).show()
                 loadRecentDownloads()
                 loadStorageSummary()
             } else {
-                Toast.makeText(this@MainActivity, "Download failed: ${downloadResult.error}", Toast.LENGTH_LONG).show()
+                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Download Failed")
+                    .setMessage("Failed to save.\n\n${downloadResult.error ?: "Unknown error"}")
+                    .setPositiveButton("Retry") { _, _ -> executeManualDownload(cleanUrl) }
+                    .setNegativeButton("Cancel", null)
+                    .show()
             }
         }
     }
-
     private fun startInstaSaveService() {
         if (prefs.downloadMode == com.instadown.assist.overlay.DownloadMode.AUTOMATIC) {
             val isA11yEnabled = InstaAccessibilityService.isServiceEnabled(this)
