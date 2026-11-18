@@ -442,7 +442,17 @@ class InstagramDownloadCoordinator(
 
         if (recordInDb) {
             val repo = com.instadown.assist.data.db.DownloadRepository.getInstance(context)
-            repo.recordDownloadResult(result)
+            // Immediately extract / generate a low-resolution persistent thumbnail into filesDir/thumbnails/${shortcode}.jpg
+            val candidateItem = result.items.firstOrNull { it.localUri != null }
+            val thumbPath = if (candidateItem != null && shortcode.isNotBlank()) {
+                repo.extractAndSaveThumbnail(
+                    shortcode = shortcode,
+                    uriStr = candidateItem.localUri.toString(),
+                    isVideo = candidateItem.mediaType == com.instadown.assist.resolver.model.MediaType.VIDEO
+                )
+            } else null
+
+            repo.recordDownloadResult(result, thumbnailPath = thumbPath)
 
             // Asynchronously fetch creator handle & thumbnail in background
             coordinatorScope.launch(Dispatchers.IO) {

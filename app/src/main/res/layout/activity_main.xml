@@ -133,6 +133,77 @@
                 android:layout_marginStart="4dp" />
         </LinearLayout>
 
+        <!-- In-App Update Available Banner -->
+        <LinearLayout
+            android:id="@+id/layoutUpdateAvailableBanner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="@drawable/card_background"
+            android:backgroundTint="#1B2D38"
+            android:padding="12dp"
+            android:layout_marginBottom="16dp"
+            android:gravity="center_vertical"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_cloud_download"
+                android:tint="@color/insta_pink"
+                android:contentDescription="Update Available" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="8dp">
+
+                <TextView
+                    android:id="@+id/tvUpdateBannerTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="New Update Available! 🚀"
+                    android:textColor="@color/white"
+                    android:textStyle="bold"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/tvUpdateBannerSubtitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="InstaSave v1.1.2 is ready to install"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:singleLine="true"
+                    android:ellipsize="end" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btnUpdateBannerAction"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:text="Update"
+                android:textColor="@color/white"
+                android:background="@drawable/btn_rounded_accent"
+                android:textSize="12sp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp" />
+
+            <ImageButton
+                android:id="@+id/btnUpdateBannerDismiss"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_close"
+                android:tint="@color/text_muted"
+                android:contentDescription="Dismiss"
+                android:layout_marginStart="4dp" />
+        </LinearLayout>
+
         <!-- 1. InstaSave Service Running State Card -->
         <LinearLayout
             android:layout_width="match_parent"

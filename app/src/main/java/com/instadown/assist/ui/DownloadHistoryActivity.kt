@@ -124,7 +124,11 @@ class DownloadHistoryActivity : AppCompatActivity() {
 
         // Reactively observe repository transaction events
         lifecycleScope.launch {
-            repo.transactionEvents.collect {
+            repo.transactionEvents.collect { event ->
+                // Avoid recursive reload loops when reconcileWithMediaStore emits RECONCILED!
+                if (event.transactionId == "RECONCILED") {
+                    return@collect
+                }
                 loadHistory(forceReconcile = false)
             }
         }
@@ -229,8 +233,54 @@ class DownloadHistoryActivity : AppCompatActivity() {
                 }
             }
 
-            // 3. Enrich creator handle & thumbnails in background for any unpopulated records
+            // 3. Backfill thumbnails and enrich creator handle in background
+            backfillThumbnailsInBackground(allHistoryRecords)
             enrichMetadataInBackground(allHistoryRecords)
+        }
+    }
+
+    private fun backfillThumbnailsInBackground(records: List<DownloadRecord>) {
+        val targets = records.filter { rec ->
+            rec.shortcode.isNotBlank() && (
+                rec.thumbnailPath.isNullOrBlank() ||
+                !java.io.File(filesDir, "thumbnails/${rec.shortcode}.jpg").exists()
+            )
+        }
+        if (targets.isEmpty()) return
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val thumbDir = java.io.File(filesDir, "thumbnails")
+            if (!thumbDir.exists()) thumbDir.mkdirs()
+
+            for (rec in targets) {
+                val thumbFile = java.io.File(thumbDir, "${rec.shortcode}.jpg")
+                val legacyFile = java.io.File(cacheDir, "thumbnails/${rec.shortcode}.jpg")
+
+                var finalPath: String? = null
+                if (thumbFile.exists() && thumbFile.length() > 0) {
+                    finalPath = thumbFile.absolutePath
+                } else if (legacyFile.exists() && legacyFile.length() > 0) {
+                    try {
+                        legacyFile.copyTo(thumbFile, overwrite = true)
+                        finalPath = thumbFile.absolutePath
+                    } catch (_: Exception) {
+                        finalPath = legacyFile.absolutePath
+                    }
+                } else {
+                    val repUri = rec.representativeUri
+                    if (!repUri.isNullOrBlank() && !repUri.startsWith("http")) {
+                        val isVid = rec.items.firstOrNull()?.mediaType == "VIDEO" || rec.postType.equals("REEL", ignoreCase = true)
+                        finalPath = repo.extractAndSaveThumbnail(rec.shortcode, repUri, isVid)
+                    }
+                }
+
+                if (finalPath != null && finalPath != rec.thumbnailPath) {
+                    repo.updateMetadata(rec.shortcode, thumbnailPath = finalPath)
+                    withContext(Dispatchers.Main) {
+                        updateRecordInMemory(rec.shortcode, rec.authorUsername, finalPath, rec.caption)
+                    }
+                }
+            }
         }
     }
 

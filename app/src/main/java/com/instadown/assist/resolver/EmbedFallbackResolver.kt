@@ -158,7 +158,42 @@ class EmbedFallbackResolver(
 
         val isReelSource = normalized.sourcePathType.contains("reel") || normalized.sourcePathType.contains("reels")
 
-        // If Reel or Carousel but only partial image found, return PARTIAL_MEDIA
+        // Carousel Detection: Check for edge_sidecar_to_children or carousel indicators in embed payload
+        val isCarousel = html!!.contains("edge_sidecar_to_children") ||
+                html!!.contains("GraphSidecar") ||
+                html!!.contains("\"is_carousel\":true") ||
+                html!!.contains("\"is_carousel\": true") ||
+                html!!.contains("carousel_media") ||
+                html!!.contains("CarouselIndicator") ||
+                html!!.contains("CarouselLoaded") ||
+                html!!.contains("EmbeddedMediaCarousel") ||
+                html!!.contains("EmbedSidecar") ||
+                html!!.contains("class=\"EmbedSidecar") ||
+                html!!.contains("class=\"Carousel")
+
+        if (isCarousel) {
+            Log.i(TAG, "Embed payload represents a carousel (edge_sidecar_to_children / carousel indicators). Deferring to bridge resolver for complete extraction.")
+            return@withContext ResolveResult(
+                success = false,
+                isPartial = true,
+                originalInputUrl = url,
+                canonicalUrl = normalized.canonicalUrl,
+                shortcode = normalized.shortcode,
+                sourcePathType = normalized.sourcePathType,
+                postType = PostType.CAROUSEL,
+                items = emptyList(),
+                methodUsed = "EmbedFallbackResolver",
+                totalResolutionTimeMs = System.currentTimeMillis() - startTime,
+                initialHost = initialHost,
+                finalHost = finalHost,
+                error = ResolveError(
+                    code = ResolveErrorCode.PARTIAL_MEDIA,
+                    message = "Embed payload represents a multi-item carousel. Deferring to HeadlessWebBridgeResolver for complete 15+ item extraction."
+                )
+            )
+        }
+
+        // If Reel but only partial image found, return PARTIAL_MEDIA
         if (videoUrl == null && isReelSource && imageUrl != null) {
             return@withContext ResolveResult(
                 success = false,

@@ -8,6 +8,11 @@ import com.instadown.assist.resolver.model.MediaType
 import com.instadown.assist.resolver.model.PostType
 import com.instadown.assist.resolver.model.ResolveResult
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicIntegerArray
+import java.util.concurrent.atomic.AtomicLongArray
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
@@ -103,90 +108,135 @@ class MediaDownloadManager(
             var skippedCount = 0
             var totalBytesDownloaded = 0L
 
-            // Carousel transaction behavior: strictly sequential (item 1 -> complete, item 2 -> complete, ...)
-            for (i in plan.items.indices) {
-                val item = plan.items[i]
+            // Concurrency pool of 3-4 parallel downloads using coroutine async/await and active Semaphore
+            val concurrencyLimit = minOf(4, maxOf(1, totalItems))
+            val semaphore = Semaphore(concurrencyLimit)
 
-                // Duplicate Check 2: Check if this specific item has already been downloaded to Gallery
-                val dupStatus = DuplicateDetector.checkStatus(context, shortcode, item.index, item.mediaType)
-                if (dupStatus == DuplicateDetector.DuplicateStatus.SAME_POST_ALREADY_DOWNLOADED) {
-                    val existingUri = DuplicateDetector.getExistingUri(context, shortcode, item.index, item.mediaType)
-                    Log.i(TAG, "Item ${item.index} already present in MediaStore at $existingUri")
-                    skippedCount++
-                    processedItems.add(
-                        item.copy(
-                            status = DownloadStatus.COMPLETED,
-                            localUri = existingUri,
-                            error = null
-                        )
-                    )
-                    continue
+            val itemBytesRead = AtomicLongArray(totalItems)
+            val itemTotalBytes = AtomicLongArray(totalItems)
+            val itemPercents = AtomicIntegerArray(totalItems)
+            val completedOrSkippedCount = AtomicInteger(0)
+
+            fun emitAggregateProgress(changedIndex: Int) {
+                var sumPercent = 0
+                for (idx in 0 until totalItems) {
+                    sumPercent += itemPercents.get(idx)
+                }
+                val overallPercent = (sumPercent / totalItems).coerceIn(0, 100)
+                val curBytes = itemBytesRead.get(changedIndex)
+                val curTotal = itemTotalBytes.get(changedIndex).takeIf { it > 0 }
+                val curPct = itemPercents.get(changedIndex)
+                val done = completedOrSkippedCount.get()
+
+                val msg = if (totalItems > 1) {
+                    "Saving $done/$totalItems items ($overallPercent%)..."
+                } else {
+                    "Downloading $overallPercent%"
                 }
 
-                // Initial progress broadcast for this item
-                val initialProgress = DownloadProgress(
+                val progress = DownloadProgress(
                     transactionId = transactionId,
                     shortcode = shortcode,
-                    currentItemIndex = i,
+                    currentItemIndex = changedIndex,
                     totalItems = totalItems,
-                    currentItemBytes = 0L,
-                    currentItemTotalBytes = null,
-                    currentItemPercent = 0,
-                    overallPercent = (i * 100) / totalItems,
-                    statusMessage = if (totalItems > 1) "Saving item ${i + 1} of $totalItems..." else "Downloading media..."
+                    currentItemBytes = curBytes,
+                    currentItemTotalBytes = curTotal,
+                    currentItemPercent = curPct,
+                    overallPercent = overallPercent,
+                    statusMessage = msg
                 )
-                onProgress?.invoke(initialProgress)
+                onProgress?.invoke(progress)
+            }
 
-                // Download item with bounded retry & URL refresh logic
-                val downloadItemResult = downloadSingleItem(
-                    item = item,
-                    shortcode = shortcode,
-                    transactionId = transactionId,
-                    totalItems = totalItems,
-                    reResolveCallback = reResolveCallback,
-                    onItemByteProgress = { bytesRead, expectedTotal ->
-                        val itemPercent = if (expectedTotal != null && expectedTotal > 0) {
-                            ((bytesRead * 100) / expectedTotal).toInt().coerceIn(0, 100)
-                        } else {
-                            0
+            // Initial aggregate progress notification
+            emitAggregateProgress(0)
+
+            val deferredItems = plan.items.mapIndexed { i, item ->
+                async(Dispatchers.IO) {
+                    semaphore.withPermit {
+                        if (!coroutineContext.isActive) {
+                            return@withPermit Pair(
+                                item.copy(
+                                    status = DownloadStatus.CANCELLED,
+                                    error = "Cancelled",
+                                    errorCode = DownloadErrorCode.CANCELLED
+                                ),
+                                false
+                            )
                         }
-                        val overallPercent = ((i * 100) + itemPercent) / totalItems
-                        val progress = DownloadProgress(
-                            transactionId = transactionId,
+
+                        // Duplicate Check: Check if this specific item has already been downloaded to Gallery
+                        val dupStatus = DuplicateDetector.checkStatus(context, shortcode, item.index, item.mediaType)
+                        if (dupStatus == DuplicateDetector.DuplicateStatus.SAME_POST_ALREADY_DOWNLOADED) {
+                            val existingUri = DuplicateDetector.getExistingUri(context, shortcode, item.index, item.mediaType)
+                            Log.i(TAG, "Item ${item.index} already present in MediaStore at $existingUri")
+                            itemPercents.set(i, 100)
+                            completedOrSkippedCount.incrementAndGet()
+                            emitAggregateProgress(i)
+                            return@withPermit Pair(
+                                item.copy(
+                                    status = DownloadStatus.COMPLETED,
+                                    localUri = existingUri,
+                                    error = null
+                                ),
+                                true
+                            )
+                        }
+
+                        // Download item with bounded retry & URL refresh logic
+                        val downloadItemResult = downloadSingleItem(
+                            item = item,
                             shortcode = shortcode,
-                            currentItemIndex = i,
+                            transactionId = transactionId,
                             totalItems = totalItems,
-                            currentItemBytes = bytesRead,
-                            currentItemTotalBytes = expectedTotal,
-                            currentItemPercent = itemPercent,
-                            overallPercent = overallPercent,
-                            statusMessage = if (totalItems > 1) "Saving ${i + 1}/$totalItems (${itemPercent}%)" else "Downloading $itemPercent%"
+                            reResolveCallback = reResolveCallback,
+                            onItemByteProgress = { bytesRead, expectedTotal ->
+                                itemBytesRead.set(i, bytesRead)
+                                if (expectedTotal != null && expectedTotal > 0) {
+                                    itemTotalBytes.set(i, expectedTotal)
+                                    val pct = ((bytesRead * 100) / expectedTotal).toInt().coerceIn(0, 100)
+                                    itemPercents.set(i, pct)
+                                }
+                                emitAggregateProgress(i)
+                            }
                         )
-                        onProgress?.invoke(progress)
+
+                        if (downloadItemResult.status == DownloadStatus.COMPLETED) {
+                            itemPercents.set(i, 100)
+                            completedOrSkippedCount.incrementAndGet()
+                            emitAggregateProgress(i)
+
+                            // Record successfully completed item in persistent history
+                            downloadItemResult.localUri?.let { uri ->
+                                DuplicateDetector.recordCompleted(
+                                    context = context,
+                                    shortcode = shortcode,
+                                    index = item.index,
+                                    mediaType = item.mediaType,
+                                    uri = uri,
+                                    fileName = item.fileName
+                                )
+                            }
+                        } else if (downloadItemResult.status == DownloadStatus.FAILED) {
+                            emitAggregateProgress(i)
+                        }
+
+                        Pair(downloadItemResult, false)
                     }
-                )
+                }
+            }
 
+            val results = deferredItems.awaitAll()
+
+            for ((downloadItemResult, isSkipped) in results) {
                 processedItems.add(downloadItemResult)
-
-                if (downloadItemResult.status == DownloadStatus.COMPLETED) {
+                if (isSkipped) {
+                    skippedCount++
+                } else if (downloadItemResult.status == DownloadStatus.COMPLETED) {
                     completedCount++
                     totalBytesDownloaded += downloadItemResult.bytesDownloaded
-
-                    // Record successfully completed item in persistent history
-                    downloadItemResult.localUri?.let { uri ->
-                        DuplicateDetector.recordCompleted(
-                            context = context,
-                            shortcode = shortcode,
-                            index = item.index,
-                            mediaType = item.mediaType,
-                            uri = uri,
-                            fileName = item.fileName
-                        )
-                    }
                 } else if (downloadItemResult.status == DownloadStatus.FAILED) {
                     failedCount++
-                } else if (downloadItemResult.status == DownloadStatus.CANCELLED) {
-                    break // Stop entire batch if cancelled
                 }
             }
 

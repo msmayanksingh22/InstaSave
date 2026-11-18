@@ -20,6 +20,7 @@ data class AppUpdateInfo(
     val versionName: String,
     val releaseNotes: String,
     val apkUrl: String,
+    val fallbackApkUrl: String? = null,
     val fileSizeBytes: Long = 0L,
     val isAvailable: Boolean = false
 )
@@ -77,6 +78,8 @@ object AppUpdateManager {
             val remoteVersionName = json.optString("versionName", "1.0")
             val releaseNotes = json.optString("releaseNotes", "New performance and feature updates.")
             val apkUrl = json.optString("apkUrl", "")
+            val fallbackApkUrl = json.optString("fallbackApkUrl", "").takeIf { it.isNotBlank() }
+                ?: "https://github.com/msmayanksingh22/InstaSave/releases/download/v$remoteVersionName/app-release.apk"
             val fileSizeBytes = json.optLong("fileSizeBytes", 0L)
 
             val isAvailable = remoteVersionCode > currentVersionCode && apkUrl.isNotBlank()
@@ -87,6 +90,7 @@ object AppUpdateManager {
                 versionName = remoteVersionName,
                 releaseNotes = releaseNotes,
                 apkUrl = apkUrl,
+                fallbackApkUrl = fallbackApkUrl,
                 fileSizeBytes = fileSizeBytes,
                 isAvailable = isAvailable
             )
@@ -98,12 +102,36 @@ object AppUpdateManager {
 
     /**
      * Downloads the update APK to the app cache directory with progress reporting.
+     * Supports automatic fallback if the primary URL fails.
      */
     suspend fun downloadUpdate(
         context: Context,
         updateInfo: AppUpdateInfo,
         onProgress: (percent: Int, bytesRead: Long, totalBytes: Long) -> Unit
     ): File? = withContext(Dispatchers.IO) {
+        val urlsToTry = mutableListOf<String>()
+        if (updateInfo.apkUrl.isNotBlank()) urlsToTry.add(updateInfo.apkUrl)
+        if (!updateInfo.fallbackApkUrl.isNullOrBlank() && updateInfo.fallbackApkUrl != updateInfo.apkUrl) {
+            urlsToTry.add(updateInfo.fallbackApkUrl)
+        }
+
+        for (url in urlsToTry) {
+            AppLogger.i(TAG, "Attempting update download from: $url")
+            val file = downloadSingleUrl(context, url, updateInfo, onProgress)
+            if (file != null && file.exists() && file.length() > 0) {
+                return@withContext file
+            }
+            AppLogger.w(TAG, "Failed downloading from $url, trying next candidate if available...")
+        }
+        null
+    }
+
+    private fun downloadSingleUrl(
+        context: Context,
+        targetUrl: String,
+        updateInfo: AppUpdateInfo,
+        onProgress: (percent: Int, bytesRead: Long, totalBytes: Long) -> Unit
+    ): File? {
         try {
             val updateDir = File(context.cacheDir, "updates")
             if (!updateDir.exists()) updateDir.mkdirs()
@@ -115,17 +143,17 @@ object AppUpdateManager {
             if (tempFile.exists()) tempFile.delete()
 
             val request = Request.Builder()
-                .url(updateInfo.apkUrl)
+                .url(targetUrl)
                 .header("User-Agent", "InstaSave-Updater/1.0")
                 .build()
 
             val response = httpClient.newCall(request).execute()
             if (!response.isSuccessful) {
-                AppLogger.e(TAG, "Download APK failed: HTTP ${response.code}")
-                return@withContext null
+                AppLogger.e(TAG, "Download APK failed: HTTP ${response.code} from $targetUrl")
+                return null
             }
 
-            val body = response.body ?: return@withContext null
+            val body = response.body ?: return null
             val totalBytes = body.contentLength().takeIf { it > 0 } ?: updateInfo.fileSizeBytes
             val inputStream = body.byteStream()
             val outputStream = FileOutputStream(tempFile)
@@ -144,6 +172,8 @@ object AppUpdateManager {
                         lastPercent = percent
                         onProgress(percent, totalRead, totalBytes)
                     }
+                } else {
+                    onProgress(-1, totalRead, 0L)
                 }
             }
 
@@ -151,15 +181,18 @@ object AppUpdateManager {
             outputStream.close()
             inputStream.close()
 
-            if (tempFile.renameTo(apkFile)) {
+            return if (tempFile.renameTo(apkFile)) {
                 AppLogger.i(TAG, "Update APK downloaded successfully: ${apkFile.length()} bytes -> ${apkFile.absolutePath}")
                 apkFile
-            } else {
+            } else if (tempFile.exists() && tempFile.length() > 0) {
+                AppLogger.i(TAG, "Update APK saved as temp: ${tempFile.length()} bytes -> ${tempFile.absolutePath}")
                 tempFile
+            } else {
+                null
             }
         } catch (e: Exception) {
-            AppLogger.e(TAG, "Download APK exception: ${e.message}", e)
-            null
+            AppLogger.e(TAG, "Download APK exception from $targetUrl: ${e.message}", e)
+            return null
         }
     }
 

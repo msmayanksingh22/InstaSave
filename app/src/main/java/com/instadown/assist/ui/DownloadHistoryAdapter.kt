@@ -166,22 +166,21 @@ class DownloadHistoryAdapter(
             }
         }
 
-        // Thumbnail Loader: Load local media, persistent thumbnail, or direct CDN thumbnail
+        // Thumbnail Loader: Load persistent internal thumbnail, DB thumbnail, or valid local media
         val context = holder.itemView.context
         val shortcode = record.shortcode
         val localThumbFile = if (shortcode.isNotBlank()) java.io.File(context.filesDir, "thumbnails/$shortcode.jpg") else null
         val legacyThumbFile = if (shortcode.isNotBlank()) java.io.File(context.cacheDir, "thumbnails/$shortcode.jpg") else null
 
         val uri = when {
-            // 1. If post is NOT deleted and local media URI exists and is valid, load local file
-            !isDeleted && !record.representativeUri.isNullOrBlank() -> record.representativeUri
-            // 2. Persistent internal disk thumbnail
+            // 1. Persistent internal disk thumbnail (takes precedence for instant offline load even for deleted items)
             localThumbFile != null && localThumbFile.exists() -> localThumbFile.absolutePath
             legacyThumbFile != null && legacyThumbFile.exists() -> legacyThumbFile.absolutePath
-            // 3. Stored thumbnailPath in DB
+            // 2. Stored DB thumbnailPath (e.g. cached path or CDN preview)
             !record.thumbnailPath.isNullOrBlank() -> record.thumbnailPath
-            // 4. Zero-auth direct Instagram CDN thumbnail fallback for all deleted posts and reels
-            shortcode.isNotBlank() -> "https://www.instagram.com/p/$shortcode/media/?size=m"
+            // 3. Local media file if item is still present on device
+            !isDeleted && !record.representativeUri.isNullOrBlank() -> record.representativeUri
+            // Do NOT fall back to dead https://www.instagram.com/p/$shortcode/media/?size=m which redirects to login!
             else -> null
         }
 

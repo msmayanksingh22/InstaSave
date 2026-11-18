@@ -106,7 +106,7 @@ class SettingsActivity : AppCompatActivity() {
             val buildNum = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) pInfo.longVersionCode else pInfo.versionCode
             tvAppVersion?.text = "Version ${pInfo.versionName} (Build $buildNum)"
         } catch (_: Exception) {
-            tvAppVersion?.text = "Version 1.1.1"
+            tvAppVersion?.text = "Version 1.1.2 (Build 4)"
         }
 
         // In-App Software Updates (Clean native OTA dialog)
@@ -115,6 +115,97 @@ class SettingsActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.btnSettingsCheckUpdates).setOnClickListener {
             startInAppUpdateFlow()
+        }
+
+        // Diagnostic Logs (USB-Free in-app debugging)
+        findViewById<android.view.View>(R.id.cardDiagnosticLogs).setOnClickListener {
+            showDiagnosticLogsDialog()
+        }
+        findViewById<Button>(R.id.btnViewDiagnosticLogs).setOnClickListener {
+            showDiagnosticLogsDialog()
+        }
+    }
+
+    private fun showDiagnosticLogsDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_diagnostic_logs, null)
+        val tvLogsCount = dialogView.findViewById<android.widget.TextView>(R.id.tvLogsCount)
+        val tvLogsContent = dialogView.findViewById<android.widget.TextView>(R.id.tvLogsContent)
+        val btnClose = dialogView.findViewById<android.widget.ImageButton>(R.id.btnLogsDialogClose)
+        val btnFilterAll = dialogView.findViewById<android.widget.Button>(R.id.btnFilterAll)
+        val btnFilterErrors = dialogView.findViewById<android.widget.Button>(R.id.btnFilterErrors)
+        val btnClear = dialogView.findViewById<android.widget.Button>(R.id.btnClearLogs)
+        val btnShare = dialogView.findViewById<android.widget.Button>(R.id.btnShareLogs)
+        val btnCopy = dialogView.findViewById<android.widget.Button>(R.id.btnCopyLogs)
+
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(true)
+            .create()
+
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        dialog.show()
+
+        var currentFilter = "ALL"
+
+        fun refreshLogDisplay() {
+            val allLogs = com.instadown.assist.util.AppLogger.getLogs()
+            val filtered = if (currentFilter == "ERRORS") {
+                allLogs.filter { it.level == "ERROR" || it.level == "WARN" }
+            } else {
+                allLogs
+            }
+
+            tvLogsCount.text = "${filtered.size} of ${allLogs.size} entries"
+            if (filtered.isEmpty()) {
+                tvLogsContent.text = if (allLogs.isEmpty()) "No logs recorded in memory yet." else "No errors or warnings recorded."
+            } else {
+                val sb = java.lang.StringBuilder()
+                for (entry in filtered) {
+                    sb.appendLine(entry.toString())
+                }
+                tvLogsContent.text = sb.toString()
+            }
+        }
+
+        refreshLogDisplay()
+
+        btnClose.setOnClickListener { dialog.dismiss() }
+
+        btnFilterAll.setOnClickListener {
+            currentFilter = "ALL"
+            btnFilterAll.setTextColor(getColor(R.color.white))
+            btnFilterErrors.setTextColor(getColor(R.color.text_secondary))
+            refreshLogDisplay()
+        }
+
+        btnFilterErrors.setOnClickListener {
+            currentFilter = "ERRORS"
+            btnFilterErrors.setTextColor(getColor(R.color.white))
+            btnFilterAll.setTextColor(getColor(R.color.text_secondary))
+            refreshLogDisplay()
+        }
+
+        btnCopy.setOnClickListener {
+            val success = com.instadown.assist.util.AppLogger.copyLogsToClipboard(this)
+            if (success) {
+                Toast.makeText(this, "Diagnostic logs copied to clipboard!", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Failed to copy logs", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        btnShare.setOnClickListener {
+            try {
+                startActivity(com.instadown.assist.util.AppLogger.createShareIntent(this))
+            } catch (e: Exception) {
+                Toast.makeText(this, "Could not open share menu: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        btnClear.setOnClickListener {
+            com.instadown.assist.util.AppLogger.clear()
+            refreshLogDisplay()
+            Toast.makeText(this, "In-memory logs cleared", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -164,7 +255,31 @@ class SettingsActivity : AppCompatActivity() {
             if (!updateInfo.isAvailable) {
                 tvTitle.text = "You're Up to Date! 🎉"
                 tvSubtitle.text = "InstaSave v${updateInfo.versionName} is the latest available version."
-                btnNegative.visibility = android.view.View.GONE
+                btnNegative.visibility = android.view.View.VISIBLE
+                btnNegative.text = "Re-download APK"
+                btnNegative.setOnClickListener {
+                    layoutReleaseNotes.visibility = android.view.View.VISIBLE
+                    tvReleaseVersion.text = "Version: v${updateInfo.versionName}"
+                    val sizeMb = if (updateInfo.fileSizeBytes > 0) String.format(java.util.Locale.US, "%.1f MB", updateInfo.fileSizeBytes / (1024.0 * 1024.0)) else ""
+                    tvReleaseSize.text = sizeMb
+                    tvReleaseNotes.text = updateInfo.releaseNotes
+                    btnNegative.visibility = android.view.View.GONE
+                    btnPositive.text = "Download Now"
+                    btnPositive.setOnClickListener {
+                        performUpdateDownload(
+                            updateInfo,
+                            dialog,
+                            tvTitle,
+                            tvSubtitle,
+                            layoutProgress,
+                            pbDownload,
+                            tvUpdatePercent,
+                            tvProgressStatus,
+                            btnPositive,
+                            btnNegative
+                        )
+                    }
+                }
                 btnPositive.isEnabled = true
                 btnPositive.text = "Done"
                 btnPositive.setOnClickListener { dialog.dismiss() }
@@ -185,58 +300,91 @@ class SettingsActivity : AppCompatActivity() {
             btnNegative.text = "Later"
 
             btnPositive.setOnClickListener {
-                btnPositive.isEnabled = false
-                btnPositive.text = "Downloading..."
-                btnNegative.isEnabled = false
-                dialog.setCancelable(false)
-                layoutProgress.visibility = android.view.View.VISIBLE
+                performUpdateDownload(
+                    updateInfo,
+                    dialog,
+                    tvTitle,
+                    tvSubtitle,
+                    layoutProgress,
+                    pbDownload,
+                    tvUpdatePercent,
+                    tvProgressStatus,
+                    btnPositive,
+                    btnNegative
+                )
+            }
+        }
+    }
 
-                lifecycleScope.launch {
-                    val downloadedApk = com.instadown.assist.util.AppUpdateManager.downloadUpdate(
-                        this@SettingsActivity,
-                        updateInfo
-                    ) { percent, bytesRead, totalBytes ->
-                        runOnUiThread {
-                            pbDownload.progress = percent
-                            tvUpdatePercent.text = "$percent%"
-                            val readMb = String.format(java.util.Locale.US, "%.1f", bytesRead / (1024.0 * 1024.0))
-                            val totMb = String.format(java.util.Locale.US, "%.1f MB", totalBytes / (1024.0 * 1024.0))
-                            tvProgressStatus.text = "Downloading... ($readMb of $totMb)"
-                        }
-                    }
+    private fun performUpdateDownload(
+        updateInfo: com.instadown.assist.util.AppUpdateInfo,
+        dialog: androidx.appcompat.app.AlertDialog,
+        tvTitle: android.widget.TextView,
+        tvSubtitle: android.widget.TextView,
+        layoutProgress: android.view.View,
+        pbDownload: android.widget.ProgressBar,
+        tvUpdatePercent: android.widget.TextView,
+        tvProgressStatus: android.widget.TextView,
+        btnPositive: android.widget.Button,
+        btnNegative: android.widget.Button
+    ) {
+        btnPositive.isEnabled = false
+        btnPositive.text = "Downloading..."
+        btnNegative.isEnabled = false
+        dialog.setCancelable(false)
+        layoutProgress.visibility = android.view.View.VISIBLE
 
-                    if (downloadedApk != null && downloadedApk.exists()) {
-                        tvTitle.text = "Download Complete!"
-                        tvSubtitle.text = "Opening Android package installer..."
-                        tvProgressStatus.text = "Ready to install"
-                        pbDownload.progress = 100
-                        tvUpdatePercent.text = "100%"
-
-                        btnPositive.isEnabled = true
-                        btnPositive.text = "Install Now"
-                        btnNegative.isEnabled = true
-                        btnNegative.text = "Dismiss"
-                        dialog.setCancelable(true)
-
-                        com.instadown.assist.util.AppUpdateManager.promptInstall(this@SettingsActivity, downloadedApk)
-
-                        btnPositive.setOnClickListener {
-                            com.instadown.assist.util.AppUpdateManager.promptInstall(this@SettingsActivity, downloadedApk)
-                        }
+        lifecycleScope.launch {
+            val downloadedApk = com.instadown.assist.util.AppUpdateManager.downloadUpdate(
+                this@SettingsActivity,
+                updateInfo
+            ) { percent, bytesRead, totalBytes ->
+                runOnUiThread {
+                    if (percent >= 0) {
+                        pbDownload.isIndeterminate = false
+                        pbDownload.progress = percent
+                        tvUpdatePercent.text = "$percent%"
                     } else {
-                        tvTitle.text = "Download Failed"
-                        tvSubtitle.text = "Unable to download the update package. Please try again."
-                        btnPositive.isEnabled = true
-                        btnPositive.text = "Retry"
-                        btnNegative.isEnabled = true
-                        btnNegative.text = "Cancel"
-                        dialog.setCancelable(true)
-
-                        btnPositive.setOnClickListener {
-                            dialog.dismiss()
-                            startInAppUpdateFlow()
-                        }
+                        pbDownload.isIndeterminate = true
+                        tvUpdatePercent.text = ""
                     }
+                    val readMb = String.format(java.util.Locale.US, "%.1f", bytesRead / (1024.0 * 1024.0))
+                    val totMb = if (totalBytes > 0) String.format(java.util.Locale.US, "%.1f MB", totalBytes / (1024.0 * 1024.0)) else "..."
+                    tvProgressStatus.text = "Downloading... ($readMb of $totMb)"
+                }
+            }
+
+            if (downloadedApk != null && downloadedApk.exists()) {
+                tvTitle.text = "Download Complete!"
+                tvSubtitle.text = "Opening Android package installer..."
+                tvProgressStatus.text = "Ready to install"
+                pbDownload.isIndeterminate = false
+                pbDownload.progress = 100
+                tvUpdatePercent.text = "100%"
+
+                btnPositive.isEnabled = true
+                btnPositive.text = "Install Now"
+                btnNegative.isEnabled = true
+                btnNegative.text = "Dismiss"
+                dialog.setCancelable(true)
+
+                com.instadown.assist.util.AppUpdateManager.promptInstall(this@SettingsActivity, downloadedApk)
+
+                btnPositive.setOnClickListener {
+                    com.instadown.assist.util.AppUpdateManager.promptInstall(this@SettingsActivity, downloadedApk)
+                }
+            } else {
+                tvTitle.text = "Download Failed"
+                tvSubtitle.text = "Unable to download the update package. Please try again."
+                btnPositive.isEnabled = true
+                btnPositive.text = "Retry"
+                btnNegative.isEnabled = true
+                btnNegative.text = "Cancel"
+                dialog.setCancelable(true)
+
+                btnPositive.setOnClickListener {
+                    dialog.dismiss()
+                    startInAppUpdateFlow()
                 }
             }
         }

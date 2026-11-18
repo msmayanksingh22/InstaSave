@@ -1,7 +1,8 @@
 {
-  "versionCode": 3,
-  "versionName": "1.1.1",
-  "releaseNotes": "• Multi-item carousels: Fixed 6-item truncation; full 10-15+ items extract immediately via direct Vue state inspection\n• Lightning-fast History & Archive: Instant <50ms load with asynchronous MediaStore reconciliation\n• Universal cover thumbnails: All posts & deleted archives show fast, lightweight preview thumbnails via zero-auth CDN\n• Modern In-App OTA Update: Sleek native update dialog with progress bar and one-tap install\n• Clean Settings: Removed wireless ADB and diagnostic clutter; dynamically bound true version (v1.1.1)",
-  "apkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.1.1/app-release.apk",
-  "fileSizeBytes": 3784188
+  "versionCode": 4,
+  "versionName": "1.1.2",
+  "releaseNotes": "• Multi-item carousels: Extract all 15+ items instantly via direct Vue state and API interception\n• Lightning-fast History & Archive: Instant <50ms load with background MediaStore reconciliation\n• Universal cover thumbnails: All posts and deleted archive items show fast persistent cover previews\n• Modern In-App OTA Update: Seamless in-app download and one-tap installer with progress bar\n• In-App Diagnostic Logs: Export, copy, and share live logs without requiring USB debugging\n• Clean Commercial Settings: Dynamic version binding (v1.1.2 Build 4) and polished experience",
+  "apkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
+  "fallbackApkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.1.2/app-release.apk",
+  "fileSizeBytes": 3802184
 }

@@ -64,6 +64,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnClipBannerDownload: Button
     private lateinit var btnClipBannerDismiss: ImageButton
 
+    private lateinit var layoutUpdateBanner: LinearLayout
+    private lateinit var tvUpdateBannerSubtitle: TextView
+    private lateinit var btnUpdateBannerAction: Button
+    private lateinit var btnUpdateBannerDismiss: ImageButton
+
     private lateinit var prefs: InstaSavePreferences
     private val repo by lazy { DownloadRepository.getInstance(this) }
     private val coordinator by lazy { com.instadown.assist.download.InstagramDownloadCoordinator(this) }
@@ -97,6 +102,11 @@ class MainActivity : AppCompatActivity() {
         tvClipBannerUrl = findViewById(R.id.tvClipBannerUrl)
         btnClipBannerDownload = findViewById(R.id.btnClipBannerDownload)
         btnClipBannerDismiss = findViewById(R.id.btnClipBannerDismiss)
+
+        layoutUpdateBanner = findViewById(R.id.layoutUpdateAvailableBanner)
+        tvUpdateBannerSubtitle = findViewById(R.id.tvUpdateBannerSubtitle)
+        btnUpdateBannerAction = findViewById(R.id.btnUpdateBannerAction)
+        btnUpdateBannerDismiss = findViewById(R.id.btnUpdateBannerDismiss)
 
         dotService = findViewById(R.id.dotServiceStatus)
         tvServiceTitle = findViewById(R.id.tvServiceStatusTitle)
@@ -268,7 +278,17 @@ class MainActivity : AppCompatActivity() {
                 val info = com.instadown.assist.util.AppUpdateManager.checkForUpdates(this@MainActivity)
                 if (info != null && info.isAvailable) {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                        showUpdateAvailablePrompt(info)
+                        layoutUpdateBanner.visibility = View.VISIBLE
+                        tvUpdateBannerSubtitle.text = "InstaSave v${info.versionName} is ready to install"
+                        btnUpdateBannerAction.setOnClickListener {
+                            showUpdateAvailablePrompt(info)
+                        }
+                        layoutUpdateBanner.setOnClickListener {
+                            showUpdateAvailablePrompt(info)
+                        }
+                        btnUpdateBannerDismiss.setOnClickListener {
+                            layoutUpdateBanner.visibility = View.GONE
+                        }
                     }
                 }
             } catch (e: Exception) {

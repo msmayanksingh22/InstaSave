@@ -122,7 +122,10 @@ data class DownloadTransactionEvent(
     val failedCount: Int,
     val totalBytes: Long,
     val timestamp: Long = System.currentTimeMillis(),
-    val items: List<ItemEvent> = emptyList()
+    val items: List<ItemEvent> = emptyList(),
+    val authorUsername: String? = null,
+    val caption: String? = null,
+    val thumbnailPath: String? = null
 )
 
 data class DeleteHistoryResult(

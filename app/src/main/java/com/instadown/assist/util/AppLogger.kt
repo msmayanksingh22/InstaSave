@@ -1,12 +1,17 @@
 package com.instadown.assist.util
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.NetworkCapabilities
 import android.util.Log
+import androidx.core.content.FileProvider
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import java.io.File
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.text.SimpleDateFormat
@@ -29,6 +34,7 @@ data class LogEntry(
 
 object AppLogger {
 
+    private const val TAG = "AppLogger"
     private const val MAX_LOGS = 500
     private val buffer = ConcurrentLinkedDeque<LogEntry>()
 
@@ -85,6 +91,57 @@ object AppLogger {
             sb.appendLine(log.toString())
         }
         return sb.toString()
+    }
+
+    /**
+     * Exports runtime logs into a persistent cache text file.
+     */
+    fun exportLogsToFile(context: Context): File {
+        val logsDir = File(context.cacheDir, "logs")
+        if (!logsDir.exists()) logsDir.mkdirs()
+        val file = File(logsDir, "instasave-diagnostics-${System.currentTimeMillis()}.txt")
+        file.writeText(exportFormattedLogs())
+        return file
+    }
+
+    /**
+     * Copies diagnostic logs to the system clipboard.
+     */
+    fun copyLogsToClipboard(context: Context): Boolean {
+        return try {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            val clip = ClipData.newPlainText("InstaSave Diagnostics", exportFormattedLogs())
+            clipboard?.setPrimaryClip(clip)
+            true
+        } catch (e: Exception) {
+            e(TAG, "Failed copying logs to clipboard: ${e.message}", e)
+            false
+        }
+    }
+
+    /**
+     * Creates an Intent to share diagnostic logs via external apps or save to files.
+     */
+    fun createShareIntent(context: Context): Intent {
+        val formatted = exportFormattedLogs()
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "InstaSave Runtime Diagnostic Logs")
+            putExtra(Intent.EXTRA_TEXT, formatted)
+            try {
+                val file = exportLogsToFile(context)
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (e: Exception) {
+                w(TAG, "FileProvider attach skipped: ${e.message}")
+            }
+        }
+        return Intent.createChooser(shareIntent, "Share Diagnostic Logs")
     }
 
     /**
