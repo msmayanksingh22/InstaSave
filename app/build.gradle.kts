@@ -11,7 +11,7 @@ android {
         applicationId = "com.instadown.assist"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
+        versionCode = 8
         versionName = "1.1.5"
     }
 

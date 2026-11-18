@@ -301,8 +301,28 @@ object MediaStoreWriter {
     /**
      * Checks whether an existing MediaStore URI is currently present and readable.
      */
+    /**
+     * Checks whether an existing MediaStore URI is currently present, not trashed, and readable.
+     * Uses cursor-first approach so hard-deletes and trash both return false reliably.
+     */
     fun isUriReadable(resolver: ContentResolver, uri: Uri): Boolean {
         return try {
+            // Step 1: Cursor existence check (fastest; handles hard-delete and trash)
+            val projection = mutableListOf(android.provider.MediaStore.MediaColumns._ID)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                projection.add(android.provider.MediaStore.MediaColumns.IS_TRASHED)
+            }
+            val cursor = resolver.query(uri, projection.toTypedArray(), null, null, null)
+            val existsAndNotTrashed = cursor?.use { c ->
+                if (!c.moveToFirst()) return@use false  // row gone -> hard deleted
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    val idx = c.getColumnIndex(android.provider.MediaStore.MediaColumns.IS_TRASHED)
+                    if (idx >= 0 && c.getInt(idx) != 0) return@use false  // trashed
+                }
+                true
+            } ?: false
+            if (!existsAndNotTrashed) return false
+            // Step 2: Confirm byte-level access
             resolver.openInputStream(uri)?.use { true } ?: false
         } catch (e: Exception) {
             Log.w(TAG, "isUriReadable failed for $uri: ${e.message}")
