@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootHistoryLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_dark">
+
+    <!-- Top App Bar -->
+    <LinearLayout
+        android:id="@+id/historyTopBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="16dp"
+        android:background="#161620">
+
+        <ImageButton
+            android:id="@+id/btnHistoryBack"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_arrow_back"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Back" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginStart="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Download History"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary" />
+
+            <TextView
+                android:id="@+id/tvHistoryHeaderSummary"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="All saves &amp; 1-click re-download archive"
+                android:textSize="11sp"
+                android:textColor="@color/text_muted" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/btnHistoryRefresh"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_history"
+            android:tint="@color/insta_pink"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Refresh" />
+    </LinearLayout>
+
+    <!-- Filter Chips Row -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:background="#13131A">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/chipFilterAll"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:text="All History"
+                android:textColor="@color/white"
+                android:background="@drawable/card_background"
+                android:backgroundTint="@color/insta_pink"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_marginEnd="8dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp" />
+
+            <Button
+                android:id="@+id/chipFilterOnDevice"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:text="On Device"
+                android:textColor="@color/text_secondary"
+                android:background="@drawable/card_background"
+                android:textSize="12sp"
+                android:layout_marginEnd="8dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp" />
+
+            <Button
+                android:id="@+id/chipFilterDeleted"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:text="Deleted / Re-download"
+                android:textColor="@color/text_secondary"
+                android:background="@drawable/card_background"
+                android:textSize="12sp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvHistoryList"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingTop="8dp"
+            android:paddingBottom="24dp" />
+
+        <!-- Empty State Container -->
+        <LinearLayout
+            android:id="@+id/layoutEmptyHistory"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="32dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:src="@drawable/ic_history"
+                android:tint="@color/text_muted"
+                android:contentDescription="No History" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="No History Records Yet"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:layout_marginTop="16dp" />
+
+            <TextView
+                android:id="@+id/tvEmptyHistoryDescription"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Every post you save will be recorded here so you can re-download it even after deleting from storage."
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:gravity="center"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/pbHistoryLoading"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:indeterminateTint="@color/insta_pink"
+            android:visibility="gone" />
+    </FrameLayout>
+
+</LinearLayout>

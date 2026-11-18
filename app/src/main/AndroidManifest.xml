@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.InstaSave">
+
+        <!-- Floating Trigger Overlay Service -->
+        <service
+            android:name=".service.FloatingTriggerService"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false"
+            android:exported="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Persistent floating overlay control for user-initiated Instagram media saving" />
+        </service>
+
+        <!-- Accessibility Service for automated Copy Link interaction -->
+        <service
+            android:name=".service.InstaAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true"
+            android:label="@string/accessibility_service_label">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- Main Dashboard Activity -->
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!-- Gallery Activity -->
+        <activity
+            android:name=".ui.GalleryActivity"
+            android:exported="true"
+            android:label="@string/gallery_title" />
+
+        <!-- Media Selection Activity for multi-select visual tiles -->
+        <activity
+            android:name=".ui.MediaSelectionActivity"
+            android:exported="true"
+            android:label="Select Media" />
+
+        <!-- Download History Activity (Backward compatibility alias) -->
+        <activity
+            android:name=".ui.DownloadHistoryActivity"
+            android:exported="true"
+            android:label="@string/gallery_title" />
+
+        <!-- In-App Media Viewer Activity -->
+        <activity
+            android:name=".ui.MediaViewerActivity"
+            android:exported="true"
+            android:theme="@style/Theme.InstaSave" />
+
+        <!-- Settings Activity -->
+        <activity
+            android:name=".ui.SettingsActivity"
+            android:exported="true"
+            android:label="@string/settings_title" />
+
+        <!-- Advanced Diagnostics Activity (telemetry, test logs) -->
+        <activity
+            android:name=".ui.DiagnosticsActivity"
+            android:exported="true"
+            android:label="@string/setting_diagnostics" />
+
+        <!-- Resolver POC Test Activity -->
+        <activity
+            android:name=".ui.ResolverTestActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:label="Instagram Resolver POC" />
+
+        <!-- Boot Completed Receiver -->
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Service Control Receiver for notification Stop action -->
+        <receiver
+            android:name=".receiver.ServiceControlReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.instadown.assist.ACTION_STOP_SERVICE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Carousel Action Receiver for Prompt notification actions (Save All, Current) -->
+        <receiver
+            android:name=".receiver.CarouselActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.instadown.assist.ACTION_SAVE_ALL" />
+                <action android:name="com.instadown.assist.ACTION_DOWNLOAD_CURRENT" />
+            </intent-filter>
+        </receiver>
+
+        <!-- VoiceInteractionService: Android Assist entry point -->
+        <service
+            android:name=".service.InstagramAssistVoiceInteractionService"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true"
+            android:label="@string/voice_interaction_service_label">
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/voice_interaction_service" />
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+        </service>
+
+        <!-- VoiceInteractionSessionService: Creates the AssistSession -->
+        <service
+            android:name=".service.InstagramAssistSessionService"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true" />
+
+        <!-- RecognitionService: Required component referenced in VoiceInteractionServiceInfo -->
+        <service
+            android:name=".service.InstagramAssistRecognitionService"
+            android:permission="android.permission.BIND_RECOGNITION_SERVICE"
+            android:exported="true"
+            android:label="@string/recognition_service_label">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech"
+                android:resource="@xml/recognition_service" />
+        </service>
+
+        <!-- FileProvider for In-App Updates and Secure APK / Media Sharing -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+    </application>
+
+</manifest>

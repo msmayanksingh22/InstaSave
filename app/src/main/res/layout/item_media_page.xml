@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- Photo Page: Pinch to zoom & pan -->
+    <com.instadown.assist.ui.view.ZoomableImageView
+        android:id="@+id/ivPhoto"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <!-- Video Page: Native Video Playback -->
+    <FrameLayout
+        android:id="@+id/videoContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone">
+
+        <VideoView
+            android:id="@+id/videoView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center" />
+
+        <!-- Center Play/Pause Floating Indicator -->
+        <FrameLayout
+            android:id="@+id/btnPlayPauseOverlay"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_gravity="center"
+            android:background="@drawable/card_background"
+            android:backgroundTint="#80000000"
+            android:clickable="true"
+            android:focusable="true">
+
+            <ImageView
+                android:id="@+id/ivPlayPauseIcon"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_play_arrow" />
+        </FrameLayout>
+
+        <!-- Video Bottom Controls -->
+        <LinearLayout
+            android:id="@+id/videoControlsBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="24dp"
+            android:background="#66000000">
+
+            <TextView
+                android:id="@+id/tvVideoTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:text="0:00" />
+
+            <SeekBar
+                android:id="@+id/videoSeekBar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:max="1000"
+                android:progressTint="#E1306C"
+                android:thumbTint="#FFFFFF" />
+
+            <TextView
+                android:id="@+id/tvVideoDuration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#88FFFFFF"
+                android:textSize="12sp"
+                android:text="0:00" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- Loading Indicator -->
+    <ProgressBar
+        android:id="@+id/pageLoading"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:indeterminate="true"
+        android:visibility="gone" />
+
+</FrameLayout>

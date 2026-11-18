@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.instadown.assist.ui.view.SquareFrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="6dp"
+    android:background="@drawable/card_background"
+    android:clipToOutline="true"
+    android:foreground="?android:attr/selectableItemBackground">
+
+    <!-- Media Thumbnail -->
+    <ImageView
+        android:id="@+id/ivTileThumbnail"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:contentDescription="Media Thumbnail" />
+
+    <!-- Unselected Dimming Overlay -->
+    <View
+        android:id="@+id/viewDimOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#88000000"
+        android:visibility="gone" />
+
+    <!-- Slide Index Badge (Top-Start) -->
+    <TextView
+        android:id="@+id/tvTileIndexBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_margin="8dp"
+        android:background="#CC000000"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="3dp"
+        android:paddingBottom="3dp"
+        android:text="#1"
+        android:textColor="@color/white"
+        android:textSize="11sp"
+        android:textStyle="bold" />
+
+    <!-- Video Indicator (Center) -->
+    <ImageView
+        android:id="@+id/ivTileVideoIndicator"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="center"
+        android:background="#66000000"
+        android:padding="6dp"
+        android:src="@drawable/ic_video"
+        android:tint="@color/white"
+        android:visibility="gone"
+        android:contentDescription="Video" />
+
+    <!-- Checkmark Badge (Top-End) -->
+    <ImageView
+        android:id="@+id/ivTileCheckmark"
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="8dp"
+        android:src="@drawable/ic_check_circle"
+        android:tint="@color/status_green"
+        android:contentDescription="Selected" />
+
+</com.instadown.assist.ui.view.SquareFrameLayout>

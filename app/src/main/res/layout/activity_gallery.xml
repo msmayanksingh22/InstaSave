@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootGalleryLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_dark">
+
+    <!-- Top App Bar -->
+    <LinearLayout
+        android:id="@+id/galleryTopBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="16dp"
+        android:background="#161620">
+
+        <ImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_arrow_back"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Back" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:text="@string/gallery_title"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_primary" />
+
+        <Button
+            android:id="@+id/btnStartSelection"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="Select"
+            android:textColor="@color/insta_pink"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp" />
+
+        <!-- Add Link Shortcut in Gallery -->
+        <ImageButton
+            android:id="@+id/btnAddLink"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_link"
+            android:tint="@color/insta_pink"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Add Link" />
+    </LinearLayout>
+
+    <!-- Selection Action Bar (Shown during multi-select mode) -->
+    <LinearLayout
+        android:id="@+id/gallerySelectionBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="16dp"
+        android:background="#231326"
+        android:visibility="gone">
+
+        <ImageButton
+            android:id="@+id/btnCloseSelection"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_close"
+            android:tint="@color/white"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Close Selection" />
+
+        <TextView
+            android:id="@+id/tvSelectionCount"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="1 selected"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/white" />
+
+        <Button
+            android:id="@+id/btnSelectAllToggle"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="Select All"
+            android:textColor="@color/insta_pink"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp" />
+
+        <ImageButton
+            android:id="@+id/btnBatchShare"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_share"
+            android:tint="@color/white"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Share Selected" />
+
+        <ImageButton
+            android:id="@+id/btnBatchDelete"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_delete"
+            android:tint="@color/status_red"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Delete Selected" />
+    </LinearLayout>
+
+    <!-- Filter Chips Row -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:background="#13131A">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/chipAll"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:text="@string/filter_all"
+                android:textColor="@color/white"
+                android:background="@drawable/card_background"
+                android:backgroundTint="@color/insta_pink"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_marginEnd="8dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp" />
+
+            <Button
+                android:id="@+id/chipPhotos"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:text="@string/filter_photos"
+                android:textColor="@color/text_secondary"
+                android:background="@drawable/card_background"
+                android:textSize="12sp"
+                android:layout_marginEnd="8dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp" />
+
+            <Button
+                android:id="@+id/chipReels"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:text="@string/filter_reels"
+                android:textColor="@color/text_secondary"
+                android:background="@drawable/card_background"
+                android:textSize="12sp"
+                android:layout_marginEnd="8dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp" />
+
+            <Button
+                android:id="@+id/chipCarousels"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:text="@string/filter_carousels"
+                android:textColor="@color/text_secondary"
+                android:background="@drawable/card_background"
+                android:textSize="12sp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <!-- Empty State -->
+    <TextView
+        android:id="@+id/tvEmptyGallery"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:padding="32dp"
+        android:text="@string/empty_gallery"
+        android:textColor="@color/text_muted"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+    <!-- Gallery 2-Column Grid -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvGallery"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="6dp"
+        android:clipToPadding="false" />
+
+</LinearLayout>

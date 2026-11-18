@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Translucent Frosted Glassmorphism Badge -->
+    <path
+        android:fillAlpha="0.18"
+        android:fillColor="#FFFFFF"
+        android:pathData="M43,28 H65 A14,14 0 0 1 79,42 V66 A14,14 0 0 1 65,80 H43 A14,14 0 0 1 29,66 V42 A14,14 0 0 1 43,28 Z" />
+
+    <!-- Camera Outer Squircle Contour -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M44,30 H64 A13,13 0 0 1 77,43 V65 A13,13 0 0 1 64,78 H44 A13,13 0 0 1 31,65 V43 A13,13 0 0 1 44,30 Z" />
+
+    <!-- Camera Top-Right Flash Sensor Dot -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M70,37 A2.2,2.2 0 1 1 69.99,37 Z" />
+
+    <!-- Center Download Arrow Stem -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M51.5,41 H56.5 V53 H51.5 Z" />
+
+    <!-- Center Download Arrow Head -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineJoin="round"
+        android:fillColor="#FFFFFF"
+        android:pathData="M43,53 L65,53 L54,63.5 Z" />
+
+    <!-- Sleek Rounded Media Catch Tray Bracket -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M43,65 V68.5 H65 V65" />
+
+</vector>

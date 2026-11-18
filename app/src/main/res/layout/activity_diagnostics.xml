@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootDiagnosticsLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_dark">
+
+    <!-- Top App Bar -->
+    <LinearLayout
+        android:id="@+id/diagnosticsTopBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="16dp"
+        android:background="#161620">
+
+        <ImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_arrow_back"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Back" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:text="Diagnostics &amp; Wireless OTA"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_primary" />
+
+        <Button
+            android:id="@+id/btnCopyReport"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="Copy"
+            android:textColor="@color/insta_pink"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- 1. Wireless Debugging Card (No USB Needed) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_background"
+                android:padding="14dp"
+                android:layout_marginBottom="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="6dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="⚡ Wireless Debugging"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="No USB Needed"
+                        android:textColor="@color/status_green"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:background="@drawable/card_background"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:paddingTop="2dp"
+                        android:paddingBottom="2dp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvWifiIp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Wi-Fi IP: Detecting..."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp"
+                    android:layout_marginBottom="6dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Connect wireless ADB from computer over same Wi-Fi network without plugging USB cable."
+                    android:textColor="@color/text_muted"
+                    android:textSize="11sp"
+                    android:layout_marginBottom="10dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnCopyAdbCommand"
+                        style="@style/Widget.AppCompat.Button.Colored"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Copy 'adb connect' Command"
+                        android:textSize="12sp"
+                        android:backgroundTint="@color/insta_purple" />
+
+                    <Button
+                        android:id="@+id/btnRefreshWifi"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Refresh"
+                        android:textColor="@color/insta_pink"
+                        android:textSize="12sp"
+                        android:layout_marginStart="8dp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 2. In-App Updates Card (OTA Self-Update) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_background"
+                android:padding="14dp"
+                android:layout_marginBottom="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="6dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="📦 In-App Software Updates"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvCurrentVersionBadge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="v1.1.0"
+                        android:textColor="@color/insta_pink"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvUpdateStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Check for latest build updates directly inside the app."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="8dp" />
+
+                <ProgressBar
+                    android:id="@+id/pbUpdateDownload"
+                    style="@style/Widget.AppCompat.ProgressBar.Horizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="8dp"
+                    android:visibility="gone"
+                    android:layout_marginBottom="8dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnCheckUpdates"
+                        style="@style/Widget.AppCompat.Button.Colored"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Check for Updates"
+                        android:textSize="12sp"
+                        android:backgroundTint="@color/insta_pink" />
+
+                    <Button
+                        android:id="@+id/btnInstallUpdate"
+                        style="@style/Widget.AppCompat.Button.Colored"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Install Update"
+                        android:textSize="12sp"
+                        android:backgroundTint="@color/status_green"
+                        android:visibility="gone"
+                        android:layout_marginStart="8dp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 3. Actions Row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="16dp">
+
+                <Button
+                    android:id="@+id/btnOpenResolverPoc"
+                    style="@style/Widget.AppCompat.Button.Colored"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Resolver POC"
+                    android:backgroundTint="@color/surface_variant" />
+
+                <Button
+                    android:id="@+id/btnExportLogs"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Share Log"
+                    android:textColor="@color/insta_pink"
+                    android:layout_marginStart="8dp" />
+
+                <Button
+                    android:id="@+id/btnClearHistory"
+                    style="@style/Widget.AppCompat.Button.Borderless"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Clear"
+                    android:textColor="@color/status_red"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+            <!-- 4. Scorecard Summary -->
+            <TextView
+                android:id="@+id/tvScorecard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Scorecard: Loading..."
+                android:textColor="@color/text_primary"
+                android:textSize="12sp"
+                android:background="@drawable/card_background"
+                android:padding="12dp"
+                android:layout_marginBottom="16dp" />
+
+            <!-- 5. Real-Time Telemetry & Log Output -->
+            <TextView
+                android:id="@+id/tvDiagnosticsLog"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="No diagnostic runs recorded yet."
+                android:textColor="#A0A0B0"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:background="#0A0A10"
+                android:padding="12dp" />
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

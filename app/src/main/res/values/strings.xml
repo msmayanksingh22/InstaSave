@@ -1,0 +1,58 @@
+<resources>
+    <string name="app_name">InstaSave</string>
+    <string name="tagline">Save What Inspires You</string>
+    <string name="accessibility_service_label">InstaSave Accessibility Assistant</string>
+    <string name="accessibility_service_description">Enables one-tap post saving from Instagram directly on your device.</string>
+    <string name="voice_interaction_service_label">InstaSave Service</string>
+    <string name="recognition_service_label">InstaSave Recognition</string>
+
+    <!-- Dashboard Strings -->
+    <string name="service_status_title">Service Status</string>
+    <string name="accessibility_status">Accessibility Service</string>
+    <string name="overlay_status">Floating Download Button</string>
+    <string name="storage_summary_title">Storage Used</string>
+    <string name="recent_downloads_title">Recent Downloads</string>
+    <string name="no_recent_downloads">No downloads yet. Tap the floating button on any Instagram post to save it!</string>
+    <string name="view_all_history">View Full History</string>
+    <string name="open_settings">Settings</string>
+
+    <!-- Gallery Strings -->
+    <string name="gallery_title">Gallery</string>
+    <string name="history_title">Gallery</string>
+    <string name="nav_gallery_desc">Browse, share, or delete saved media</string>
+    <string name="filter_all">All</string>
+    <string name="filter_photos">Photos</string>
+    <string name="filter_reels">Reels</string>
+    <string name="filter_carousels">Carousels</string>
+    <string name="empty_gallery">Your gallery is empty.\nDownload media using the floating button, clipboard, or paste a link!</string>
+    <string name="action_view_gallery">View in Viewer</string>
+    <string name="action_share">Share Media</string>
+    <string name="action_open">Open File</string>
+    <string name="action_remove_history">Remove from Gallery</string>
+    <string name="action_delete_file">Delete from Device</string>
+    <string name="status_available">Saved</string>
+    <string name="status_missing">Removed from storage</string>
+    <string name="status_verify_error">Storage check pending</string>
+
+    <!-- Settings Strings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_group_floating">Floating Button</string>
+    <string name="setting_button_enabled">Enable Floating Button</string>
+    <string name="setting_button_size">Button Size</string>
+    <string name="setting_button_opacity">Button Opacity</string>
+    <string name="setting_edge_docking">Snap to Screen Edges</string>
+    <string name="setting_haptic_feedback">Haptic Feedback</string>
+    <string name="setting_reset_position">Reset Button Position</string>
+    <string name="settings_group_downloads">Downloads</string>
+    <string name="setting_duplicate_behavior">Duplicate Handling</string>
+    <string name="setting_completion_notification">Completion Notifications</string>
+    <string name="settings_group_behavior">Behavior</string>
+    <string name="setting_start_on_boot">Start on Device Boot</string>
+    <string name="setting_sound_feedback">Completion Sound</string>
+    <string name="settings_group_advanced">Advanced</string>
+    <string name="setting_diagnostics">Advanced Diagnostics</string>
+    <string name="setting_diagnostics_desc">View technical telemetry, engine confidence scores, and raw logs.</string>
+    <string name="settings_group_about">About</string>
+    <string name="about_version">Version 1.0</string>
+    <string name="privacy_statement">Downloads are resolved and saved directly on your device. No account or app-owned server is required.</string>
+</resources>
