@@ -1,11 +1,12 @@
 package com.instadown.assist.resolver
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -26,133 +27,20 @@ class HeadlessWebBridgeResolver(
     companion object {
         private const val TAG = "HeadlessWebBridge"
         private const val EXTRACTOR_URL = "https://fastdl.app/en"
-        private const val TIMEOUT_MS = 22000L
-
-        @Volatile
-        private var prewarmedWebView: WebView? = null
-        @Volatile
-        private var isPrewarming = false
-        @Volatile
-        private var isPagePrewarmed = false
+        private const val TIMEOUT_MS = 25000L
 
         private fun configureWebView(webView: WebView) {
             val settings = webView.settings
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            settings.databaseEnabled = true
             settings.loadsImagesAutomatically = false // optimize memory & bandwidth
             settings.userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
         }
-
-        private fun getMonkeyPatchScript(): String {
-            return """
-                (function() {
-                    if (window._fastDlPatched) return;
-                    window._fastDlPatched = true;
-                    window._capturedFastDlApiData = null;
-
-                    function handleCaptured(data) {
-                        if (!data) return;
-                        window._capturedFastDlApiData = data;
-                        try {
-                            if (window.AndroidBridge && typeof window.AndroidBridge.onApiCaptured === 'function') {
-                                window.AndroidBridge.onApiCaptured(typeof data === 'string' ? data : JSON.stringify(data));
-                            }
-                        } catch (_) {}
-                    }
-
-                    // Monkey-patch window.fetch
-                    var origFetch = window.fetch;
-                    if (origFetch) {
-                        window.fetch = function() {
-                            var args = arguments;
-                            var url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url ? args[0].url : '');
-                            return origFetch.apply(this, args).then(function(response) {
-                                try {
-                                    if (url && (url.indexOf('/api/convert') !== -1 || url.indexOf('convert') !== -1)) {
-                                        response.clone().json().then(function(json) {
-                                            console.log('Intercepted /api/convert via fetch');
-                                            handleCaptured(json);
-                                        }).catch(function(_) {});
-                                    }
-                                } catch (_) {}
-                                return response;
-                            });
-                        };
-                    }
-
-                    // Monkey-patch XMLHttpRequest
-                    var origOpen = XMLHttpRequest.prototype.open;
-                    var origSend = XMLHttpRequest.prototype.send;
-                    XMLHttpRequest.prototype.open = function(method, url) {
-                        this._reqUrl = url;
-                        return origOpen.apply(this, arguments);
-                    };
-                    XMLHttpRequest.prototype.send = function() {
-                        this.addEventListener('load', function() {
-                            try {
-                                if (this._reqUrl && (this._reqUrl.indexOf('/api/convert') !== -1 || this._reqUrl.indexOf('convert') !== -1)) {
-                                    var json = JSON.parse(this.responseText);
-                                    console.log('Intercepted /api/convert via XHR');
-                                    handleCaptured(json);
-                                }
-                            } catch (_) {}
-                        });
-                        return origSend.apply(this, arguments);
-                    };
-                })();
-            """.trimIndent()
-        }
     }
 
-    /**
-     * Pre-warms the background WebView with FastDL homepage so extraction starts instantly without cold WebView boot.
-     */
     fun preWarm() {
-        if (prewarmedWebView != null || isPrewarming) return
-        Handler(Looper.getMainLooper()).post {
-            if (prewarmedWebView != null || isPrewarming) return@post
-            try {
-                isPrewarming = true
-                isPagePrewarmed = false
-                val newWebView = WebView(context.applicationContext)
-                configureWebView(newWebView)
-
-                newWebView.webViewClient = object : WebViewClient() {
-                    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                        super.onPageStarted(view, url, favicon)
-                        view?.evaluateJavascript(getMonkeyPatchScript(), null)
-                    }
-
-                    override fun onPageFinished(view: WebView?, pageUrl: String?) {
-                        super.onPageFinished(view, pageUrl)
-                        view?.evaluateJavascript(getMonkeyPatchScript(), null)
-                        isPrewarming = false
-                        isPagePrewarmed = true
-                        Log.i(TAG, "Pre-warmed WebView ready: $pageUrl")
-                    }
-
-                    override fun onReceivedError(
-                        view: WebView?,
-                        request: WebResourceRequest?,
-                        error: WebResourceError?
-                    ) {
-                        super.onReceivedError(view, request, error)
-                        if (request?.isForMainFrame == true) {
-                            Log.w(TAG, "Pre-warming error: ${error?.description}")
-                            isPrewarming = false
-                        }
-                    }
-                }
-
-                Log.i(TAG, "Pre-warming background WebView with $EXTRACTOR_URL")
-                newWebView.loadUrl(EXTRACTOR_URL)
-                prewarmedWebView = newWebView
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not pre-warm background WebView", e)
-                isPrewarming = false
-                isPagePrewarmed = false
-            }
-        }
+        // No-op: Fast, clean on-demand instantiation with zero lifecycle state bugs
     }
 
     override suspend fun resolve(url: String, validateCdn: Boolean): ResolveResult {
@@ -233,13 +121,12 @@ class HeadlessWebBridgeResolver(
                 try {
                     webView?.stopLoading()
                     webView?.removeJavascriptInterface("AndroidBridge")
+                    webView?.webChromeClient = null
                     webView?.destroy()
                     webView = null
                 } catch (e: Exception) {
                     Log.w(TAG, "Error cleaning up WebView", e)
                 }
-                // Pre-warm the next WebView in background
-                preWarm()
             }
 
             fun finishWithSuccess(items: List<ResolvedMedia>) {
@@ -344,22 +231,6 @@ class HeadlessWebBridgeResolver(
                 }
 
                 @JavascriptInterface
-                fun onApiCaptured(jsonStr: String) {
-                    if (isFinished) return
-                    Log.i(TAG, "onApiCaptured received: ${jsonStr.take(200)}...")
-                    Handler(Looper.getMainLooper()).post {
-                        try {
-                            val items = parseMediaItems(jsonStr, normalized.shortcode)
-                            if (items.isNotEmpty()) {
-                                finishWithSuccess(items)
-                            }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "API capture parse warning: ${e.message}")
-                        }
-                    }
-                }
-
-                @JavascriptInterface
                 fun onError(errorMsg: String) {
                     if (isFinished) return
                     Log.w(TAG, "Bridge reported error: $errorMsg")
@@ -370,58 +241,67 @@ class HeadlessWebBridgeResolver(
             }
 
             try {
-                val prewarmed = prewarmedWebView
-                prewarmedWebView = null
-                val isReady = isPagePrewarmed
-                isPagePrewarmed = false
-
-                val activeWebView = prewarmed ?: WebView(context.applicationContext)
+                val activeWebView = WebView(context.applicationContext)
                 webView = activeWebView
+                configureWebView(activeWebView)
 
-                if (prewarmed == null) {
-                    configureWebView(activeWebView)
-                }
-
+                // 1. MUST add JavascriptInterface BEFORE loadUrl
                 activeWebView.addJavascriptInterface(BridgeInterface(), "AndroidBridge")
-                val injectionJs = buildInjectionScript(targetUrl)
 
-                if (isReady && prewarmed != null) {
-                    Log.i(TAG, "Using pre-warmed WebView! Immediately evaluating automation script for: $targetUrl")
-                    activeWebView.evaluateJavascript(injectionJs, null)
-                } else {
-                    var hasInjected = false
-                    activeWebView.webViewClient = object : WebViewClient() {
-                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                            super.onPageStarted(view, url, favicon)
-                            view?.evaluateJavascript(getMonkeyPatchScript(), null)
-                        }
-
-                        override fun onPageFinished(view: WebView?, pageUrl: String?) {
-                            super.onPageFinished(view, pageUrl)
-                            if (!hasInjected && pageUrl?.contains("fastdl.app") == true) {
-                                hasInjected = true
-                                Log.i(TAG, "Page loaded. Injecting automation script for: $targetUrl")
-                                view?.evaluateJavascript(injectionJs, null)
+                // 2. MUST add WebChromeClient to intercept console logs as a fail-safe communication channel
+                activeWebView.webChromeClient = object : WebChromeClient() {
+                    override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                        val msg = consoleMessage?.message() ?: return false
+                        if (msg.startsWith("INSTASAVE_FOUND:")) {
+                            val json = msg.removePrefix("INSTASAVE_FOUND:")
+                            Handler(Looper.getMainLooper()).post {
+                                try {
+                                    val items = parseMediaItems(json, normalized.shortcode)
+                                    finishWithSuccess(items)
+                                } catch (e: Exception) {
+                                    finishWithError(e.message ?: "Parse error")
+                                }
                             }
+                            return true
                         }
-
-                        override fun onReceivedError(
-                            view: WebView?,
-                            request: WebResourceRequest?,
-                            error: WebResourceError?
-                        ) {
-                            super.onReceivedError(view, request, error)
-                            if (request?.isForMainFrame == true) {
-                                Log.w(TAG, "Main frame error: ${error?.description}")
+                        if (msg.startsWith("INSTASAVE_ERROR:")) {
+                            val err = msg.removePrefix("INSTASAVE_ERROR:")
+                            Handler(Looper.getMainLooper()).post {
+                                finishWithError(err)
                             }
+                            return true
                         }
-                    }
-
-                    if (prewarmed == null) {
-                        Log.i(TAG, "Loading extractor URL: $EXTRACTOR_URL")
-                        activeWebView.loadUrl(EXTRACTOR_URL)
+                        return super.onConsoleMessage(consoleMessage)
                     }
                 }
+
+                val injectionJs = buildInjectionScript(targetUrl)
+                var hasInjected = false
+
+                activeWebView.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, pageUrl: String?) {
+                        super.onPageFinished(view, pageUrl)
+                        if (!hasInjected && pageUrl?.contains("fastdl.app") == true) {
+                            hasInjected = true
+                            Log.i(TAG, "Page loaded. Evaluating automation script for: $targetUrl")
+                            view?.evaluateJavascript(injectionJs, null)
+                        }
+                    }
+
+                    override fun onReceivedError(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                        error: WebResourceError?
+                    ) {
+                        super.onReceivedError(view, request, error)
+                        if (request?.isForMainFrame == true) {
+                            Log.w(TAG, "Main frame error on $EXTRACTOR_URL: ${error?.description}")
+                        }
+                    }
+                }
+
+                Log.i(TAG, "Loading extractor URL: $EXTRACTOR_URL")
+                activeWebView.loadUrl(EXTRACTOR_URL)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to instantiate WebView", e)
@@ -502,7 +382,7 @@ class HeadlessWebBridgeResolver(
                     downloadUrl.contains(".mp4") ||
                     downloadUrl.contains("/t16/")
 
-            // Ensure thumbUrl extracts the small preview image (e.g. previewImageUrl) instead of multi-megabyte downloadUrl
+            // Prioritize small preview image (e.g. previewImageUrl) instead of multi-megabyte downloadUrl
             var thumbUrl = obj.optString("thumbUrl").takeIf { it.isNotBlank() }
             if (thumbUrl == null) {
                 thumbUrl = obj.optString("previewImageUrl").takeIf { it.isNotBlank() }
@@ -570,7 +450,27 @@ class HeadlessWebBridgeResolver(
             (function() {
                 console.log('InstaSave bridge injection started');
 
-                // 1. Ensure monkey patching for window.fetch and XMLHttpRequest is active
+                function sendResult(items) {
+                    if (!items || items.length === 0) return;
+                    var json = JSON.stringify(items);
+                    console.log('INSTASAVE_FOUND:' + json);
+                    try {
+                        if (window.AndroidBridge && typeof window.AndroidBridge.onMediaFound === 'function') {
+                            window.AndroidBridge.onMediaFound(json);
+                        }
+                    } catch (_) {}
+                }
+
+                function sendError(msg) {
+                    console.log('INSTASAVE_ERROR:' + msg);
+                    try {
+                        if (window.AndroidBridge && typeof window.AndroidBridge.onError === 'function') {
+                            window.AndroidBridge.onError(msg);
+                        }
+                    } catch (_) {}
+                }
+
+                // Monkey-patch window.fetch and XMLHttpRequest to catch raw API payload
                 if (!window._fastDlPatched) {
                     window._fastDlPatched = true;
                     window._capturedFastDlApiData = null;
@@ -585,7 +485,11 @@ class HeadlessWebBridgeResolver(
                                     if (url && (url.indexOf('/api/convert') !== -1 || url.indexOf('convert') !== -1)) {
                                         response.clone().json().then(function(json) {
                                             console.log('Intercepted /api/convert via fetch');
-                                            handleCaptured(json);
+                                            window._capturedFastDlApiData = json;
+                                            var items = extractFromCapturedApiData();
+                                            if (items && items.length > 0) {
+                                                sendResult(items);
+                                            }
                                         }).catch(function(_) {});
                                     }
                                 } catch (_) {}
@@ -606,24 +510,16 @@ class HeadlessWebBridgeResolver(
                                 if (this._reqUrl && (this._reqUrl.indexOf('/api/convert') !== -1 || this._reqUrl.indexOf('convert') !== -1)) {
                                     var json = JSON.parse(this.responseText);
                                     console.log('Intercepted /api/convert via XHR');
-                                    handleCaptured(json);
+                                    window._capturedFastDlApiData = json;
+                                    var items = extractFromCapturedApiData();
+                                    if (items && items.length > 0) {
+                                        sendResult(items);
+                                    }
                                 }
                             } catch (_) {}
                         });
                         return origSend.apply(this, arguments);
                     };
-                }
-
-                function handleCaptured(data) {
-                    if (!data) return;
-                    window._capturedFastDlApiData = data;
-                    var items = extractFromCapturedApiData();
-                    if (items && items.length > 0) {
-                        console.log('Immediately returning ' + items.length + ' items from captured API data');
-                        if (window.AndroidBridge && typeof window.AndroidBridge.onMediaFound === 'function') {
-                            window.AndroidBridge.onMediaFound(JSON.stringify(items));
-                        }
-                    }
                 }
 
                 function extractFromDataArray(arr) {
@@ -701,7 +597,6 @@ class HeadlessWebBridgeResolver(
                         for (var i = 0; i < targets.length; i++) {
                             var comp = targets[i].__vueParentComponent;
                             while (comp) {
-                                // FastDL Vue 3: comp.props.data or comp.proxy.data holds the full 15-item array!
                                 var candidateArrays = [];
                                 if (comp.props && comp.props.data) candidateArrays.push(comp.props.data);
                                 if (comp.proxy && comp.proxy.data) candidateArrays.push(comp.proxy.data);
@@ -839,20 +734,53 @@ class HeadlessWebBridgeResolver(
                     return null;
                 }
 
-                // Input URL into search field and trigger search immediately
-                var input = document.querySelector('.search-form__input, input[name="url"], input[type="text"]');
-                var btn = document.querySelector('.search-form__button, button[type="submit"]');
-                if (input && btn) {
-                    input.value = '$safeUrl';
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    input.dispatchEvent(new Event('change', { bubbles: true }));
-                    setTimeout(function() {
+                function doTriggerSearch() {
+                    var input = document.getElementById('search-form-input') || document.querySelector('.search-form__input, input[name="url"], input[type="text"]');
+                    var btn = document.getElementById('searchFormButton') || document.querySelector('.search-form__button, button[type="submit"]');
+
+                    if (input) {
+                        try {
+                            var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                            if (setter) {
+                                setter.call(input, '$safeUrl');
+                            } else {
+                                input.value = '$safeUrl';
+                            }
+                        } catch (_) {
+                            input.value = '$safeUrl';
+                        }
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+
+                        try {
+                            var el = input;
+                            while (el) {
+                                if (el.__vueParentComponent && el.__vueParentComponent.proxy) {
+                                    var p = el.__vueParentComponent.proxy;
+                                    if ('query' in p) p.query = '$safeUrl';
+                                    if ('disabled' in p) p.disabled = false;
+                                    if (typeof p.handleSearchButtonClick === 'function') {
+                                        console.log('Invoked proxy.handleSearchButtonClick()');
+                                        p.handleSearchButtonClick();
+                                        return;
+                                    }
+                                }
+                                el = el.parentElement;
+                            }
+                        } catch (_) {}
+                    }
+
+                    if (btn) {
+                        btn.removeAttribute('disabled');
+                        btn.disabled = false;
                         btn.click();
-                        console.log('Search button clicked');
-                    }, 30);
-                } else {
-                    console.log('Search input or button not found');
+                        console.log('Clicked search button');
+                    }
                 }
+
+                doTriggerSearch();
+                setTimeout(doTriggerSearch, 100);
+                setTimeout(doTriggerSearch, 300);
 
                 var attempts = 0;
                 var lastCount = 0;
@@ -860,27 +788,27 @@ class HeadlessWebBridgeResolver(
                 var pollInterval = setInterval(function() {
                     attempts++;
 
-                    // 0. Check captured API data from monkey-patched fetch / XHR (FASTEST! <1s)
+                    // 0. Intercepted API data
                     var apiMedia = extractFromCapturedApiData();
                     if (apiMedia && apiMedia.length > 0) {
                         clearInterval(pollInterval);
-                        console.log('Media extracted via monkey-patched API data: ' + apiMedia.length + ' items');
-                        AndroidBridge.onMediaFound(JSON.stringify(apiMedia));
+                        console.log('Returning ' + apiMedia.length + ' items via intercepted API');
+                        sendResult(apiMedia);
                         return;
                     }
 
                     expandDomItems();
 
-                    // 1. Check direct Vue state / component props (contains full 15 items!)
+                    // 1. Vue component state
                     var vueMedia = tryExtractFromVue();
                     if (vueMedia && vueMedia.length > 0) {
                         clearInterval(pollInterval);
-                        console.log('Media extracted via Vue state: ' + vueMedia.length + ' items');
-                        AndroidBridge.onMediaFound(JSON.stringify(vueMedia));
+                        console.log('Returning ' + vueMedia.length + ' items via Vue state');
+                        sendResult(vueMedia);
                         return;
                     }
 
-                    // 2. Check DOM extraction
+                    // 2. DOM elements
                     var media = tryExtractDom();
                     if (media.length > 0) {
                         if (media.length === lastCount) {
@@ -890,11 +818,10 @@ class HeadlessWebBridgeResolver(
                             lastCount = media.length;
                         }
 
-                        // Single items return at once; multi-item carousels wait until stabilized or expanded
-                        if (media.length === 1 || stableTicks >= 2) {
+                        if (media.length === 1 || stableTicks >= 5) {
                             clearInterval(pollInterval);
-                            console.log('Media extracted via DOM: ' + media.length + ' items');
-                            AndroidBridge.onMediaFound(JSON.stringify(media));
+                            console.log('Returning ' + media.length + ' items via DOM');
+                            sendResult(media);
                             return;
                         }
                     }
@@ -902,20 +829,19 @@ class HeadlessWebBridgeResolver(
                     var err = checkError();
                     if (err) {
                         clearInterval(pollInterval);
-                        console.log('Error found: ' + err);
-                        AndroidBridge.onError(err);
+                        sendError(err);
                         return;
                     }
 
-                    if (attempts >= 100) { // ~10 seconds at 100ms interval
+                    if (attempts >= 50) { // ~10 seconds
                         clearInterval(pollInterval);
                         if (media.length > 0) {
-                            AndroidBridge.onMediaFound(JSON.stringify(media));
+                            sendResult(media);
                         } else {
-                            AndroidBridge.onError("Extraction timed out on web bridge");
+                            sendError("Extraction timed out on web bridge");
                         }
                     }
-                }, 100);
+                }, 200);
             })();
         """.trimIndent()
     }

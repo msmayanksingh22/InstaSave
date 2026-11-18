@@ -274,6 +274,28 @@ class DownloadHistoryActivity : AppCompatActivity() {
                     }
                 }
 
+                // If still missing (e.g. deleted from device gallery), resolve preview thumbnail directly
+                if (finalPath == null && rec.shortcode.isNotBlank()) {
+                    try {
+                        val targetUrl = rec.targetDownloadUrl.ifBlank { "https://www.instagram.com/p/${rec.shortcode}/" }
+                        Log.i("DownloadHistory", "Resolving remote thumbnail for deleted post: ${rec.shortcode}")
+                        val res = coordinator.resolver.resolve(targetUrl, validateCdn = false)
+                        if (res.success && res.items.isNotEmpty()) {
+                            val item = res.items.first()
+                            val thumbUrl = item.thumbnailUrl ?: item.mediaUrl
+                            if (!thumbUrl.isNullOrBlank()) {
+                                finalPath = repo.extractAndSaveThumbnail(
+                                    shortcode = rec.shortcode,
+                                    uriStr = thumbUrl,
+                                    isVideo = item.mediaType == com.instadown.assist.resolver.model.MediaType.VIDEO
+                                )
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.d("DownloadHistory", "Thumbnail backfill resolution notice for ${rec.shortcode}: ${e.message}")
+                    }
+                }
+
                 if (finalPath != null && finalPath != rec.thumbnailPath) {
                     repo.updateMetadata(rec.shortcode, thumbnailPath = finalPath)
                     withContext(Dispatchers.Main) {
