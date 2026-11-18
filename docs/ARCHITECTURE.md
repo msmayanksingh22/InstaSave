@@ -372,3 +372,158 @@ InstaSave utilizes Kotlin Coroutines and structured concurrency across all opera
 | **Storage Accounting** | Background Job | `Dispatchers.IO` (Cursor scanning) |
 | **Floating Overlay UI** | Android Main Looper | `Dispatchers.Main` (WindowManager layout updates) |
 | **Dashboard & Selection UI** | Activity Lifecycle Scope | `Dispatchers.Main` (View binding & state observation) |
+
+---
+
+## 10. Pre-Warmed Headless Web Bridge Architecture
+
+To eliminate cold-start latencies and bypass unauthenticated Instagram SSR login redirects, InstaSave incorporates a persistent background WebKit runtime managed by `HeadlessWebBridgeResolver.kt` and initialized in `InstaSaveApp.onCreate()`.
+
+```
+Application Startup (InstaSaveApp)
+           │
+           ▼
+Handler(MainLooper).post { HeadlessWebBridgeResolver.preWarm() }
+           │
+           ▼
+Creates Background WebView
+├── Settings: JS enabled, DOM Storage, Images Disabled (0 bandwidth waste)
+├── Desktop UA: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0
+├── Injects AndroidBridge interface
+└── Loads https://fastdl.app/en into memory
+           │
+           ▼
+onPageFinished() ──► isPrewarmReady = true (Parked in memory awaiting input)
+```
+
+### 10.1 Desktop User-Agent Anti-Ad Spoofing
+When WebKit runs with an Android mobile User-Agent, online converter engines serve interstitial modal dialogs prompting visitors to *"Install our Android app from Google Play"*, which overlays the input element and intercepts automated clicks. By explicitly spoofing a Desktop Chrome User-Agent (`Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36`), the server serves the clean desktop layout without mobile promotional modals. Proactive DOM purging (`dismissPopups()`) strips any residual overlays or modal elements before search injection.
+
+### 10.2 Vue 3 Proxy & Prototype Setter Injection
+The extractor form relies on Vue 3 reactive properties (`:disabled="disabled"`, `v-model="query"`). Assigning `input.value = url` directly in JavaScript fails to notify Vue's internal reactive proxy. The automation script invokes the native HTMLInputElement prototype setter:
+```javascript
+var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+setter.call(input, targetUrl);
+input.dispatchEvent(new Event('input', { bubbles: true }));
+input.dispatchEvent(new Event('change', { bubbles: true }));
+```
+It then traverses DOM nodes up the hierarchy to locate `__vueParentComponent.proxy` and directly triggers `proxy.handleSearchButtonClick()`, executing search immediately with zero polling stall.
+
+### 10.3 Dual-Channel Fail-Safe IPC
+To ensure callback delivery across varied OEM Android WebKit versions, the bridge establishes dual IPC channels:
+1. Primary: `@JavascriptInterface window.AndroidBridge.onMediaFound(jsonStr)`.
+2. Fallback: `WebChromeClient.onConsoleMessage` intercepting `INSTASAVE_FOUND:<json>` and `INSTASAVE_ERROR:<msg>`.
+
+---
+
+## 11. Multi-Item Carousel Extraction Subsystem
+
+FastDL initializes carousels with a virtualized DOM slice (`visibleDataCount: 6`). Extracting raw DOM nodes prematurely truncates large carousels at 6 items. The extraction engine bypasses this limit using two coordinated mechanisms:
+1. **Direct Vue State Extraction**: Evaluates `comp.props?.data`, `comp.proxy?.data`, and `comp.setupState?.data` directly from the parent Vue component, retrieving all 10–15+ raw media models before DOM virtualization.
+2. **Dynamic DOM Expansion**: Simultaneously sets `visibleDataCount = 999` and issues automated synthetic clicks on `.load-more-trigger, button.load-more` selectors, while scrolling the document to guarantee full media availability.
+
+---
+
+## 12. Single-Flight Resolution Hand-off & Detached Background Downloading
+
+### 12.1 Zero-Delay Activity Hand-off
+Previously, `MainActivity` resolved a link from the clipboard, and then `MediaSelectionActivity` re-resolved the same URL upon opening, doubling latency. `MediaSelectionActivity.start(context, url, preloadedResult)` now accepts the existing `ResolveResult`. If `preloadedResult` is present, `displayResolvedMedia()` executes synchronously in 0 ms, skipping network resolution entirely.
+
+### 12.2 Detached Application-Scope Background Saving
+Tapping *"Download Selected"* in `MediaSelectionActivity` transfers execution to `InstaSaveApp.applicationScope` and immediately finishes the activity (`finish()`). The user returns to their previous application instantly, while:
+1. `InstagramDownloadCoordinator.executeDirectDownload()` receives `preResolvedResult`, bypassing re-resolution.
+2. `MediaDownloadManager` streams media via parallel OkHttp sockets (3–4 concurrent streams bounded by Semaphore).
+3. `DownloadNotificationManager` posts ongoing progress to the system notification drawer and alerts the user upon completion.
+
+---
+
+## 13. Universal Persistent Thumbnail Subsystem
+
+To ensure thumbnails remain accessible even after users delete high-resolution photos or videos from their phone gallery, InstaSave employs an isolated, persistent internal thumbnail cache.
+
+```
+Media Downloaded / Resolved
+           │
+           ▼
+Extract lightweight preview image (~20 KB)
+           │
+           ▼
+Save to internal private storage:
+context.filesDir / "thumbnails" / "${shortcode}.jpg"
+           │
+           ▼
+Store path in SQLite: downloads.thumbnail_path
+```
+
+### 13.1 Offline Persistence Guarantee
+Because files in `context.filesDir` are private to InstaSave, external gallery cleaners, Google Photos deletions, and file managers cannot delete them. When `DownloadHistoryActivity` loads, it references `filesDir/thumbnails/${shortcode}.jpg` first, rendering the card immediately even when local media is marked `EXTERNAL_DELETED`.
+
+### 13.2 Bounded Parallel Backfilling
+For legacy records created before persistent thumbnail caching, `DownloadHistoryActivity.backfillThumbnailsInBackground`:
+1. Executes an instant local pass checking `filesDir`, `cacheDir`, and local `MediaStore` in 0 ms.
+2. For records with deleted local files, launches a bounded parallel coroutine pool (`Semaphore(3)`) resolving remote preview images via the fast pre-warmed bridge.
+3. Updates SQLite and calls `updateRecordInMemory(shortcode, author, thumbPath, caption)` on the fly, rendering thumbnails within 2–3 seconds.
+
+---
+
+## 14. In-App Software Self-Update Subsystem (OTA)
+
+InstaSave includes an autonomous software update mechanism that checks for new releases on GitHub without requiring USB debugging or third-party app stores.
+
+```
+Settings -> "Check for Updates"
+           │
+           ▼
+HTTP GET release-manifest.json
+           │
+           ▼
+Compare remote versionCode > current versionCode
+           │
+           ├── If newer version available:
+           │   ├── Download app-release.apk to internal app cache
+           │   ├── Emit real-time byte progress (0% - 100%)
+           │   └── Launch PackageInstaller intent via FileProvider
+           │
+           └── If up to date:
+               └── Notify "You are using the latest version."
+```
+
+### Manifest Schema (`release-manifest.json`):
+```json
+{
+  "versionCode": 6,
+  "versionName": "1.1.4",
+  "releaseNotes": "Summary of updates and fixes",
+  "apkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
+  "fallbackApkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.1.4/app-release.apk",
+  "fileSizeBytes": 3842477
+}
+```
+
+---
+
+## 15. In-App Diagnostics & Telemetry Subsystem
+
+To facilitate debugging without tethered USB debugging or ADB shell sessions:
+1. `AppLogger.kt`: Maintains an in-memory thread-safe circular buffer of up to 1,000 log events with millisecond timestamps and log levels.
+2. In-App Log Viewer: Accessible from Settings -> In-App Software Updates & Diagnostics -> View Diagnostic Logs.
+3. One-Tap Export:
+   - **Copy to Clipboard**: Copies the full formatted session log for direct messaging.
+   - **Share Logs via File**: Writes `instasave-debug-[timestamp].txt` and shares it via Android's native system share sheet.
+
+---
+
+## 16. Cryptographic Release Signing & Security Architecture
+
+### 16.1 Official Production Keystore
+Release APKs are signed using a dedicated 2048-bit RSA keystore (`app/instasave-release.jks`):
+- **Alias**: `instasave`
+- **Validity**: 10,000 days (~27 years)
+- **Distinguished Name**: `CN=InstaSave Software, OU=Mobile Security, O=InstaSave Global, L=San Francisco, ST=California, C=US`
+- **Signatures Enabled**: APK Signature Scheme V1, V2, and V3.
+
+### 16.2 Play Protect Hardening
+To prevent heuristic false-positives from Google Play Protect:
+1. All private application activities (`MediaSelectionActivity`, `DownloadHistoryActivity`, `DiagnosticsActivity`, `MediaViewerActivity`, `SettingsActivity`) explicitly declare `android:exported="false"`.
+2. Release signing uses official production signatures rather than Android SDK test/debug certificates.
+

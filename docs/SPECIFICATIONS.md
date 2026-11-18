@@ -296,3 +296,69 @@ Technical verification:
 - Zero external analytics dependencies in `build.gradle.kts`.
 - Zero tracking or telemetry endpoints.
 - No network requests other than direct media downloads from Instagram CDN servers.
+
+---
+
+## 10. Headless Web Bridge & Pre-Warmed Engine Specifications
+
+### 10.1 WebKit Environment Parameters
+- **Engine**: Headless `android.webkit.WebView` pre-warmed via `HeadlessWebBridgeResolver.preWarm(context)`.
+- **Target URL**: `https://fastdl.app/en`
+- **User-Agent String**: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36`
+- **Resource Constraints**:
+  - `loadsImagesAutomatically = false` (Prohibits bitmap and video assets during extraction).
+  - `domStorageEnabled = true` (Retains token/session state required by converter scripts).
+- **Execution Target**:
+  - Resolution latency target: **< 1,200 ms** under active pre-warming.
+  - Fail-safe timeout: **14,000 ms**.
+
+### 10.2 Vue 3 State & Carousel Extraction Criteria
+- **Deep Proxy Inspection Target**: Traverses `__vueParentComponent` ancestors inspecting `props.data`, `proxy.data`, and `setupState.data`.
+- **Carousel Load-More Criteria**: Automates clicks on `.load-more-trigger`, `button.load-more`, and sets `visibleDataCount = 999` to ensure all 10–15+ items extract without slicing.
+
+---
+
+## 11. Universal Persistent Thumbnail Specifications
+
+### 11.1 File Storage Schema
+- **Path Format**: `context.filesDir/thumbnails/${shortcode}.jpg`
+- **File Format**: JPEG, downsampled to 240x240 px, quality 85.
+- **Disk Footprint**: ~15 KB – 30 KB per thumbnail.
+- **Database Column**: `downloads.thumbnail_path` stores the absolute internal file path.
+
+### 11.2 Lifecycle & Cleanup Guarantees
+- Stored exclusively in internal private app storage (`context.filesDir`).
+- **Immunity**: Immune to external gallery deletions, Google Photos cleanups, and file manager purges.
+- **Backfill Concurrency**: Bounded at max 3 concurrent network requests (`Semaphore(3)`).
+
+---
+
+## 12. In-App Software Update (OTA) Specifications
+
+### 12.1 Update Discovery Contract
+- **Endpoint**: `https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/release-manifest.json`
+- **Method**: HTTP `GET` with header `User-Agent: InstaSave-Updater/1.0`.
+- **Evaluation**: `remoteVersionCode > localVersionCode`.
+
+### 12.2 Installation Intent Contract
+- **Storage Target**: Internal cache directory `context.cacheDir/updates/InstaSave_v${remoteVersionName}.apk`.
+- **FileProvider Authority**: `com.instadown.assist.fileprovider`.
+- **Intent**: `Intent.ACTION_VIEW` with MIME `application/vnd.android.package-archive` and `FLAG_GRANT_READ_URI_PERMISSION`.
+
+---
+
+## 13. Production Signing & Security Hardening Specifications
+
+### 13.1 Keystore Specification
+- **Keystore File**: `app/instasave-release.jks`
+- **Key Algorithm**: RSA 2048-bit
+- **Alias**: `instasave`
+- **Validity**: 10,000 days
+- **Certificate DN**: `CN=InstaSave Software, OU=Mobile Security, O=InstaSave Global, L=San Francisco, ST=California, C=US`
+
+### 13.2 Signature Schemes
+- **v1 (JAR Signature)**: Enabled
+- **v2 (APK Signature Scheme v2)**: Enabled
+- **v3 (APK Signature Scheme v3)**: Enabled
+- **v4**: Disabled (not required for sideloading)
+
