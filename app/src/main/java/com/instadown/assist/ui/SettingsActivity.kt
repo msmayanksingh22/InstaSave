@@ -368,10 +368,10 @@ class SettingsActivity : AppCompatActivity() {
                 btnNegative.text = "Dismiss"
                 dialog.setCancelable(true)
 
-                com.instadown.assist.util.AppUpdateManager.promptInstall(this@SettingsActivity, downloadedApk)
+                com.instadown.assist.util.AppUpdateManager.promptInstall(this@SettingsActivity, downloadedApk, updateInfo.apkUrl)
 
                 btnPositive.setOnClickListener {
-                    com.instadown.assist.util.AppUpdateManager.promptInstall(this@SettingsActivity, downloadedApk)
+                    com.instadown.assist.util.AppUpdateManager.promptInstall(this@SettingsActivity, downloadedApk, updateInfo.apkUrl)
                 }
             } else {
                 tvTitle.text = "Download Failed"

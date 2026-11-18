@@ -31,6 +31,7 @@ object AppUpdateManager {
 
     // Default release metadata endpoint (e.g. GitHub Releases latest or raw JSON)
     const val DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/release-manifest.json"
+    const val DEFAULT_APK_URL = "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk"
 
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -198,16 +199,33 @@ object AppUpdateManager {
 
     /**
      * Prompts the native Android package installer to install the downloaded APK.
+     * Falls back to browser download if REQUEST_INSTALL_PACKAGES permission is unavailable
+     * (omitted from manifest for Play Protect compliance).
      */
-    fun promptInstall(context: Context, apkFile: File): Boolean {
+    fun promptInstall(context: Context, apkFile: File, fallbackApkUrl: String? = null): Boolean {
         if (!apkFile.exists() || apkFile.length() == 0L) {
             AppLogger.e(TAG, "Cannot install: APK file does not exist or is empty")
             return false
         }
 
-        // On Android 8.0+, check if app is permitted to request package installs
+        // On Android 8.0+, guard canRequestPackageInstalls() — without REQUEST_INSTALL_PACKAGES
+        // in the manifest this throws SecurityException. Catch it and fall back to browser.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (!context.packageManager.canRequestPackageInstalls()) {
+            val canInstall = try {
+                context.packageManager.canRequestPackageInstalls()
+            } catch (se: SecurityException) {
+                AppLogger.w(TAG, "REQUEST_INSTALL_PACKAGES not declared — routing to browser download")
+                // Fall back: open APK URL directly in browser for the user to download & install
+                val browserUrl = fallbackApkUrl?.takeIf { it.isNotBlank() }
+                    ?: DEFAULT_APK_URL
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(browserUrl)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    })
+                } catch (_: Exception) {}
+                return false
+            }
+            if (!canInstall) {
                 AppLogger.i(TAG, "Requesting unknown app sources permission...")
                 val manageIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
                     data = Uri.parse("package:${context.packageName}")

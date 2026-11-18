@@ -35,7 +35,7 @@ data class LogEntry(
 object AppLogger {
 
     private const val TAG = "AppLogger"
-    private const val MAX_LOGS = 500
+    private const val MAX_LOGS = 1000
     private val buffer = ConcurrentLinkedDeque<LogEntry>()
 
     private val _logEvents = MutableSharedFlow<LogEntry>(extraBufferCapacity = 64)
