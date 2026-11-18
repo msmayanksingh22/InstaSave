@@ -20,6 +20,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.coroutines.resume
 
+/**
+ * Ultra-fast headless web bridge for zero-login Instagram resolution.
+ * Features persistent background WebView pre-warming, Desktop User-Agent anti-ad spoofing,
+ * automatic banner dismissal, and instant DOM/Vue/API interceptors.
+ */
 class HeadlessWebBridgeResolver(
     private val context: Context
 ) : InstagramResolver {
@@ -27,20 +32,100 @@ class HeadlessWebBridgeResolver(
     companion object {
         private const val TAG = "HeadlessWebBridge"
         private const val EXTRACTOR_URL = "https://fastdl.app/en"
-        private const val TIMEOUT_MS = 25000L
+        private const val TIMEOUT_MS = 14000L
+        private const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+
+        @Volatile
+        private var prewarmedWebView: WebView? = null
+        @Volatile
+        private var isPrewarmReady: Boolean = false
+        @Volatile
+        private var isPrewarmBusy: Boolean = false
+
+        private var activeBridgeCallback: ((String?, String?) -> Unit)? = null
 
         private fun configureWebView(webView: WebView) {
             val settings = webView.settings
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.databaseEnabled = true
-            settings.loadsImagesAutomatically = false // optimize memory & bandwidth
-            settings.userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+            settings.loadsImagesAutomatically = false // Prevent heavy ad/image downloads
+            settings.userAgentString = DESKTOP_UA // Desktop UA prevents "Download our Android app" banners!
+        }
+
+        fun preWarm(context: Context) {
+            Handler(Looper.getMainLooper()).post {
+                if (prewarmedWebView != null && isPrewarmReady) {
+                    return@post
+                }
+                try {
+                    Log.i(TAG, "Pre-warming background headless WebView with $EXTRACTOR_URL...")
+                    val wv = WebView(context.applicationContext)
+                    prewarmedWebView = wv
+                    isPrewarmReady = false
+                    isPrewarmBusy = false
+                    configureWebView(wv)
+
+                    class StaticBridge {
+                        @JavascriptInterface
+                        fun onMediaFound(jsonStr: String) {
+                            Handler(Looper.getMainLooper()).post {
+                                activeBridgeCallback?.invoke(jsonStr, null)
+                            }
+                        }
+
+                        @JavascriptInterface
+                        fun onError(errorMsg: String) {
+                            Handler(Looper.getMainLooper()).post {
+                                activeBridgeCallback?.invoke(null, errorMsg)
+                            }
+                        }
+                    }
+
+                    wv.addJavascriptInterface(StaticBridge(), "AndroidBridge")
+                    wv.webChromeClient = object : WebChromeClient() {
+                        override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                            val msg = consoleMessage?.message() ?: return false
+                            if (msg.startsWith("INSTASAVE_FOUND:")) {
+                                val json = msg.removePrefix("INSTASAVE_FOUND:")
+                                Handler(Looper.getMainLooper()).post {
+                                    activeBridgeCallback?.invoke(json, null)
+                                }
+                                return true
+                            }
+                            if (msg.startsWith("INSTASAVE_ERROR:")) {
+                                val err = msg.removePrefix("INSTASAVE_ERROR:")
+                                Handler(Looper.getMainLooper()).post {
+                                    activeBridgeCallback?.invoke(null, err)
+                                }
+                                return true
+                            }
+                            return super.onConsoleMessage(consoleMessage)
+                        }
+                    }
+
+                    wv.webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            super.onPageFinished(view, url)
+                            if (url?.contains("fastdl.app") == true) {
+                                isPrewarmReady = true
+                                Log.i(TAG, "Pre-warmed headless WebView is ready in memory!")
+                            }
+                        }
+                    }
+
+                    wv.loadUrl(EXTRACTOR_URL)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to pre-warm WebView: ${e.message}")
+                    prewarmedWebView = null
+                    isPrewarmReady = false
+                }
+            }
         }
     }
 
     fun preWarm() {
-        // No-op: Fast, clean on-demand instantiation with zero lifecycle state bugs
+        preWarm(context)
     }
 
     override suspend fun resolve(url: String, validateCdn: Boolean): ResolveResult {
@@ -114,25 +199,33 @@ class HeadlessWebBridgeResolver(
         startTime: Long
     ): ResolveResult = withContext(Dispatchers.Main) {
         suspendCancellableCoroutine { continuation ->
-            var webView: WebView? = null
+            var onDemandWebView: WebView? = null
             var isFinished = false
-
-            fun cleanup() {
-                try {
-                    webView?.stopLoading()
-                    webView?.removeJavascriptInterface("AndroidBridge")
-                    webView?.webChromeClient = null
-                    webView?.destroy()
-                    webView = null
-                } catch (e: Exception) {
-                    Log.w(TAG, "Error cleaning up WebView", e)
-                }
-            }
+            val usingPrewarmed = prewarmedWebView != null && isPrewarmReady && !isPrewarmBusy
 
             fun finishWithSuccess(items: List<ResolvedMedia>) {
                 if (isFinished) return
                 isFinished = true
-                cleanup()
+                activeBridgeCallback = null
+
+                if (usingPrewarmed) {
+                    isPrewarmBusy = false
+                    // Trigger a light reload in background to keep pre-warm ready for the next request
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        try {
+                            prewarmedWebView?.loadUrl(EXTRACTOR_URL)
+                        } catch (_: Exception) {}
+                    }, 500)
+                } else {
+                    try {
+                        onDemandWebView?.stopLoading()
+                        onDemandWebView?.destroy()
+                        onDemandWebView = null
+                    } catch (_: Exception) {}
+                }
+
+                // If pre-warmed instance was consumed or wasn't ready, prime a new one
+                preWarm(context)
 
                 if (items.isNotEmpty()) {
                     val postType = when {
@@ -152,7 +245,7 @@ class HeadlessWebBridgeResolver(
                             identityVerified = true,
                             identityVerificationMethod = "HEADLESS_WEB_BRIDGE",
                             items = items,
-                            methodUsed = "HeadlessWebBridgeResolver",
+                            methodUsed = if (usingPrewarmed) "HeadlessWebBridgeResolver (Instant Prewarmed)" else "HeadlessWebBridgeResolver (On-Demand)",
                             totalResolutionTimeMs = System.currentTimeMillis() - startTime,
                             stageA = StageAResult(
                                 success = true,
@@ -190,7 +283,20 @@ class HeadlessWebBridgeResolver(
             fun finishWithError(errorMsg: String) {
                 if (isFinished) return
                 isFinished = true
-                cleanup()
+                activeBridgeCallback = null
+
+                if (usingPrewarmed) {
+                    isPrewarmBusy = false
+                    prewarmedWebView?.loadUrl(EXTRACTOR_URL)
+                } else {
+                    try {
+                        onDemandWebView?.stopLoading()
+                        onDemandWebView?.destroy()
+                        onDemandWebView = null
+                    } catch (_: Exception) {}
+                }
+                preWarm(context)
+
                 continuation.resume(
                     ResolveResult(
                         success = false,
@@ -211,118 +317,111 @@ class HeadlessWebBridgeResolver(
             }
 
             continuation.invokeOnCancellation {
-                cleanup()
+                activeBridgeCallback = null
+                if (usingPrewarmed) {
+                    isPrewarmBusy = false
+                } else {
+                    try {
+                        onDemandWebView?.stopLoading()
+                        onDemandWebView?.destroy()
+                        onDemandWebView = null
+                    } catch (_: Exception) {}
+                }
             }
 
-            class BridgeInterface {
-                @JavascriptInterface
-                fun onMediaFound(jsonStr: String) {
-                    if (isFinished) return
-                    Log.i(TAG, "onMediaFound received: ${jsonStr.take(200)}...")
-                    Handler(Looper.getMainLooper()).post {
-                        try {
-                            val items = parseMediaItems(jsonStr, normalized.shortcode)
-                            finishWithSuccess(items)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to parse bridge JSON", e)
-                            finishWithError("JSON parse error: ${e.message}")
+            // Set the active callback for this resolution
+            activeBridgeCallback = { jsonStr, errStr ->
+                if (errStr != null) {
+                    finishWithError(errStr)
+                } else if (jsonStr != null) {
+                    try {
+                        val items = parseMediaItems(jsonStr, normalized.shortcode)
+                        finishWithSuccess(items)
+                    } catch (e: Exception) {
+                        finishWithError("JSON parse error: ${e.message}")
+                    }
+                }
+            }
+
+            val injectionJs = buildInjectionScript(targetUrl)
+
+            if (usingPrewarmed && prewarmedWebView != null) {
+                isPrewarmBusy = true
+                Log.i(TAG, "Executing INSTANT resolution using pre-warmed WebView for: $targetUrl")
+                prewarmedWebView?.evaluateJavascript(injectionJs, null)
+            } else {
+                Log.i(TAG, "Pre-warmed WebView not ready. Launching on-demand WebView for: $targetUrl")
+                try {
+                    val wv = WebView(context.applicationContext)
+                    onDemandWebView = wv
+                    configureWebView(wv)
+
+                    class OnDemandBridge {
+                        @JavascriptInterface
+                        fun onMediaFound(jsonStr: String) {
+                            Handler(Looper.getMainLooper()).post {
+                                activeBridgeCallback?.invoke(jsonStr, null)
+                            }
+                        }
+
+                        @JavascriptInterface
+                        fun onError(errorMsg: String) {
+                            Handler(Looper.getMainLooper()).post {
+                                activeBridgeCallback?.invoke(null, errorMsg)
+                            }
                         }
                     }
-                }
 
-                @JavascriptInterface
-                fun onError(errorMsg: String) {
-                    if (isFinished) return
-                    Log.w(TAG, "Bridge reported error: $errorMsg")
-                    Handler(Looper.getMainLooper()).post {
-                        finishWithError(errorMsg)
-                    }
-                }
-            }
-
-            try {
-                val activeWebView = WebView(context.applicationContext)
-                webView = activeWebView
-                configureWebView(activeWebView)
-
-                // 1. MUST add JavascriptInterface BEFORE loadUrl
-                activeWebView.addJavascriptInterface(BridgeInterface(), "AndroidBridge")
-
-                // 2. MUST add WebChromeClient to intercept console logs as a fail-safe communication channel
-                activeWebView.webChromeClient = object : WebChromeClient() {
-                    override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                        val msg = consoleMessage?.message() ?: return false
-                        if (msg.startsWith("INSTASAVE_FOUND:")) {
-                            val json = msg.removePrefix("INSTASAVE_FOUND:")
-                            Handler(Looper.getMainLooper()).post {
-                                try {
-                                    val items = parseMediaItems(json, normalized.shortcode)
-                                    finishWithSuccess(items)
-                                } catch (e: Exception) {
-                                    finishWithError(e.message ?: "Parse error")
+                    wv.addJavascriptInterface(OnDemandBridge(), "AndroidBridge")
+                    wv.webChromeClient = object : WebChromeClient() {
+                        override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                            val msg = consoleMessage?.message() ?: return false
+                            if (msg.startsWith("INSTASAVE_FOUND:")) {
+                                val json = msg.removePrefix("INSTASAVE_FOUND:")
+                                Handler(Looper.getMainLooper()).post {
+                                    activeBridgeCallback?.invoke(json, null)
                                 }
+                                return true
                             }
-                            return true
-                        }
-                        if (msg.startsWith("INSTASAVE_ERROR:")) {
-                            val err = msg.removePrefix("INSTASAVE_ERROR:")
-                            Handler(Looper.getMainLooper()).post {
-                                finishWithError(err)
+                            if (msg.startsWith("INSTASAVE_ERROR:")) {
+                                val err = msg.removePrefix("INSTASAVE_ERROR:")
+                                Handler(Looper.getMainLooper()).post {
+                                    activeBridgeCallback?.invoke(null, err)
+                                }
+                                return true
                             }
-                            return true
+                            return super.onConsoleMessage(consoleMessage)
                         }
-                        return super.onConsoleMessage(consoleMessage)
                     }
+
+                    var hasInjected = false
+                    wv.webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView?, pageUrl: String?) {
+                            super.onPageFinished(view, pageUrl)
+                            if (!hasInjected && pageUrl?.contains("fastdl.app") == true) {
+                                hasInjected = true
+                                Log.i(TAG, "On-demand page loaded. Evaluating automation script...")
+                                view?.evaluateJavascript(injectionJs, null)
+                            }
+                        }
+
+                        override fun onReceivedError(
+                            view: WebView?,
+                            request: WebResourceRequest?,
+                            error: WebResourceError?
+                        ) {
+                            super.onReceivedError(view, request, error)
+                            if (request?.isForMainFrame == true) {
+                                Log.w(TAG, "On-demand frame error: ${error?.description}")
+                            }
+                        }
+                    }
+
+                    wv.loadUrl(EXTRACTOR_URL)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to instantiate on-demand WebView", e)
+                    finishWithError("Failed to initialize WebView: ${e.message}")
                 }
-
-                val injectionJs = buildInjectionScript(targetUrl)
-                var hasInjected = false
-
-                activeWebView.webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView?, pageUrl: String?) {
-                        super.onPageFinished(view, pageUrl)
-                        if (!hasInjected && pageUrl?.contains("fastdl.app") == true) {
-                            hasInjected = true
-                            Log.i(TAG, "Page loaded. Evaluating automation script for: $targetUrl")
-                            view?.evaluateJavascript(injectionJs, null)
-                        }
-                    }
-
-                    override fun onReceivedError(
-                        view: WebView?,
-                        request: WebResourceRequest?,
-                        error: WebResourceError?
-                    ) {
-                        super.onReceivedError(view, request, error)
-                        if (request?.isForMainFrame == true) {
-                            Log.w(TAG, "Main frame error on $EXTRACTOR_URL: ${error?.description}")
-                        }
-                    }
-                }
-
-                Log.i(TAG, "Loading extractor URL: $EXTRACTOR_URL")
-                activeWebView.loadUrl(EXTRACTOR_URL)
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to instantiate WebView", e)
-                cleanup()
-                continuation.resume(
-                    ResolveResult(
-                        success = false,
-                        originalInputUrl = normalized.originalUrl,
-                        canonicalUrl = normalized.canonicalUrl,
-                        shortcode = normalized.shortcode,
-                        sourcePathType = normalized.sourcePathType,
-                        postType = null,
-                        items = emptyList(),
-                        methodUsed = "HeadlessWebBridgeResolver",
-                        totalResolutionTimeMs = System.currentTimeMillis() - startTime,
-                        error = ResolveError(
-                            code = ResolveErrorCode.NETWORK_ERROR,
-                            message = "Could not initialize background WebView: ${e.message}"
-                        )
-                    )
-                )
             }
         }
     }
@@ -382,7 +481,7 @@ class HeadlessWebBridgeResolver(
                     downloadUrl.contains(".mp4") ||
                     downloadUrl.contains("/t16/")
 
-            // Prioritize small preview image (e.g. previewImageUrl) instead of multi-megabyte downloadUrl
+            // Prioritize small preview image (~20KB) instead of multi-megabyte downloadUrl
             var thumbUrl = obj.optString("thumbUrl").takeIf { it.isNotBlank() }
             if (thumbUrl == null) {
                 thumbUrl = obj.optString("previewImageUrl").takeIf { it.isNotBlank() }
@@ -408,7 +507,7 @@ class HeadlessWebBridgeResolver(
                 }
             }
 
-            // Fallback for photo if no thumbnail found: downloadUrl is image anyway
+            // Fallback for photo if no thumbnail found: downloadUrl is photo anyway
             if (thumbUrl == null && !isVideo) {
                 thumbUrl = downloadUrl
             }
@@ -448,7 +547,24 @@ class HeadlessWebBridgeResolver(
         val safeUrl = targetUrl.replace("'", "\\'")
         return """
             (function() {
-                console.log('InstaSave bridge injection started');
+                console.log('InstaSave bridge execution starting for: $safeUrl');
+
+                function dismissPopups() {
+                    try {
+                        var selectors = [
+                            '.modal', '[class*="modal"]', '[class*="popup"]', '[class*="banner"]',
+                            '[class*="overlay"]', '[class*="app-promo"]', '[class*="download-app"]',
+                            '#ad-banner', '.app-install-modal'
+                        ];
+                        for (var s = 0; s < selectors.length; s++) {
+                            var els = document.querySelectorAll(selectors[s]);
+                            for (var e = 0; e < els.length; e++) {
+                                els[e].remove();
+                            }
+                        }
+                    } catch (_) {}
+                }
+                dismissPopups();
 
                 function sendResult(items) {
                     if (!items || items.length === 0) return;
@@ -735,6 +851,7 @@ class HeadlessWebBridgeResolver(
                 }
 
                 function doTriggerSearch() {
+                    dismissPopups();
                     var input = document.getElementById('search-form-input') || document.querySelector('.search-form__input, input[name="url"], input[type="text"]');
                     var btn = document.getElementById('searchFormButton') || document.querySelector('.search-form__button, button[type="submit"]');
 
@@ -780,13 +897,14 @@ class HeadlessWebBridgeResolver(
 
                 doTriggerSearch();
                 setTimeout(doTriggerSearch, 100);
-                setTimeout(doTriggerSearch, 300);
+                setTimeout(doTriggerSearch, 250);
 
                 var attempts = 0;
                 var lastCount = 0;
                 var stableTicks = 0;
                 var pollInterval = setInterval(function() {
                     attempts++;
+                    dismissPopups();
 
                     // 0. Intercepted API data
                     var apiMedia = extractFromCapturedApiData();
@@ -818,7 +936,7 @@ class HeadlessWebBridgeResolver(
                             lastCount = media.length;
                         }
 
-                        if (media.length === 1 || stableTicks >= 5) {
+                        if (media.length === 1 || stableTicks >= 4) {
                             clearInterval(pollInterval);
                             console.log('Returning ' + media.length + ' items via DOM');
                             sendResult(media);
@@ -833,7 +951,7 @@ class HeadlessWebBridgeResolver(
                         return;
                     }
 
-                    if (attempts >= 50) { // ~10 seconds
+                    if (attempts >= 45) { // ~9 seconds
                         clearInterval(pollInterval);
                         if (media.length > 0) {
                             sendResult(media);

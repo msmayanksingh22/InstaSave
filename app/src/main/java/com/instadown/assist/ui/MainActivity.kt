@@ -605,7 +605,7 @@ class MainActivity : AppCompatActivity() {
             if (totalItems > 1 && behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.ASK) {
                 clipboardCoordinator.onProcessingSuccess(cleanUrl, clipTimestamp, prefs)
                 layoutClipboardBanner.visibility = View.GONE
-                com.instadown.assist.ui.MediaSelectionActivity.start(this@MainActivity, cleanUrl)
+                com.instadown.assist.ui.MediaSelectionActivity.start(this@MainActivity, cleanUrl, resolveResult)
                 checkPendingClipboard()
                 return@launch
             }
@@ -707,7 +707,7 @@ class MainActivity : AppCompatActivity() {
             val totalItems = resolveResult.items.size
 
             if (totalItems > 1 && behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.ASK) {
-                com.instadown.assist.ui.MediaSelectionActivity.start(this@MainActivity, cleanUrl)
+                com.instadown.assist.ui.MediaSelectionActivity.start(this@MainActivity, cleanUrl, resolveResult)
                 return@launch
             }
 

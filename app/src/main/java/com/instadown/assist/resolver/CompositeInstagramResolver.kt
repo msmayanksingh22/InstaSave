@@ -15,8 +15,7 @@ class CompositeInstagramResolver(
 
     companion object {
         private const val TAG = "CompositeResolver"
-        private const val PRIMARY_RESOLVER_TIMEOUT_MS = 3500L
-        private const val FALLBACK_RESOLVER_TIMEOUT_MS = 3000L
+        private const val FALLBACK_TIMEOUT_MS = 2500L
     }
 
     init {
@@ -25,7 +24,9 @@ class CompositeInstagramResolver(
     }
 
     fun preWarm() {
-        (webBridgeResolver as? HeadlessWebBridgeResolver)?.preWarm()
+        if (context != null) {
+            HeadlessWebBridgeResolver.preWarm(context)
+        }
     }
 
     override suspend fun resolve(url: String, validateCdn: Boolean): ResolveResult {
@@ -34,31 +35,19 @@ class CompositeInstagramResolver(
         // Ensure web bridge background WebView is pre-warmed
         preWarm()
 
-        // 1. Execute primary SSR resolver first (streamlined with timeout so slow network stalls don't block)
-        val primaryResult = try {
-            withTimeoutOrNull(PRIMARY_RESOLVER_TIMEOUT_MS) {
-                primaryResolver.resolve(url, validateCdn)
+        // 1. TIER 1 (PRIMARY): Ultra-fast Headless Web Bridge (Instant Pre-warmed ~1s execution)
+        if (webBridgeResolver != null) {
+            val bridgeResult = webBridgeResolver.resolve(url, validateCdn)
+            if (bridgeResult.success && bridgeResult.items.isNotEmpty()) {
+                Log.i(TAG, "Tier 1 (Headless Web Bridge) succeeded in ${bridgeResult.totalResolutionTimeMs}ms with ${bridgeResult.items.size} items!")
+                return bridgeResult
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Primary resolver exception", e)
-            null
+            Log.w(TAG, "Tier 1 Web Bridge did not succeed: ${bridgeResult.error?.message}. Attempting fast fallbacks...")
         }
 
-        if (primaryResult != null && primaryResult.success) {
-            return primaryResult
-        }
-
-        // Do not attempt fallback if URL itself was malformed or unsupported
-        if (primaryResult?.error?.code == ResolveErrorCode.UNSUPPORTED_URL) {
-            return primaryResult
-        }
-
-        val primaryMsg = primaryResult?.error?.message ?: "Timed out after ${PRIMARY_RESOLVER_TIMEOUT_MS}ms"
-        Log.w(TAG, "Primary resolver did not succeed ($primaryMsg). Falling through immediately to embed fallback...")
-
-        // 2. Attempt embed fallback resolver (streamlined with timeout)
+        // 2. TIER 2: Fast Embed Fallback
         val fallbackResult = try {
-            withTimeoutOrNull(FALLBACK_RESOLVER_TIMEOUT_MS) {
+            withTimeoutOrNull(FALLBACK_TIMEOUT_MS) {
                 fallbackResolver.resolve(url, validateCdn)
             }
         } catch (e: Exception) {
@@ -66,31 +55,28 @@ class CompositeInstagramResolver(
             null
         }
 
-        if (fallbackResult != null && fallbackResult.success) {
+        if (fallbackResult != null && fallbackResult.success && fallbackResult.items.isNotEmpty()) {
+            Log.i(TAG, "Tier 2 (Embed Fallback) succeeded in ${System.currentTimeMillis() - startTime}ms")
             return fallbackResult
         }
 
-        val fallbackMsg = fallbackResult?.error?.message ?: "Timed out after ${FALLBACK_RESOLVER_TIMEOUT_MS}ms"
-        Log.i(TAG, "Embed fallback did not succeed ($fallbackMsg). Falling through immediately to Headless Web Bridge...")
-
-        // 3. Fall through immediately to Headless Web Bridge (login-free extractor)
-        if (webBridgeResolver != null) {
-            val bridgeResult = webBridgeResolver.resolve(url, validateCdn)
-            if (bridgeResult.success) {
-                return bridgeResult
+        // 3. TIER 3: WebPage SJS Resolver
+        val sjsResult = try {
+            withTimeoutOrNull(FALLBACK_TIMEOUT_MS) {
+                primaryResolver.resolve(url, validateCdn)
             }
-            Log.w(TAG, "Headless Web Bridge failed: ${bridgeResult.error?.message}")
-            return bridgeResult
+        } catch (e: Exception) {
+            Log.w(TAG, "SJS resolver exception", e)
+            null
         }
 
-        // If all tiers failed, return the error with comprehensive diagnosis
-        val combinedError = primaryResult?.error?.copy(
-            rawDetails = "Primary: $primaryMsg | Embed: $fallbackMsg | WebBridge: No Context"
-        )
-        return primaryResult?.copy(
-            totalResolutionTimeMs = System.currentTimeMillis() - startTime,
-            error = combinedError
-        ) ?: ResolveResult(
+        if (sjsResult != null && sjsResult.success && sjsResult.items.isNotEmpty()) {
+            Log.i(TAG, "Tier 3 (SJS Resolver) succeeded in ${System.currentTimeMillis() - startTime}ms")
+            return sjsResult
+        }
+
+        // If all tiers failed, return the primary error
+        return fallbackResult ?: sjsResult ?: ResolveResult(
             success = false,
             originalInputUrl = url,
             canonicalUrl = null,
@@ -102,7 +88,7 @@ class CompositeInstagramResolver(
             totalResolutionTimeMs = System.currentTimeMillis() - startTime,
             error = com.instadown.assist.resolver.model.ResolveError(
                 code = ResolveErrorCode.NETWORK_ERROR,
-                message = "All resolvers failed or timed out: Primary: $primaryMsg | Embed: $fallbackMsg"
+                message = "Failed to resolve Instagram post media"
             )
         )
     }

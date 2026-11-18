@@ -42,9 +42,9 @@ object MediaThumbnailLoader {
 
     private val sharedHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectionPool(ConnectionPool(15, 5, TimeUnit.MINUTES))
-            .connectTimeout(5, TimeUnit.SECONDS)
-            .readTimeout(8, TimeUnit.SECONDS)
+            .connectionPool(ConnectionPool(20, 5, TimeUnit.MINUTES))
+            .connectTimeout(3, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.SECONDS)
             .followRedirects(true)
             .build()
     }
@@ -168,7 +168,7 @@ object MediaThumbnailLoader {
                     context.contentResolver.openInputStream(uri)?.use { decStream ->
                         val opts = BitmapFactory.Options().apply {
                             inSampleSize = sample
-                            inPreferredConfig = Bitmap.Config.ARGB_8888
+                            inPreferredConfig = Bitmap.Config.RGB_565
                         }
                         bitmap = BitmapFactory.decodeStream(decStream, null, opts)
                     }
@@ -199,7 +199,7 @@ object MediaThumbnailLoader {
             }
             val opts = BitmapFactory.Options().apply {
                 inSampleSize = sample
-                inPreferredConfig = Bitmap.Config.ARGB_8888
+                inPreferredConfig = Bitmap.Config.RGB_565
             }
             BitmapFactory.decodeFile(filePath, opts)
         } catch (e: Exception) {

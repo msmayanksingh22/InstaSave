@@ -11,14 +11,27 @@ android {
         applicationId = "com.instadown.assist"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.1.3"
+        versionCode = 6
+        versionName = "1.1.4"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("instasave-release.jks")
+            storePassword = "InstaSaveRelease2026!"
+            keyAlias = "instasave"
+            keyPassword = "InstaSaveRelease2026!"
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+            enableV4Signing = false
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

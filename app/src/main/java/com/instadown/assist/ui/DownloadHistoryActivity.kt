@@ -252,6 +252,8 @@ class DownloadHistoryActivity : AppCompatActivity() {
             val thumbDir = java.io.File(filesDir, "thumbnails")
             if (!thumbDir.exists()) thumbDir.mkdirs()
 
+            // 1. Instant local pass (0ms disk check)
+            val remaining = mutableListOf<DownloadRecord>()
             for (rec in targets) {
                 val thumbFile = java.io.File(thumbDir, "${rec.shortcode}.jpg")
                 val legacyFile = java.io.File(cacheDir, "thumbnails/${rec.shortcode}.jpg")
@@ -274,32 +276,48 @@ class DownloadHistoryActivity : AppCompatActivity() {
                     }
                 }
 
-                // If still missing (e.g. deleted from device gallery), resolve preview thumbnail directly
-                if (finalPath == null && rec.shortcode.isNotBlank()) {
+                if (finalPath != null && finalPath != rec.thumbnailPath) {
+                    repo.updateMetadata(rec.shortcode, thumbnailPath = finalPath)
+                    withContext(Dispatchers.Main) {
+                        updateRecordInMemory(rec.shortcode, rec.authorUsername, finalPath, rec.caption)
+                    }
+                } else if (finalPath == null) {
+                    remaining.add(rec)
+                }
+            }
+
+            if (remaining.isEmpty()) return@launch
+
+            // 2. Fast parallel network pass for deleted records (3 concurrent streams)
+            val semaphore = kotlinx.coroutines.sync.Semaphore(3)
+            remaining.forEach { rec ->
+                launch(Dispatchers.IO) {
+                    semaphore.acquire()
                     try {
                         val targetUrl = rec.targetDownloadUrl.ifBlank { "https://www.instagram.com/p/${rec.shortcode}/" }
-                        Log.i("DownloadHistory", "Resolving remote thumbnail for deleted post: ${rec.shortcode}")
+                        Log.i("DownloadHistory", "Resolving thumbnail for deleted post: ${rec.shortcode}")
                         val res = coordinator.resolver.resolve(targetUrl, validateCdn = false)
                         if (res.success && res.items.isNotEmpty()) {
                             val item = res.items.first()
                             val thumbUrl = item.thumbnailUrl ?: item.mediaUrl
                             if (!thumbUrl.isNullOrBlank()) {
-                                finalPath = repo.extractAndSaveThumbnail(
+                                val savedPath = repo.extractAndSaveThumbnail(
                                     shortcode = rec.shortcode,
                                     uriStr = thumbUrl,
                                     isVideo = item.mediaType == com.instadown.assist.resolver.model.MediaType.VIDEO
                                 )
+                                if (savedPath != null) {
+                                    repo.updateMetadata(rec.shortcode, thumbnailPath = savedPath)
+                                    withContext(Dispatchers.Main) {
+                                        updateRecordInMemory(rec.shortcode, rec.authorUsername, savedPath, rec.caption)
+                                    }
+                                }
                             }
                         }
                     } catch (e: Exception) {
-                        Log.d("DownloadHistory", "Thumbnail backfill resolution notice for ${rec.shortcode}: ${e.message}")
-                    }
-                }
-
-                if (finalPath != null && finalPath != rec.thumbnailPath) {
-                    repo.updateMetadata(rec.shortcode, thumbnailPath = finalPath)
-                    withContext(Dispatchers.Main) {
-                        updateRecordInMemory(rec.shortcode, rec.authorUsername, finalPath, rec.caption)
+                        Log.d("DownloadHistory", "Thumbnail backfill notice for ${rec.shortcode}: ${e.message}")
+                    } finally {
+                        semaphore.release()
                     }
                 }
             }

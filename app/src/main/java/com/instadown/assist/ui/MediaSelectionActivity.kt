@@ -28,8 +28,10 @@ class MediaSelectionActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_URL = "extra_instagram_url"
+        var preloadedResult: com.instadown.assist.resolver.model.ResolveResult? = null
 
-        fun start(context: Context, url: String) {
+        fun start(context: Context, url: String, preloaded: com.instadown.assist.resolver.model.ResolveResult? = null) {
+            preloadedResult = preloaded
             val intent = Intent(context, MediaSelectionActivity::class.java).apply {
                 putExtra(EXTRA_URL, url)
             }
@@ -49,6 +51,7 @@ class MediaSelectionActivity : AppCompatActivity() {
     private val coordinator by lazy { InstagramDownloadCoordinator(this, resolver = resolver) }
 
     private var targetUrl: String = ""
+    private var currentResolveResult: com.instadown.assist.resolver.model.ResolveResult? = null
     private var resolvedItems: List<ResolvedMedia> = emptyList()
     private val selectedIndices = mutableSetOf<Int>()
     private var isDownloading = false
@@ -106,7 +109,54 @@ class MediaSelectionActivity : AppCompatActivity() {
             startDownload()
         }
 
-        loadMediaMetadata()
+        val preloaded = preloadedResult
+        preloadedResult = null
+
+        if (preloaded != null && preloaded.success && preloaded.items.isNotEmpty()) {
+            displayResolvedMedia(preloaded)
+        } else {
+            loadMediaMetadata()
+        }
+    }
+
+    private fun displayResolvedMedia(result: com.instadown.assist.resolver.model.ResolveResult) {
+        currentResolveResult = result
+        resolvedItems = result.items
+        selectedIndices.clear()
+        for (i in resolvedItems.indices) selectedIndices.add(i)
+
+        // Instant parallel thumbnail pre-decoding
+        lifecycleScope.launch(Dispatchers.IO) {
+            resolvedItems.forEach { item ->
+                val thumb = if (item.mediaType == MediaType.VIDEO) item.thumbnailUrl else (item.thumbnailUrl ?: item.mediaUrl)
+                if (!thumb.isNullOrBlank() && (thumb.startsWith("http://") || thumb.startsWith("https://"))) {
+                    try {
+                        MediaThumbnailLoader.loadThumbnail(
+                            this@MediaSelectionActivity,
+                            thumb,
+                            isVideo = item.mediaType == MediaType.VIDEO,
+                            targetWidth = 240,
+                            targetHeight = 240
+                        )
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+
+        val postType = result.postType ?: when {
+            resolvedItems.size > 1 -> PostType.CAROUSEL
+            resolvedItems.any { it.mediaType == MediaType.VIDEO } -> PostType.REEL
+            else -> PostType.PHOTO
+        }
+
+        tvTitle.text = when (postType) {
+            PostType.CAROUSEL -> "Carousel • ${resolvedItems.size} items"
+            PostType.REEL -> "Instagram Reel"
+            else -> "Instagram Photo"
+        }
+
+        rvMediaTiles.adapter = MediaTileAdapter()
+        updateUiState()
     }
 
     private fun loadMediaMetadata() {
@@ -129,45 +179,7 @@ class MediaSelectionActivity : AppCompatActivity() {
                 return@launch
             }
 
-            resolvedItems = result.items
-            // Default: Select all items
-            selectedIndices.clear()
-            for (i in resolvedItems.indices) selectedIndices.add(i)
-
-            // High-throughput parallel thumbnail prefetch
-            lifecycleScope.launch(Dispatchers.IO) {
-                resolvedItems.map { item ->
-                    launch {
-                        val thumb = if (item.mediaType == MediaType.VIDEO) item.thumbnailUrl else (item.thumbnailUrl ?: item.mediaUrl)
-                        if (!thumb.isNullOrBlank() && (thumb.startsWith("http://") || thumb.startsWith("https://"))) {
-                            try {
-                                MediaThumbnailLoader.loadThumbnail(
-                                    this@MediaSelectionActivity,
-                                    thumb,
-                                    isVideo = item.mediaType == MediaType.VIDEO,
-                                    targetWidth = 240,
-                                    targetHeight = 240
-                                )
-                            } catch (ignored: Exception) {}
-                        }
-                    }
-                }
-            }
-
-            val postType = result.postType ?: when {
-                resolvedItems.size > 1 -> PostType.CAROUSEL
-                resolvedItems.any { it.mediaType == MediaType.VIDEO } -> PostType.REEL
-                else -> PostType.PHOTO
-            }
-
-            tvTitle.text = when (postType) {
-                PostType.CAROUSEL -> "Carousel • ${resolvedItems.size} items"
-                PostType.REEL -> "Instagram Reel"
-                else -> "Instagram Photo"
-            }
-
-            rvMediaTiles.adapter = MediaTileAdapter()
-            updateUiState()
+            displayResolvedMedia(result)
         }
     }
 
@@ -192,53 +204,37 @@ class MediaSelectionActivity : AppCompatActivity() {
     }
 
     private fun startDownload() {
+        val result = currentResolveResult ?: return
         if (selectedIndices.isEmpty() || isDownloading) return
 
         isDownloading = true
-        btnDownloadSelected.isEnabled = false
-        btnToggleSelectAll.isEnabled = false
-        pbDownloadProgress.visibility = View.VISIBLE
-        pbDownloadProgress.isIndeterminate = false
-        pbDownloadProgress.progress = 0
-        tvDownloadStatus.visibility = View.VISIBLE
-        tvDownloadStatus.text = "Starting download..."
+        val selectedCount = selectedIndices.size
+        val selectedSet = selectedIndices.toSet()
 
-        lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                coordinator.executeDirectDownload(
-                    url = targetUrl,
-                    selectedIndices = selectedIndices.toSet(),
+        Toast.makeText(
+            this,
+            if (selectedCount > 1) "Saving $selectedCount items to Gallery in background..." else "Saving to Gallery in background...",
+            Toast.LENGTH_SHORT
+        ).show()
+
+        val appContext = applicationContext
+        val url = targetUrl
+        com.instadown.assist.InstaSaveApp.applicationScope.launch {
+            try {
+                val appCoordinator = InstagramDownloadCoordinator(appContext)
+                appCoordinator.executeDirectDownload(
+                    url = url,
+                    selectedIndices = selectedSet,
                     recordInDb = true,
-                    onStatusUpdate = { status ->
-                        runOnUiThread {
-                            tvDownloadStatus.text = status
-                        }
-                    },
-                    onProgress = { progress ->
-                        runOnUiThread {
-                            pbDownloadProgress.progress = progress.overallPercent
-                            tvDownloadStatus.text = progress.statusMessage
-                        }
-                    }
+                    preResolvedResult = result
                 )
-            }
-
-            isDownloading = false
-            pbDownloadProgress.visibility = View.GONE
-            tvDownloadStatus.visibility = View.GONE
-
-            if (result.success || result.completedCount > 0 || (result.skippedCount > 0 && result.failedCount == 0)) {
-                val count = result.completedCount
-                val msg = if (count > 0) "Successfully saved $count items to Gallery!" else "Media already saved in Gallery"
-                Toast.makeText(this@MediaSelectionActivity, msg, Toast.LENGTH_LONG).show()
-                finish()
-            } else {
-                val errorMsg = result.error ?: "Download failed"
-                Toast.makeText(this@MediaSelectionActivity, errorMsg, Toast.LENGTH_LONG).show()
-                btnDownloadSelected.isEnabled = true
-                btnToggleSelectAll.isEnabled = true
+            } catch (e: Exception) {
+                android.util.Log.e("MediaSelection", "Background download error", e)
             }
         }
+
+        // Close selection sheet immediately so user does not wait!
+        finish()
     }
 
     private inner class MediaTileAdapter : RecyclerView.Adapter<MediaTileViewHolder>() {
