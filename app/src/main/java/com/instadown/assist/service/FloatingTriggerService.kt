@@ -22,6 +22,7 @@ import android.os.VibratorManager
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
@@ -36,6 +37,7 @@ import com.instadown.assist.download.model.DownloadResult
 import com.instadown.assist.overlay.ButtonSize
 import com.instadown.assist.overlay.FloatingPositionManager
 import com.instadown.assist.overlay.InstaSavePreferences
+import com.instadown.assist.overlay.SpringFloatingDockController
 import com.instadown.assist.util.DownloadNotificationManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +49,8 @@ class FloatingTriggerService : Service() {
     private var containerView: FrameLayout? = null
     private var floatingButtonView: com.instadown.assist.ui.view.FloatingTriggerButtonView? = null
     private var windowParams: WindowManager.LayoutParams? = null
+    private var springDockController: SpringFloatingDockController? = null
+    private var velocityTracker: VelocityTracker? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private lateinit var positionManager: FloatingPositionManager
@@ -188,6 +192,10 @@ class FloatingTriggerService : Service() {
         preferences.isServiceRunningDesired = false
         isRunning = false
         idleResetRunnable?.let { mainHandler.removeCallbacks(it) }
+        springDockController?.cancelActiveSprings()
+        springDockController = null
+        velocityTracker?.recycle()
+        velocityTracker = null
 
         containerView?.let {
             try { windowManager?.removeView(it) } catch (ignored: Exception) {}
@@ -247,6 +255,7 @@ class FloatingTriggerService : Service() {
 
         floatingButtonView = buttonView
         containerView = root
+        springDockController = SpringFloatingDockController(wm, root, params)
 
         setupTouchListener(root, params)
 
@@ -266,8 +275,12 @@ class FloatingTriggerService : Service() {
         var isDrag = false
 
         root.setOnTouchListener { _, event ->
+            velocityTracker?.addMovement(event)
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    springDockController?.cancelActiveSprings()
+                    velocityTracker?.recycle()
+                    velocityTracker = VelocityTracker.obtain().apply { addMovement(event) }
                     floatingButtonView?.setPressedScale(true)
                     initialX = params.x
                     initialY = params.y
@@ -296,13 +309,19 @@ class FloatingTriggerService : Service() {
                     floatingButtonView?.setPressedScale(false)
                     if (!isDrag) {
                         handleButtonTap(event.rawX, event.rawY)
+                        velocityTracker?.recycle()
+                        velocityTracker = null
                     } else {
-                        handleDragCompleted(params)
+                        handleDragCompleted(params, velocityTracker)
+                        // Note: velocityTracker is recycled after computing velocity in handleDragCompleted
+                        velocityTracker = null
                     }
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     floatingButtonView?.setPressedScale(false)
+                    velocityTracker?.recycle()
+                    velocityTracker = null
                     true
                 }
                 else -> false
@@ -319,35 +338,26 @@ class FloatingTriggerService : Service() {
         initiateDownloadFlow(tapX, tapY)
     }
 
-    private fun handleDragCompleted(params: WindowManager.LayoutParams) {
+    private fun handleDragCompleted(params: WindowManager.LayoutParams, tracker: VelocityTracker?) {
         val wm = windowManager ?: return
         val root = containerView ?: return
         val sizePx = getButtonSizePx()
 
         if (preferences.isEdgeDockingEnabled) {
             val usable = positionManager.getUsableScreenArea(wm)
-            val centerX = params.x + sizePx / 2
-            val screenCenterX = usable.left + usable.width / 2
-
-            val targetX = if (centerX < screenCenterX) {
-                usable.left + 16
-            } else {
-                usable.right - sizePx - 16
+            val edgeMarginPx = (16 * resources.displayMetrics.density).toInt().coerceAtLeast(16)
+            springDockController?.snapToEdgeWithSpring(
+                screenWidthPx = usable.left + usable.width,
+                safeTopPx = usable.top,
+                safeBottomPx = usable.bottom,
+                edgeMarginPx = edgeMarginPx,
+                velocityTracker = tracker
+            ) { finalX, finalY ->
+                positionManager.savePosition(wm, finalX, finalY, sizePx, sizePx)
             }
-
-            val animator = ValueAnimator.ofInt(params.x, targetX).apply {
-                duration = 200
-                interpolator = DecelerateInterpolator()
-                addUpdateListener { va ->
-                    params.x = va.animatedValue as Int
-                    try {
-                        wm.updateViewLayout(root, params)
-                    } catch (ignored: Exception) {}
-                }
-            }
-            animator.start()
-            positionManager.savePosition(wm, targetX, params.y, sizePx, sizePx)
+            tracker?.recycle()
         } else {
+            tracker?.recycle()
             val savedPoint = positionManager.savePosition(wm, params.x, params.y, sizePx, sizePx)
             params.x = savedPoint.x
             params.y = savedPoint.y

@@ -92,6 +92,14 @@ class MediaSelectionActivity : AppCompatActivity() {
             if (!isDownloading) finish()
         }
 
+        registerPredictiveBackMotion(
+            rootContainer = findViewById(R.id.rootMediaSelection),
+            shouldInterceptBack = { isDownloading },
+            onInterceptedCommit = {
+                Toast.makeText(this, "Download in progress...", Toast.LENGTH_SHORT).show()
+            }
+        )
+
         rvMediaTiles.layoutManager = GridLayoutManager(this, 2)
 
         btnToggleSelectAll.setOnClickListener {

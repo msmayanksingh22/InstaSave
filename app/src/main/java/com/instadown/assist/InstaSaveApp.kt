@@ -3,6 +3,8 @@ package com.instadown.assist
 import android.app.Application
 import android.util.Log
 import com.instadown.assist.resolver.HeadlessWebBridgeResolver
+import com.instadown.assist.resolver.NetworkPrewarmer
+import com.instadown.assist.service.AccessibilityBinderWatchdog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,9 +24,11 @@ class InstaSaveApp : Application() {
         super.onCreate()
         instance = this
 
-        Log.i(TAG, "InstaSaveApp initialized. Pre-warming headless web bridge...")
+        Log.i(TAG, "InstaSaveApp initialized. Pre-warming network sockets & headless web bridge...")
         try {
+            NetworkPrewarmer.warmUpAsync()
             HeadlessWebBridgeResolver.preWarm(this)
+            AccessibilityBinderWatchdog.startMonitoring(this)
         } catch (e: Exception) {
             Log.w(TAG, "Pre-warm notice on app startup: ${e.message}")
         }

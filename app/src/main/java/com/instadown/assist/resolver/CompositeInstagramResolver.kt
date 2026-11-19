@@ -8,6 +8,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 class CompositeInstagramResolver(
     private val context: Context? = null,
+    private val directResolver: InstagramResolver = DirectOkHttpInstagramResolver(),
     private val primaryResolver: InstagramResolver = WebPageSjsResolver(),
     private val fallbackResolver: InstagramResolver = EmbedFallbackResolver(),
     private val webBridgeResolver: InstagramResolver? = context?.let { HeadlessWebBridgeResolver(it) }
@@ -31,6 +32,21 @@ class CompositeInstagramResolver(
 
     override suspend fun resolve(url: String, validateCdn: Boolean): ResolveResult {
         val startTime = System.currentTimeMillis()
+
+        // 0. TIER 0: Ultra-fast Direct OkHttp GraphQL (Zero-WebView 180ms - 350ms)
+        val tier0Result = try {
+            withTimeoutOrNull(1500L) {
+                directResolver.resolve(url, validateCdn)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Tier 0 Direct OkHttp GraphQL exception", e)
+            null
+        }
+
+        if (tier0Result != null && tier0Result.success && tier0Result.items.isNotEmpty()) {
+            Log.i(TAG, "Tier 0 (Direct OkHttp GraphQL) succeeded in ${System.currentTimeMillis() - startTime}ms with ${tier0Result.items.size} items!")
+            return tier0Result
+        }
 
         // Ensure web bridge background WebView is pre-warmed
         preWarm()

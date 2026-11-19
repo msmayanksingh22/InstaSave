@@ -79,12 +79,34 @@ class MediaViewerActivity : AppCompatActivity() {
             insets
         }
 
-        btnBack.setOnClickListener { finish() }
+        val downloadId = intent.getLongExtra(EXTRA_DOWNLOAD_ID, -1L)
+        val initialIndex = intent.getIntExtra(EXTRA_INITIAL_INDEX, 0)
+        val startPosition = intent.getIntExtra(SharedMediaTransition.EXTRA_START_POSITION, 0)
+
+        SharedMediaTransition.bindViewerEnterRemapper(
+            activity = this,
+            viewPager = viewPager,
+            getMediaIdAt = { downloadId },
+            findActiveImageView = { pos ->
+                val holder = (viewPager.getChildAt(0) as? RecyclerView)?.findViewHolderForAdapterPosition(pos)
+                holder?.itemView?.findViewById(R.id.ivPhoto)
+            }
+        )
+
+        val handleExit = {
+            SharedMediaTransition.setReturnPositionResult(this, startPosition)
+            finishAfterTransition()
+        }
+
+        btnBack.setOnClickListener { handleExit() }
         btnShare.setOnClickListener { shareCurrentMedia() }
         btnDelete.setOnClickListener { confirmDeleteCurrentDownload() }
 
-        val downloadId = intent.getLongExtra(EXTRA_DOWNLOAD_ID, -1L)
-        val initialIndex = intent.getIntExtra(EXTRA_INITIAL_INDEX, 0)
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                handleExit()
+            }
+        })
 
         if (downloadId != -1L) {
             loadTransaction(downloadId, initialIndex)
@@ -313,6 +335,7 @@ class MediaViewerActivity : AppCompatActivity() {
                     } else {
                         ivPhoto.setImageResource(R.drawable.ic_image)
                     }
+                    supportStartPostponedEnterTransition()
                 }
             }
         }
@@ -333,6 +356,7 @@ class MediaViewerActivity : AppCompatActivity() {
 
                 videoView.start()
                 startProgressUpdater()
+                supportStartPostponedEnterTransition()
             }
 
             videoView.setOnErrorListener { _, _, _ ->

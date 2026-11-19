@@ -159,6 +159,42 @@ All release builds must be signed with the dedicated production keystore:
 - Rolling in-memory ring buffer (up to 1,000 log events).
 - One-tap clipboard copy and file share.
 
+### 8. Tier 0 Native OkHttp GraphQL & Socket Pre-warming (<400ms)
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/resolver/NetworkPrewarmer.kt`
+  - `app/src/main/java/com/instadown/assist/resolver/DirectOkHttpInstagramResolver.kt`
+  - `app/src/main/java/com/instadown/assist/resolver/CompositeInstagramResolver.kt`
+- DNS pre-resolution via `DnsResolver` (API 29+) and TLS 1.3 / HTTP/2 connection pooling pre-warmed on app startup.
+- Queries unauthenticated GraphQL endpoint with fast fallback on 302/401/429 to Tier 1 headless bridge.
+
+### 9. Zero-Allocation Media Streaming Pipeline
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/download/ZeroAllocMediaPipeline.kt`
+- Off-heap direct NIO buffer pool (`DirectBufferPool`, 64 KB).
+- Streams from OkHttp source directly into `MediaStore` `FileChannel` without JVM heap byte array allocations.
+- Atomic rollback eliminates corrupt zero-byte records on abort/network failure.
+
+### 10. OEM Durability & Accessibility Watchdog
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/service/AccessibilityBinderWatchdog.kt`
+  - `app/src/main/java/com/instadown/assist/service/InstaAccessibilityService.kt`
+- Tracks binder state to distinguish `HEALTHY`, `ZOMBIE_UNBOUND`, and `DISABLED_BY_USER`.
+- Provides OEM-specific autostart settings resolution (HyperOS, ColorOS, One UI).
+- Complies with Android 15/16 Foreground Service restrictions via `specialUse`.
+
+### 11. Motion Physics, Predictive Back & Shared Element Transitions
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/overlay/SpringFloatingDockController.kt`
+  - `app/src/main/java/com/instadown/assist/ui/PredictiveBackExtensions.kt`
+  - `app/src/main/java/com/instadown/assist/ui/SharedMediaTransition.kt`
+- Velocity-aware spring-damper docking for floating overlay using AndroidX `DynamicAnimation`.
+- Predictive back swipe progress physics on Android 14–16 (`OnBackPressedCallback` / `BackEventCompat`).
+- Bidirectional shared element transition between Gallery grid and Media Viewer.
+
+### 12. Automated CI/CD Release Workflow
+- **File**: `.github/workflows/release.yml`
+- Automated release workflow with dynamic `aapt2` truth metadata extraction, SHA-256 calculation, and GitHub Releases publication.
+
 ---
 
 ## ⚡ Mandatory Tooling Directives

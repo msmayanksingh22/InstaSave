@@ -50,6 +50,16 @@ class GalleryActivity : AppCompatActivity() {
 
     private var currentFilter = FilterType.ALL
     private var allTransactions: List<DownloadRecord> = emptyList()
+    private var lastReturnedPosition = -1
+
+    override fun onActivityReenter(resultCode: Int, data: Intent?) {
+        super.onActivityReenter(resultCode, data)
+        val returnPos = data?.getIntExtra(SharedMediaTransition.EXTRA_RETURN_POSITION, -1) ?: -1
+        if (returnPos >= 0) {
+            lastReturnedPosition = returnPos
+            rvGallery.scrollToPosition(returnPos)
+        }
+    }
 
     private val repo by lazy { DownloadRepository.getInstance(this) }
     private val mediaStoreObserver by lazy {
@@ -91,12 +101,21 @@ class GalleryActivity : AppCompatActivity() {
             DialogManualDownload.show(this)
         }
 
+        registerPredictiveBackMotion(
+            rootContainer = findViewById(R.id.rootGalleryLayout),
+            shouldInterceptBack = { adapter.isSelectionMode },
+            onInterceptedCommit = {
+                exitSelectionMode()
+            }
+        )
+
         adapter = GalleryAdapter(
-            onItemClick = { record ->
+            onItemClick = { record, thumbView, position ->
                 if (adapter.isSelectionMode) {
                     toggleSelection(record.id)
                 } else {
-                    MediaViewerActivity.start(this, record.id, 0)
+                    lastReturnedPosition = position
+                    SharedMediaTransition.launchViewer(this, thumbView, record.id, position)
                 }
             },
             onItemLongClick = { record ->
@@ -110,6 +129,13 @@ class GalleryActivity : AppCompatActivity() {
 
         rvGallery.layoutManager = GridLayoutManager(this, 2)
         rvGallery.adapter = adapter
+
+        SharedMediaTransition.bindGalleryExitRemapper(
+            activity = this,
+            recyclerView = rvGallery,
+            getCurrentReturnPosition = { lastReturnedPosition },
+            getMediaIdAt = { pos -> adapter.getRecordAt(pos)?.id ?: -1L }
+        )
 
         btnStartSelection.setOnClickListener {
             if (adapter.itemCount > 0) {
@@ -334,7 +360,7 @@ class GalleryActivity : AppCompatActivity() {
     }
 
     private inner class GalleryAdapter(
-        private val onItemClick: (DownloadRecord) -> Unit,
+        private val onItemClick: (DownloadRecord, ImageView, Int) -> Unit,
         private val onItemLongClick: (DownloadRecord) -> Unit
     ) : RecyclerView.Adapter<GalleryViewHolder>() {
 
@@ -347,6 +373,8 @@ class GalleryActivity : AppCompatActivity() {
             items.addAll(newItems)
             notifyDataSetChanged()
         }
+
+        fun getRecordAt(position: Int): DownloadRecord? = items.getOrNull(position)
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): GalleryViewHolder {
             val view = LayoutInflater.from(parent.context).inflate(R.layout.item_gallery_card, parent, false)
@@ -410,7 +438,7 @@ class GalleryActivity : AppCompatActivity() {
                 scope = lifecycleScope
             )
 
-            holder.itemView.setOnClickListener { onItemClick(record) }
+            holder.itemView.setOnClickListener { onItemClick(record, holder.ivThumbnail, position) }
             holder.itemView.setOnLongClickListener {
                 onItemLongClick(record)
                 true

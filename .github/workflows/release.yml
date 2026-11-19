@@ -1,0 +1,168 @@
+name: Build, Sign & Publish InstaSave OTA Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: 'Optional release notes summary'
+        required: false
+        default: 'Bug fixes and performance improvements.'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Assemble Signed APK & Generate OTA Manifest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode Release Keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::SIGNING_KEYSTORE_BASE64 secret is missing!"
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 --decode > "${RUNNER_TEMP}/release.jks"
+
+      - name: Assemble Signed Release APK
+        env:
+          KEYSTORE_FILE: ${{ runner.temp }}/release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease \
+            -Pandroid.injected.signing.store.file="$KEYSTORE_FILE" \
+            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD" \
+            --no-daemon
+
+      - name: Verify APK Signature & Extract Truth Metadata
+        id: apk_meta
+        run: |
+          set -euo pipefail
+
+          RAW_APK=$(find app/build/outputs/apk/release -maxdepth 2 -name "*.apk" | head -n 1)
+          if [ ! -f "$RAW_APK" ]; then
+            echo "::error::Compiled release APK not found!"
+            exit 1
+          fi
+
+          BUILD_TOOLS_DIR=$(ls -d "${ANDROID_HOME}/build-tools/"* | sort -V | tail -n 1)
+          AAPT2="${BUILD_TOOLS_DIR}/aapt2"
+          APKSIGNER="${BUILD_TOOLS_DIR}/apksigner"
+
+          echo "Verifying APK V2/V3 signature..."
+          "$APKSIGNER" verify --verbose "$RAW_APK"
+
+          BADGING=$("$AAPT2" dump badging "$RAW_APK")
+          PACKAGE_NAME=$(echo "$BADGING" | sed -n "s/.*package: name='\([^']*\)'.*/\1/p")
+          VERSION_CODE=$(echo "$BADGING" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p")
+          VERSION_NAME=$(echo "$BADGING" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+
+          if [ -z "$VERSION_CODE" ] || [ -z "$VERSION_NAME" ]; then
+            echo "::error::Failed to extract versionCode or versionName from APK!"
+            exit 1
+          fi
+
+          FINAL_APK_NAME="InstaSave-v${VERSION_NAME}.apk"
+          cp "$RAW_APK" "$FINAL_APK_NAME"
+
+          SHA256=$(sha256sum "$FINAL_APK_NAME" | awk '{print $1}')
+          SIZE_BYTES=$(stat -c%s "$FINAL_APK_NAME")
+          TAG_NAME="v${VERSION_NAME}"
+          APK_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/${FINAL_APK_NAME}"
+          PUBLISHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          jq -n \
+            --arg pkg "$PACKAGE_NAME" \
+            --argjson code "$VERSION_CODE" \
+            --arg name "$VERSION_NAME" \
+            --arg tag "$TAG_NAME" \
+            --arg url "$APK_URL" \
+            --arg sha "$SHA256" \
+            --argjson size "$SIZE_BYTES" \
+            --arg published "$PUBLISHED_AT" \
+            --arg notes "${{ github.event.inputs.release_notes || 'Automated signed production release.' }}" \
+            '{
+              packageName: $pkg,
+              versionCode: $code,
+              versionName: $name,
+              tag: $tag,
+              apkUrl: $url,
+              sha256: $sha,
+              sizeBytes: $size,
+              publishedAt: $published,
+              releaseNotes: $notes
+            }' > release-manifest.json
+
+          cat release-manifest.json
+
+          {
+            echo "apk_path=$FINAL_APK_NAME"
+            echo "tag_name=$TAG_NAME"
+            echo "version_code=$VERSION_CODE"
+            echo "version_name=$VERSION_NAME"
+            echo "sha256=$SHA256"
+            echo "size_bytes=$SIZE_BYTES"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.apk_meta.outputs.tag_name }}
+          name: "InstaSave v${{ steps.apk_meta.outputs.version_name }} (Build ${{ steps.apk_meta.outputs.version_code }})"
+          body: |
+            ### InstaSave v${{ steps.apk_meta.outputs.version_name }}
+            - **Version Code:** `${{ steps.apk_meta.outputs.version_code }}`
+            - **SHA-256:** `${{ steps.apk_meta.outputs.sha256 }}`
+            - **Size:** `${{ steps.apk_meta.outputs.size_bytes }} bytes`
+
+            ${{ github.event.inputs.release_notes || '' }}
+          files: |
+            ${{ steps.apk_meta.outputs.apk_path }}
+            release-manifest.json
+          make_latest: true
+
+      - name: Commit Updated release-manifest.json to main
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+          git pull --rebase origin main
+          git add release-manifest.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): update release-manifest.json to v${{ steps.apk_meta.outputs.version_name }} (${{ steps.apk_meta.outputs.version_code }}) [skip ci]"
+            git push origin main
+          fi
+
+      - name: Securely Shred Temporary Keystore
+        if: always()
+        run: |
+          rm -f "${RUNNER_TEMP}/release.jks"

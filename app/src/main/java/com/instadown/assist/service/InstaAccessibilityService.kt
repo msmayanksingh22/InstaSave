@@ -55,6 +55,7 @@ class InstaAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        AccessibilityBinderWatchdog.onBinderConnected(this)
         automationEngine = AutomationEngine(
             service = this,
             getRootsProvider = { getCandidateRootNodes() },
@@ -68,8 +69,14 @@ class InstaAccessibilityService : AccessibilityService() {
         Log.i(TAG, "InstaAccessibilityService connected. AutomationEngine initialized.")
     }
 
+    override fun onUnbind(intent: android.content.Intent?): Boolean {
+        AccessibilityBinderWatchdog.onBinderDisconnected(this)
+        return super.onUnbind(intent)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        AccessibilityBinderWatchdog.onBinderDisconnected(this)
         if (instance === this) {
             instance = null
         }
