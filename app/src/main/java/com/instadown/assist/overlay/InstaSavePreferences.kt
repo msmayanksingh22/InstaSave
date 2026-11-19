@@ -59,6 +59,8 @@ class InstaSavePreferences(context: Context) {
         private const val KEY_LAST_PROCESSED_CLIP_URL = "last_processed_clip_url"
         private const val KEY_LAST_PROCESSED_CLIP_TIMESTAMP = "last_processed_clip_timestamp"
         private const val KEY_SERVICE_RUNNING_DESIRED = "service_running_desired"
+        private const val KEY_FLOATING_HUD_ENABLED = "floating_hud_enabled"
+        private const val KEY_AUDIO_EXTRACTION_ENABLED = "audio_extraction_enabled"
 
         const val DEFAULT_SAVE_LOCATION = "Pictures/InstaSave/"
 
@@ -132,4 +134,12 @@ class InstaSavePreferences(context: Context) {
     var lastProcessedClipboardTimestamp: Long
         get() = prefs.getLong(KEY_LAST_PROCESSED_CLIP_TIMESTAMP, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_PROCESSED_CLIP_TIMESTAMP, value).apply()
+
+    var isFloatingHudEnabled: Boolean
+        get() = prefs.getBoolean(KEY_FLOATING_HUD_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_FLOATING_HUD_ENABLED, value).apply()
+
+    var isAudioExtractionEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AUDIO_EXTRACTION_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_AUDIO_EXTRACTION_ENABLED, value).apply()
 }

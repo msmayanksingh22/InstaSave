@@ -11,8 +11,12 @@ import android.util.LruCache
 import android.util.Size
 import android.widget.ImageView
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
@@ -20,6 +24,7 @@ import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 /**
@@ -49,6 +54,11 @@ object MediaThumbnailLoader {
             .build()
     }
 
+    // Bounded network concurrency (max 4 concurrent streams to prevent HTTP/2 pipeline starvation)
+    private val networkSemaphore = Semaphore(4)
+    // In-flight deduplication to avoid duplicate downloads of identical thumbnails
+    private val inFlightRequests = ConcurrentHashMap<String, Deferred<Bitmap?>>()
+
     suspend fun loadThumbnail(
         context: Context,
         uriString: String?,
@@ -66,6 +76,31 @@ object MediaThumbnailLoader {
             }
         }
 
+        // Check if there is already an in-flight request for this thumbnail
+        val existingDeferred = inFlightRequests[cacheKey]
+        if (existingDeferred != null) {
+            return@withContext existingDeferred.await()
+        }
+
+        val deferred = async(Dispatchers.IO) {
+            try {
+                loadThumbnailInternal(context, uriString, isVideo, targetWidth, targetHeight, cacheKey)
+            } finally {
+                inFlightRequests.remove(cacheKey)
+            }
+        }
+        inFlightRequests[cacheKey] = deferred
+        deferred.await()
+    }
+
+    private suspend fun loadThumbnailInternal(
+        context: Context,
+        uriString: String,
+        isVideo: Boolean,
+        targetWidth: Int,
+        targetHeight: Int,
+        cacheKey: String
+    ): Bitmap? {
         var bitmap: Bitmap? = null
 
         // Strategy 1: Local file path on disk (e.g. cached thumbnails or internal storage)
@@ -76,40 +111,47 @@ object MediaThumbnailLoader {
                 bitmap = decodeSampledBitmapFromFile(file.absolutePath, targetWidth, targetHeight)
                 if (bitmap != null) {
                     synchronized(memoryCache) { memoryCache.put(cacheKey, bitmap) }
-                    return@withContext bitmap
+                    return bitmap
                 }
             }
         }
 
-        // Strategy 2: Remote HTTP/HTTPS URL
+        // Strategy 2: Remote HTTP/HTTPS URL with Bounded Semaphore & Disk LRU
         if (uriString.startsWith("http://") || uriString.startsWith("https://")) {
             // Guard: If URL is a direct .mp4 video stream without image cover, do not attempt image download
             val isDirectVideoUrl = uriString.contains(".mp4", ignoreCase = true) || uriString.contains("/video", ignoreCase = true)
             if (isDirectVideoUrl && isVideo) {
-                return@withContext null
+                return null
             }
 
             try {
-                // Check disk cache first
+                // Check disk cache first (0ms network bypass)
                 val diskFile = getDiskCacheFile(context, uriString)
                 if (diskFile.exists() && diskFile.length() > 0) {
                     bitmap = decodeSampledBitmapFromFile(diskFile.absolutePath, targetWidth, targetHeight)
                 } else {
-                    val request = Request.Builder()
-                        .url(uriString)
-                        .header("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)")
-                        .build()
+                    networkSemaphore.withPermit {
+                        // Re-check disk file in case parallel coroutine filled it while waiting for permit
+                        if (diskFile.exists() && diskFile.length() > 0) {
+                            bitmap = decodeSampledBitmapFromFile(diskFile.absolutePath, targetWidth, targetHeight)
+                        } else {
+                            val request = Request.Builder()
+                                .url(uriString)
+                                .header("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)")
+                                .build()
 
-                    sharedHttpClient.newCall(request).execute().use { response ->
-                        if (response.isSuccessful) {
-                            val body = response.body
-                            if (body != null) {
-                                val tempFile = File(diskFile.parentFile, "${diskFile.name}.tmp")
-                                FileOutputStream(tempFile).use { fos ->
-                                    body.byteStream().copyTo(fos)
+                            sharedHttpClient.newCall(request).execute().use { response ->
+                                if (response.isSuccessful) {
+                                    val body = response.body
+                                    if (body != null) {
+                                        val tempFile = File(diskFile.parentFile, "${diskFile.name}.tmp")
+                                        FileOutputStream(tempFile).use { fos ->
+                                            body.byteStream().copyTo(fos)
+                                        }
+                                        tempFile.renameTo(diskFile)
+                                        bitmap = decodeSampledBitmapFromFile(diskFile.absolutePath, targetWidth, targetHeight)
+                                    }
                                 }
-                                tempFile.renameTo(diskFile)
-                                bitmap = decodeSampledBitmapFromFile(diskFile.absolutePath, targetWidth, targetHeight)
                             }
                         }
                     }
@@ -120,14 +162,14 @@ object MediaThumbnailLoader {
 
             if (bitmap != null) {
                 synchronized(memoryCache) { memoryCache.put(cacheKey, bitmap) }
-                return@withContext bitmap
+                return bitmap
             }
         }
 
         val uri = try {
             Uri.parse(uriString)
         } catch (e: Exception) {
-            return@withContext null
+            return null
         }
 
         // Strategy 3: ContentResolver.loadThumbnail (Android Q+ hardware acceleration)
@@ -182,7 +224,7 @@ object MediaThumbnailLoader {
             }
         }
 
-        bitmap
+        return bitmap
     }
 
     private fun decodeSampledBitmapFromFile(filePath: String, reqWidth: Int, reqHeight: Int): Bitmap? {

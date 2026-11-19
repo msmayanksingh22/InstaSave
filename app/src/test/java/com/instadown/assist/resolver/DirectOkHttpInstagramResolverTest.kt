@@ -120,4 +120,36 @@ class DirectOkHttpInstagramResolverTest {
         val items = resolver.parseGraphQlMedia(json)
         assertTrue(items.isEmpty())
     }
+
+    @Test
+    fun testParseThumbnailResourcesForFastGrid() {
+        val json = JSONObject(
+            """
+            {
+              "data": {
+                "xdt_shortcode_media": {
+                  "is_video": false,
+                  "display_url": "https://scontent.cdninstagram.com/huge_3mb_photo.jpg",
+                  "thumbnail_resources": [
+                    { "config_width": 150, "src": "https://scontent.cdninstagram.com/thumb_150.jpg" },
+                    { "config_width": 320, "src": "https://scontent.cdninstagram.com/thumb_320_fast.jpg" },
+                    { "config_width": 640, "src": "https://scontent.cdninstagram.com/thumb_640.jpg" }
+                  ],
+                  "display_resources": [
+                    { "config_width": 1080, "src": "https://scontent.cdninstagram.com/photo_1080.jpg" }
+                  ],
+                  "dimensions": { "width": 1080, "height": 1350 }
+                }
+              }
+            }
+            """.trimIndent()
+        )
+
+        val items = resolver.parseGraphQlMedia(json)
+        assertEquals(1, items.size)
+        val item = items[0]
+        assertEquals("https://scontent.cdninstagram.com/photo_1080.jpg", item.url)
+        // Must select the 320px resource (~25 KB) instead of the 3 MB display_url
+        assertEquals("https://scontent.cdninstagram.com/thumb_320_fast.jpg", item.thumbnailUrl)
+    }
 }

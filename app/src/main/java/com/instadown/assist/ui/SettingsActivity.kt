@@ -12,7 +12,10 @@ import androidx.lifecycle.lifecycleScope
 import com.instadown.assist.R
 import com.instadown.assist.overlay.InstaSavePreferences
 import com.instadown.assist.service.FloatingTriggerService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -35,7 +38,11 @@ class SettingsActivity : AppCompatActivity() {
 
         findViewById<ImageButton>(R.id.btnBack).setOnClickListener { finish() }
 
-        // Floating Button Switches
+        // Setup Hero Storage Card & Service Watchdog
+        setupStorageHeroCard()
+        setupWatchdogCard()
+
+        // Floating Assistant & Dynamic Island HUD Switches
         val switchEnable = findViewById<SwitchCompat>(R.id.switchEnableButton)
         switchEnable.isChecked = prefs.isButtonEnabled
         switchEnable.setOnCheckedChangeListener { _, isChecked ->
@@ -45,6 +52,13 @@ class SettingsActivity : AppCompatActivity() {
             } else {
                 FloatingTriggerService.stop(this)
             }
+        }
+
+        val switchHud = findViewById<SwitchCompat>(R.id.switchEnableHud)
+        switchHud.isChecked = prefs.isFloatingHudEnabled
+        switchHud.setOnCheckedChangeListener { _, isChecked ->
+            prefs.isFloatingHudEnabled = isChecked
+            FloatingTriggerService.updatePreferences(this)
         }
 
         val switchDocking = findViewById<SwitchCompat>(R.id.switchEdgeDocking)
@@ -64,7 +78,13 @@ class SettingsActivity : AppCompatActivity() {
             FloatingTriggerService.resetPosition(this)
         }
 
-        // Downloads Switches
+        // Downloads & Media Switches
+        val switchAudioExtraction = findViewById<SwitchCompat>(R.id.switchAudioExtraction)
+        switchAudioExtraction.isChecked = prefs.isAudioExtractionEnabled
+        switchAudioExtraction.setOnCheckedChangeListener { _, isChecked ->
+            prefs.isAudioExtractionEnabled = isChecked
+        }
+
         val switchDuplicates = findViewById<SwitchCompat>(R.id.switchSkipDuplicates)
         switchDuplicates.isChecked = prefs.duplicatePolicy == "SKIP"
         switchDuplicates.setOnCheckedChangeListener { _, isChecked ->
@@ -442,10 +462,119 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    private fun setupStorageHeroCard() {
+        val tvTotal = findViewById<android.widget.TextView>(R.id.tvSettingsStorageTotal)
+        val tvSubtitle = findViewById<android.widget.TextView>(R.id.tvSettingsStorageSubtitle)
+        val btnReconcile = findViewById<Button>(R.id.btnSettingsReconcile)
+        val btnClearCache = findViewById<Button>(R.id.btnSettingsClearCache)
+
+        fun refresh() {
+            lifecycleScope.launch(Dispatchers.IO) {
+                val summary = com.instadown.assist.data.StorageAccountant.getStorageSummary(this@SettingsActivity, forceRefresh = true)
+                withContext(Dispatchers.Main) {
+                    tvTotal.text = summary.formattedSize
+                    tvSubtitle.text = "Stored in Pictures/InstaSave/ • ${summary.photosCount} photos, ${summary.videosCount} videos"
+                }
+            }
+        }
+
+        btnReconcile.setOnClickListener {
+            Toast.makeText(this, "Re-indexing MediaStore...", Toast.LENGTH_SHORT).show()
+            lifecycleScope.launch(Dispatchers.IO) {
+                com.instadown.assist.data.db.DownloadRepository.getInstance(this@SettingsActivity).reconcileWithMediaStore()
+                com.instadown.assist.data.StorageAccountant.invalidateCache()
+                refresh()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@SettingsActivity, "✓ Gallery re-indexed!", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        btnClearCache.setOnClickListener {
+            lifecycleScope.launch(Dispatchers.IO) {
+                com.instadown.assist.util.MediaThumbnailLoader.clearAll()
+                val cache = File(cacheDir, "img_cache")
+                if (cache.exists()) {
+                    cache.deleteRecursively()
+                }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@SettingsActivity, "✓ Temporary thumbnail cache cleared", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        refresh()
+    }
+
+    private fun setupWatchdogCard() {
+        val tvBadge = findViewById<android.widget.TextView>(R.id.tvWatchdogStatusBadge)
+        val tvDetails = findViewById<android.widget.TextView>(R.id.tvWatchdogDetails)
+        val btnFix = findViewById<Button>(R.id.btnWatchdogFixAction)
+
+        fun updateUi(health: com.instadown.assist.service.AccessibilityHealth) {
+            when (health) {
+                com.instadown.assist.service.AccessibilityHealth.HEALTHY -> {
+                    tvBadge.text = "ACTIVE & HEALTHY"
+                    tvBadge.setBackgroundResource(R.drawable.badge_status_downloaded)
+                    tvBadge.setTextColor(getColor(R.color.status_green))
+                    tvDetails.text = "Accessibility service is running smoothly with 0ms response."
+                    btnFix.text = "Accessibility Settings"
+                    btnFix.setOnClickListener {
+                        startActivity(com.instadown.assist.service.AccessibilityBinderWatchdog.buildHighlightedAccessibilityIntent(this))
+                    }
+                }
+                com.instadown.assist.service.AccessibilityHealth.ZOMBIE_UNBOUND -> {
+                    tvBadge.text = "HIBERNATED / ZOMBIE"
+                    tvBadge.setBackgroundResource(R.drawable.badge_status_missing)
+                    tvBadge.setTextColor(getColor(R.color.status_amber))
+                    tvDetails.text = "OEM battery optimizer suspended the background service binder. Tap below to rebind."
+                    btnFix.text = "Fix OEM Background Restriction"
+                    btnFix.setOnClickListener {
+                        val oemIntent = com.instadown.assist.service.AccessibilityBinderWatchdog.resolveOemAutoStartIntent(this)
+                        if (oemIntent != null) {
+                            try {
+                                startActivity(oemIntent)
+                            } catch (_: Exception) {
+                                startActivity(com.instadown.assist.service.AccessibilityBinderWatchdog.buildHighlightedAccessibilityIntent(this))
+                            }
+                        } else if (!com.instadown.assist.service.AccessibilityBinderWatchdog.isBatteryOptimizationIgnored(this)) {
+                            try {
+                                startActivity(com.instadown.assist.service.AccessibilityBinderWatchdog.buildBatteryWhitelistIntent(this))
+                            } catch (_: Exception) {
+                                startActivity(com.instadown.assist.service.AccessibilityBinderWatchdog.buildHighlightedAccessibilityIntent(this))
+                            }
+                        } else {
+                            startActivity(com.instadown.assist.service.AccessibilityBinderWatchdog.buildHighlightedAccessibilityIntent(this))
+                        }
+                    }
+                }
+                com.instadown.assist.service.AccessibilityHealth.DISABLED_BY_USER -> {
+                    tvBadge.text = "DISABLED"
+                    tvBadge.setBackgroundResource(R.drawable.badge_status_corrupted)
+                    tvBadge.setTextColor(getColor(R.color.status_red))
+                    tvDetails.text = "Accessibility service is turned off. Enable it for 1-tap download automation."
+                    btnFix.text = "Enable in System Settings"
+                    btnFix.setOnClickListener {
+                        startActivity(com.instadown.assist.service.AccessibilityBinderWatchdog.buildHighlightedAccessibilityIntent(this))
+                    }
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            com.instadown.assist.service.AccessibilityBinderWatchdog.health.collect { health ->
+                updateUi(health)
+            }
+        }
+        com.instadown.assist.service.AccessibilityBinderWatchdog.evaluateHealth(this)
+    }
+
     override fun onResume() {
         super.onResume()
         // Automatically resume update installation if user just returned from granting Unknown Sources permission
         com.instadown.assist.util.AppUpdateManager.resumePendingInstallIfPermitted(this)
+        setupStorageHeroCard()
+        com.instadown.assist.service.AccessibilityBinderWatchdog.evaluateHealth(this)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

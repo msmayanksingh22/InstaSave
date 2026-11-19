@@ -1,9 +1,9 @@
 {
-  "versionCode": 11,
-  "versionName": "1.1.8",
-  "releaseNotes": "• Tier 0 Ultra-Fast Resolution (<400ms): Native OkHttp GraphQL web resolver with HTTP/2 + TLS 1.3 socket pre-warming\n• Zero-Allocation Streaming Pipeline: Direct off-heap NIO direct buffers to MediaStore FileChannel for smooth 4K downloads\n• Android 16 (API 36) Hardened: Predictive Back gestures, SpecialUse FGS compliance, and Accessibility binder watchdog\n• Spring-Damper Physics: Velocity-aware floating overlay docking\n• Shared Element Transitions: Seamless photo zoom animations between Gallery and Media Viewer\n• Seamless In-App OTA Update: Direct native PackageInstaller without external browser redirects",
+  "versionCode": 12,
+  "versionName": "1.2.0",
+  "releaseNotes": "• Dynamic Island Progress HUD Pill: Sleek top floating HUD providing real-time visual progress (link detected, resolving, downloading, saved) across all apps without focus theft\n• Smart Differential Re-Download: Interactive Bottom Sheet inspecting MediaStore and IS_TRASHED to detect missing/corrupted files with 1-tap restore\n• Sub-300ms Thumbnail Grid: Extracts low-res GraphQL thumbnail resources (~320px, ~25KB) with Semaphore(4) concurrency and in-flight deduplication\n• Modern Material 3 Settings UI: Hero storage card with dynamic breakdown, live Accessibility watchdog telemetry with OEM quick-fix actions, and categorized cards\n• Native Lossless Reel Audio Extractor: Zero-bloat demuxing of background music (.m4a) via native MediaExtractor + MediaMuxer into Music/InstaSave/ with 0 KB APK bloat",
   "apkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
-  "fallbackApkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.1.8/app-release.apk",
-  "fileSizeBytes": 3917719,
-  "sha256": "ac7e650cd6ea286081f67bfec9d8bad9e0a458774968c4aad73ff4f810fcdf9b"
+  "fallbackApkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.2.0/app-release.apk",
+  "fileSizeBytes": 3952677,
+  "sha256": "0f86a602b37fd109e915447623cb31d9b24fc4c48fc524f8afb94db462213b40"
 }

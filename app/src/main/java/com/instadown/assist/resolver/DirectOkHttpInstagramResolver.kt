@@ -212,22 +212,63 @@ class DirectOkHttpInstagramResolver(
 
     private fun extractSingleNode(node: JSONObject): ResolvedMediaItem? {
         val isVideo = node.optBoolean("is_video", false)
-        val thumb = node.optString("display_url").takeIf { it.isNotBlank() }
+        val displayUrl = node.optString("display_url").takeIf { it.isNotBlank() }
+        val lowResThumb = extractLowResThumbnail(node) ?: displayUrl
         val mediaUrl = if (isVideo) {
             node.optString("video_url").takeIf { it.isNotBlank() } ?: return null
         } else {
             val resources = node.optJSONArray("display_resources")
             resources?.optJSONObject(resources.length() - 1)?.optString("src")?.takeIf { it.isNotBlank() }
-                ?: thumb
+                ?: displayUrl
                 ?: return null
         }
         val dims = node.optJSONObject("dimensions")
         return ResolvedMediaItem(
             url = mediaUrl,
             isVideo = isVideo,
-            thumbnailUrl = thumb,
+            thumbnailUrl = lowResThumb,
             width = dims?.optInt("width", 0) ?: 0,
             height = dims?.optInt("height", 0) ?: 0
         )
+    }
+
+    private fun extractLowResThumbnail(node: JSONObject): String? {
+        val thumbResources = node.optJSONArray("thumbnail_resources")
+        if (thumbResources != null && thumbResources.length() > 0) {
+            var bestSrc: String? = null
+            var bestDiff = Int.MAX_VALUE
+            for (i in 0 until thumbResources.length()) {
+                val res = thumbResources.optJSONObject(i) ?: continue
+                val width = res.optInt("config_width", 0)
+                val src = res.optString("src").takeIf { it.isNotBlank() } ?: continue
+                val diff = kotlin.math.abs(width - 320)
+                if (diff < bestDiff) {
+                    bestDiff = diff
+                    bestSrc = src
+                }
+            }
+            if (bestSrc != null) return bestSrc
+        }
+
+        val dispResources = node.optJSONArray("display_resources")
+        if (dispResources != null && dispResources.length() > 0) {
+            var bestSrc: String? = null
+            var bestDiff = Int.MAX_VALUE
+            for (i in 0 until dispResources.length()) {
+                val res = dispResources.optJSONObject(i) ?: continue
+                val width = res.optInt("config_width", 0)
+                if (width > 0 && width <= 640) {
+                    val src = res.optString("src").takeIf { it.isNotBlank() } ?: continue
+                    val diff = kotlin.math.abs(width - 320)
+                    if (diff < bestDiff) {
+                        bestDiff = diff
+                        bestSrc = src
+                    }
+                }
+            }
+            if (bestSrc != null) return bestSrc
+        }
+
+        return null
     }
 }

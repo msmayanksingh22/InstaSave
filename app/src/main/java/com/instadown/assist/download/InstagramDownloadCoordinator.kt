@@ -98,6 +98,9 @@ class InstagramDownloadCoordinator(
         onComplete: ((DownloadResult) -> Unit)?
     ) {
         if (autoResult.verdict != "PASS" || !autoResult.validInstagramUrl || autoResult.instagramUrl.isBlank()) {
+            com.instadown.assist.overlay.FloatingHudBus.emit(
+                com.instadown.assist.overlay.FloatingHudState.Error("", "Instagram URL capture failed")
+            )
             val fail = DownloadResult(
                 transactionId = "AUTO_FAIL_${System.currentTimeMillis() % 10000}",
                 shortcode = null,
@@ -150,6 +153,11 @@ class InstagramDownloadCoordinator(
             }
             return
         }
+
+        val autoShortcode = UrlNormalizer.normalize(autoResult.instagramUrl)?.shortcode ?: ""
+        com.instadown.assist.overlay.FloatingHudBus.emit(
+            com.instadown.assist.overlay.FloatingHudState.LinkDetected(autoShortcode)
+        )
 
         // 1. Resolve media metadata first so actual post type and item count are known
         withContext(Dispatchers.Main) { onStatusUpdate?.invoke("Resolving post...") }
@@ -365,6 +373,10 @@ class InstagramDownloadCoordinator(
 
         val shortcode = normalized.shortcode
 
+        com.instadown.assist.overlay.FloatingHudBus.emit(
+            com.instadown.assist.overlay.FloatingHudState.Resolving(shortcode)
+        )
+
         // 1. Resolve media metadata (or reuse preResolvedResult if provided)
         val resolveStart = System.currentTimeMillis()
         val resolveResult = if (preResolvedResult != null && preResolvedResult.success) {
@@ -390,6 +402,12 @@ class InstagramDownloadCoordinator(
                 elapsedTimeMs = resolveLatency,
                 error = resolveResult.error?.message ?: "Failed to resolve media metadata",
                 errorCode = DownloadErrorCode.RESOLUTION_FAILED
+            )
+            com.instadown.assist.overlay.FloatingHudBus.emit(
+                com.instadown.assist.overlay.FloatingHudState.Error(
+                    shortcode = shortcode,
+                    message = fail.error ?: "Resolution failed"
+                )
             )
             return@withContext fail
         }
@@ -417,6 +435,12 @@ class InstagramDownloadCoordinator(
                 error = plan.error ?: "Download safety checks failed",
                 errorCode = plan.errorCode ?: DownloadErrorCode.VERIFICATION_FAILED
             )
+            com.instadown.assist.overlay.FloatingHudBus.emit(
+                com.instadown.assist.overlay.FloatingHudState.Error(
+                    shortcode = shortcode,
+                    message = fail.error ?: "Safety verification failed"
+                )
+            )
             return@withContext fail
         }
 
@@ -433,12 +457,38 @@ class InstagramDownloadCoordinator(
                 if (freshResult.success) freshResult else null
             },
             onProgress = { progress ->
+                com.instadown.assist.overlay.FloatingHudBus.emit(
+                    com.instadown.assist.overlay.FloatingHudState.Downloading(
+                        shortcode = shortcode,
+                        percent = progress.overallPercent,
+                        currentItem = progress.currentItemIndex + 1,
+                        totalItems = progress.totalItems,
+                        message = progress.statusMessage
+                    )
+                )
                 mainHandler.post {
                     onStatusUpdate?.invoke(progress.statusMessage)
                     onProgress?.invoke(progress)
                 }
             }
         )
+
+        if (result.success) {
+            com.instadown.assist.overlay.FloatingHudBus.emit(
+                com.instadown.assist.overlay.FloatingHudState.Success(
+                    shortcode = shortcode,
+                    message = if (result.completedCount > 1) "Saved ${result.completedCount} items" else "Saved to Gallery",
+                    totalItems = result.completedCount
+                )
+            )
+        } else {
+            com.instadown.assist.overlay.FloatingHudBus.emit(
+                com.instadown.assist.overlay.FloatingHudState.Error(
+                    shortcode = shortcode,
+                    message = result.error ?: "Download failed"
+                )
+            )
+        }
 
         if (recordInDb) {
             val repo = com.instadown.assist.data.db.DownloadRepository.getInstance(context)
@@ -465,6 +515,24 @@ class InstagramDownloadCoordinator(
             }
 
             repo.recordDownloadResult(result, thumbnailPath = thumbPath)
+
+            // Auto audio extraction for Reels if enabled in preferences
+            val prefs = com.instadown.assist.overlay.InstaSavePreferences(context)
+            if (prefs.isAudioExtractionEnabled && result.success) {
+                coordinatorScope.launch(Dispatchers.IO) {
+                    result.items.filter { it.mediaType == com.instadown.assist.resolver.model.MediaType.VIDEO && it.localUri != null }.forEach { vidItem ->
+                        try {
+                            com.instadown.assist.download.ReelAudioExtractor.extractAudio(
+                                context = context,
+                                videoUri = vidItem.localUri!!,
+                                shortcode = shortcode
+                            )
+                        } catch (e: Exception) {
+                            Log.d(TAG, "Auto audio extraction notice: ${e.message}")
+                        }
+                    }
+                }
+            }
 
             // Asynchronously fetch creator handle & thumbnail in background
             coordinatorScope.launch(Dispatchers.IO) {

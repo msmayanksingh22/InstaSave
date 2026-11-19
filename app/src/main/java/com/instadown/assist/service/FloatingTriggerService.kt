@@ -51,6 +51,7 @@ class FloatingTriggerService : Service() {
     private var windowParams: WindowManager.LayoutParams? = null
     private var springDockController: SpringFloatingDockController? = null
     private var velocityTracker: VelocityTracker? = null
+    private var floatingHudController: com.instadown.assist.overlay.FloatingHudOverlayController? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private lateinit var positionManager: FloatingPositionManager
@@ -138,6 +139,12 @@ class FloatingTriggerService : Service() {
 
         startForegroundNotification()
         createFloatingControl()
+
+        if (preferences.isFloatingHudEnabled) {
+            floatingHudController = com.instadown.assist.overlay.FloatingHudOverlayController(this).apply {
+                start()
+            }
+        }
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -196,6 +203,8 @@ class FloatingTriggerService : Service() {
         springDockController = null
         velocityTracker?.recycle()
         velocityTracker = null
+        floatingHudController?.stop()
+        floatingHudController = null
 
         containerView?.let {
             try { windowManager?.removeView(it) } catch (ignored: Exception) {}
@@ -566,6 +575,14 @@ class FloatingTriggerService : Service() {
         try {
             wm.updateViewLayout(root, params)
         } catch (ignored: Exception) {}
+
+        // Reconcile Floating HUD Pill state
+        floatingHudController?.stop()
+        if (preferences.isFloatingHudEnabled) {
+            floatingHudController = com.instadown.assist.overlay.FloatingHudOverlayController(this).apply {
+                start()
+            }
+        }
     }
 
     private fun triggerHaptic() {
@@ -604,6 +621,8 @@ class FloatingTriggerService : Service() {
         super.onDestroy()
         isRunning = false
         idleResetRunnable?.let { mainHandler.removeCallbacks(it) }
+        floatingHudController?.stop()
+        floatingHudController = null
         try {
             val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
             cm?.removePrimaryClipChangedListener(clipListener)

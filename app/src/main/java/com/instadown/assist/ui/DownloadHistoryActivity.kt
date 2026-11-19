@@ -59,7 +59,8 @@ class DownloadHistoryActivity : AppCompatActivity() {
     // Sequential Re-download Queue Management
     private data class QueuedDownloadItem(
         val record: DownloadRecord,
-        val targetUrl: String
+        val targetUrl: String,
+        val targetIndices: Set<Int>? = null
     )
     private val downloadQueue = ConcurrentLinkedQueue<QueuedDownloadItem>()
     private val queuedOrActiveIds = ConcurrentHashMap.newKeySet<Long>()
@@ -99,13 +100,13 @@ class DownloadHistoryActivity : AppCompatActivity() {
             scope = lifecycleScope,
             onViewClick = { record ->
                 if (record.isDeletedFromDevice) {
-                    enqueueRedownload(record)
+                    showReDownloadDialogOrSheet(record)
                 } else {
                     MediaViewerActivity.start(this, record.id, 0)
                 }
             },
             onRedownloadClick = { record ->
-                enqueueRedownload(record)
+                showReDownloadDialogOrSheet(record)
             },
             onOpenInstagramClick = { record ->
                 openInInstagram(record)
@@ -419,7 +420,19 @@ class DownloadHistoryActivity : AppCompatActivity() {
         applyFilter()
     }
 
-    private fun enqueueRedownload(record: DownloadRecord) {
+    private fun showReDownloadDialogOrSheet(record: DownloadRecord) {
+        if (record.items.size > 1) {
+            val sheet = ReDownloadSelectionBottomSheet.newInstance(record.id)
+            sheet.onConfirmRestore = { targetRecord, targetIndices ->
+                enqueueRedownload(targetRecord, targetIndices)
+            }
+            sheet.show(supportFragmentManager, "ReDownloadSelectionBottomSheet")
+        } else {
+            enqueueRedownload(record, null)
+        }
+    }
+
+    private fun enqueueRedownload(record: DownloadRecord, targetIndices: Set<Int>? = null) {
         val targetUrl = record.targetDownloadUrl
         if (targetUrl.isBlank()) {
             Toast.makeText(this, "Cannot re-download: Instagram URL missing", Toast.LENGTH_SHORT).show()
@@ -432,7 +445,7 @@ class DownloadHistoryActivity : AppCompatActivity() {
         }
 
         queuedOrActiveIds.add(record.id)
-        downloadQueue.add(QueuedDownloadItem(record, targetUrl))
+        downloadQueue.add(QueuedDownloadItem(record, targetUrl, targetIndices))
 
         val position = downloadQueue.size
         adapter.setDownloadQueued(record.id, position)
@@ -458,6 +471,7 @@ class DownloadHistoryActivity : AppCompatActivity() {
 
                 val result = coordinator.executeDirectDownload(
                     url = targetUrl,
+                    selectedIndices = nextItem.targetIndices,
                     recordInDb = true,
                     onStatusUpdate = { status ->
                         adapter.setDownloadProgress(record.id, percent = 0, message = status)
@@ -552,7 +566,7 @@ class DownloadHistoryActivity : AppCompatActivity() {
                         }
                     }
                     "Re-download to Device" -> {
-                        enqueueRedownload(record)
+                        showReDownloadDialogOrSheet(record)
                     }
                 }
             }

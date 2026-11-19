@@ -51,6 +51,7 @@ class MediaViewerActivity : AppCompatActivity() {
     private lateinit var tvTitle: TextView
     private lateinit var tvSubtitle: TextView
     private lateinit var btnBack: ImageButton
+    private lateinit var btnExtractAudio: ImageButton
     private lateinit var btnShare: ImageButton
     private lateinit var btnDelete: ImageButton
 
@@ -69,6 +70,7 @@ class MediaViewerActivity : AppCompatActivity() {
         tvTitle = findViewById(R.id.tvViewerTitle)
         tvSubtitle = findViewById(R.id.tvViewerSubtitle)
         btnBack = findViewById(R.id.btnBack)
+        btnExtractAudio = findViewById(R.id.btnExtractAudio)
         btnShare = findViewById(R.id.btnShare)
         btnDelete = findViewById(R.id.btnDelete)
 
@@ -99,6 +101,7 @@ class MediaViewerActivity : AppCompatActivity() {
         }
 
         btnBack.setOnClickListener { handleExit() }
+        btnExtractAudio.setOnClickListener { extractAudioForCurrentItem() }
         btnShare.setOnClickListener { shareCurrentMedia() }
         btnDelete.setOnClickListener { confirmDeleteCurrentDownload() }
 
@@ -195,6 +198,8 @@ class MediaViewerActivity : AppCompatActivity() {
         val currentItem = mediaItems.getOrNull(position) ?: return
         val isVideo = currentItem.mediaType == "VIDEO" || record.postType.equals("REEL", ignoreCase = true)
 
+        btnExtractAudio.visibility = if (isVideo) View.VISIBLE else View.GONE
+
         if (record.isCarousel) {
             tvTitle.text = "Instagram Carousel"
             tvSubtitle.text = "Item ${position + 1} of ${mediaItems.size}"
@@ -204,6 +209,35 @@ class MediaViewerActivity : AppCompatActivity() {
         } else {
             tvTitle.text = "Instagram Photo"
             tvSubtitle.text = record.shortcode.ifBlank { "Photo" }
+        }
+    }
+
+    private fun extractAudioForCurrentItem() {
+        val record = currentRecord ?: return
+        val currentItem = mediaItems.getOrNull(viewPager.currentItem) ?: return
+        val uriStr = currentItem.mediaUri ?: return
+        val videoUri = Uri.parse(uriStr)
+
+        Toast.makeText(this, "Extracting lossless audio (.m4a)...", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val result = com.instadown.assist.download.ReelAudioExtractor.extractAudio(
+                context = this@MediaViewerActivity,
+                videoUri = videoUri,
+                shortcode = record.shortcode
+            )
+            if (result.success && result.audioUri != null) {
+                Toast.makeText(
+                    this@MediaViewerActivity,
+                    "✓ Audio extracted: ${result.fileName}\nSaved in Music/InstaSave/ (${result.elapsedMs}ms)",
+                    Toast.LENGTH_LONG
+                ).show()
+            } else {
+                Toast.makeText(
+                    this@MediaViewerActivity,
+                    "Audio extraction failed: ${result.error}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 
