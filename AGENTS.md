@@ -87,7 +87,7 @@ You are an expert principal Android systems engineer and architect working on In
   - `androidx.viewpager2:viewpager2:1.1.0`
   - `org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1`
   - `com.squareup.okhttp3:okhttp:4.12.0`
-- **Current Version**: `versionCode = 6`, `versionName = "1.1.4"`
+- **Current Version**: `versionCode = 10`, `versionName = "1.1.7"`
 
 ---
 

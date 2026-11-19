@@ -157,6 +157,7 @@ class DiagnosticsActivity : AppCompatActivity() {
         super.onResume()
         refreshWifiIp()
         refreshDiagnostics()
+        AppUpdateManager.resumePendingInstallIfPermitted(this)
     }
 
     private fun refreshWifiIp() {

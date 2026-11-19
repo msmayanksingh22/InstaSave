@@ -33,6 +33,52 @@ object AppUpdateManager {
     const val DEFAULT_UPDATE_URL = "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/release-manifest.json"
     const val DEFAULT_APK_URL = "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk"
 
+    /**
+     * Holds an APK waiting for installation if the user was directed to Settings
+     * to grant "Install unknown apps" permission.
+     */
+    var pendingInstallApk: File? = null
+
+    /**
+     * Checks if the app has permission to install unknown APKs.
+     * On Android 8.0+ (API 26+), checks PackageInstaller capability.
+     */
+    fun canInstallPackages(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                context.packageManager.canRequestPackageInstalls()
+            } catch (e: Exception) {
+                AppLogger.w(TAG, "canRequestPackageInstalls check failed: ${e.message}")
+                false
+            }
+        } else {
+            true
+        }
+    }
+
+    /**
+     * Checks whether an update APK has already been downloaded and is ready to install.
+     */
+    fun getDownloadedUpdateApk(context: Context, versionName: String): File? {
+        val updateDir = File(context.cacheDir, "updates")
+        val apkFile = File(updateDir, "InstaSave-v${versionName}.apk")
+        return if (apkFile.exists() && apkFile.length() > 0) apkFile else null
+    }
+
+    /**
+     * Automatically resumes installation if an APK was downloaded and the user
+     * just granted the "Install unknown apps" permission from Settings.
+     */
+    fun resumePendingInstallIfPermitted(context: Context): Boolean {
+        val apk = pendingInstallApk
+        if (apk != null && apk.exists() && apk.length() > 0 && canInstallPackages(context)) {
+            AppLogger.i(TAG, "Resuming pending installation after permission grant: ${apk.name}")
+            pendingInstallApk = null
+            return promptInstall(context, apk)
+        }
+        return false
+    }
+
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
@@ -73,8 +119,23 @@ object AppUpdateManager {
             }
 
             val jsonStr = response.body?.string() ?: return@withContext null
-            val json = JSONObject(jsonStr)
+            val updateInfo = parseManifest(jsonStr, currentVersionCode)
+            if (updateInfo != null) {
+                AppLogger.i(TAG, "Update check: Current=$currentVersionCode, Remote=${updateInfo.versionCode}, Available=${updateInfo.isAvailable}")
+            }
+            updateInfo
+        } catch (e: Exception) {
+            AppLogger.w(TAG, "Check updates error: ${e.message}")
+            null
+        }
+    }
 
+    /**
+     * Parses the update manifest JSON and calculates update availability against currentVersionCode.
+     */
+    fun parseManifest(jsonStr: String, currentVersionCode: Int): AppUpdateInfo? {
+        return try {
+            val json = JSONObject(jsonStr)
             val remoteVersionCode = json.optInt("versionCode", 0)
             val remoteVersionName = json.optString("versionName", "1.0")
             val releaseNotes = json.optString("releaseNotes", "New performance and feature updates.")
@@ -84,7 +145,6 @@ object AppUpdateManager {
             val fileSizeBytes = json.optLong("fileSizeBytes", 0L)
 
             val isAvailable = remoteVersionCode > currentVersionCode && apkUrl.isNotBlank()
-            AppLogger.i(TAG, "Update check: Current=$currentVersionCode, Remote=$remoteVersionCode, Available=$isAvailable")
 
             AppUpdateInfo(
                 versionCode = remoteVersionCode,
@@ -95,8 +155,7 @@ object AppUpdateManager {
                 fileSizeBytes = fileSizeBytes,
                 isAvailable = isAvailable
             )
-        } catch (e: Exception) {
-            AppLogger.w(TAG, "Check updates error: ${e.message}")
+        } catch (_: Exception) {
             null
         }
     }
@@ -185,11 +244,20 @@ object AppUpdateManager {
             return if (tempFile.renameTo(apkFile)) {
                 AppLogger.i(TAG, "Update APK downloaded successfully: ${apkFile.length()} bytes -> ${apkFile.absolutePath}")
                 apkFile
-            } else if (tempFile.exists() && tempFile.length() > 0) {
-                AppLogger.i(TAG, "Update APK saved as temp: ${tempFile.length()} bytes -> ${tempFile.absolutePath}")
-                tempFile
             } else {
-                null
+                try {
+                    tempFile.copyTo(apkFile, overwrite = true)
+                    tempFile.delete()
+                    AppLogger.i(TAG, "Update APK copied to destination: ${apkFile.length()} bytes -> ${apkFile.absolutePath}")
+                    apkFile
+                } catch (e: Exception) {
+                    if (tempFile.exists() && tempFile.length() > 0) {
+                        AppLogger.w(TAG, "Returning temp APK file as fallback: ${tempFile.absolutePath}")
+                        tempFile
+                    } else {
+                        null
+                    }
+                }
             }
         } catch (e: Exception) {
             AppLogger.e(TAG, "Download APK exception from $targetUrl: ${e.message}", e)
@@ -199,8 +267,8 @@ object AppUpdateManager {
 
     /**
      * Prompts the native Android package installer to install the downloaded APK.
-     * Falls back to browser download if REQUEST_INSTALL_PACKAGES permission is unavailable
-     * (omitted from manifest for Play Protect compliance).
+     * If the user has not yet permitted installs from this app, opens the system
+     * "Install unknown apps" settings page and remembers the pending APK to auto-resume.
      */
     fun promptInstall(context: Context, apkFile: File, fallbackApkUrl: String? = null): Boolean {
         if (!apkFile.exists() || apkFile.length() == 0L) {
@@ -208,30 +276,33 @@ object AppUpdateManager {
             return false
         }
 
-        // On Android 8.0+, guard canRequestPackageInstalls() — without REQUEST_INSTALL_PACKAGES
-        // in the manifest this throws SecurityException. Catch it and fall back to browser.
+        // On Android 8.0+ (API 26+), verify and request unknown app sources permission if needed
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val canInstall = try {
-                context.packageManager.canRequestPackageInstalls()
-            } catch (se: SecurityException) {
-                AppLogger.w(TAG, "REQUEST_INSTALL_PACKAGES not declared — routing to browser download")
-                // Fall back: open APK URL directly in browser for the user to download & install
-                val browserUrl = fallbackApkUrl?.takeIf { it.isNotBlank() }
-                    ?: DEFAULT_APK_URL
+            if (!canInstallPackages(context)) {
+                pendingInstallApk = apkFile
+                AppLogger.i(TAG, "Install permission not yet granted. Directing user to Settings...")
                 try {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(browserUrl)).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    })
+                    android.widget.Toast.makeText(
+                        context,
+                        "Please allow 'Install unknown apps' for InstaSave to complete update",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
                 } catch (_: Exception) {}
-                return false
-            }
-            if (!canInstall) {
-                AppLogger.i(TAG, "Requesting unknown app sources permission...")
+
                 val manageIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
                     data = Uri.parse("package:${context.packageName}")
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                context.startActivity(manageIntent)
+                try {
+                    context.startActivity(manageIntent)
+                } catch (e: Exception) {
+                    AppLogger.e(TAG, "Failed to open unknown sources settings: ${e.message}", e)
+                    try {
+                        context.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        })
+                    } catch (_: Exception) {}
+                }
                 return false
             }
         }
@@ -247,13 +318,34 @@ object AppUpdateManager {
                 setDataAndType(contentUri, "application/vnd.android.package-archive")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
 
+            // Explicitly grant URI read permission to all matching activities for OEM robustness
+            val resInfoList = context.packageManager.queryIntentActivities(
+                installIntent,
+                android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
+            )
+            for (resolveInfo in resInfoList) {
+                val targetPackage = resolveInfo.activityInfo.packageName
+                context.grantUriPermission(targetPackage, contentUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            pendingInstallApk = null
             context.startActivity(installIntent)
-            AppLogger.i(TAG, "Launched PackageInstaller for $contentUri")
+            AppLogger.i(TAG, "Successfully launched Android PackageInstaller for $contentUri")
             return true
         } catch (e: Exception) {
             AppLogger.e(TAG, "Failed to launch package installer: ${e.message}", e)
+            // Only fallback to browser if PackageInstaller launch completely crashes
+            if (!fallbackApkUrl.isNullOrBlank()) {
+                try {
+                    android.widget.Toast.makeText(context, "Opening direct download...", android.widget.Toast.LENGTH_SHORT).show()
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(fallbackApkUrl)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    })
+                } catch (_: Exception) {}
+            }
             return false
         }
     }

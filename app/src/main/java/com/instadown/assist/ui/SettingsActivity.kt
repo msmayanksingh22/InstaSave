@@ -287,31 +287,65 @@ class SettingsActivity : AppCompatActivity() {
             }
 
             // Update is available!
-            tvTitle.text = "Update Available! 🚀"
-            tvSubtitle.text = "A new version of InstaSave is ready to download."
-            layoutReleaseNotes.visibility = android.view.View.VISIBLE
-            tvReleaseVersion.text = "New Version: v${updateInfo.versionName}"
-            val sizeMb = if (updateInfo.fileSizeBytes > 0) String.format(java.util.Locale.US, "%.1f MB", updateInfo.fileSizeBytes / (1024.0 * 1024.0)) else ""
-            tvReleaseSize.text = sizeMb
-            tvReleaseNotes.text = updateInfo.releaseNotes
+            val existingApk = com.instadown.assist.util.AppUpdateManager.getDownloadedUpdateApk(this@SettingsActivity, updateInfo.versionName)
+            if (existingApk != null) {
+                tvTitle.text = "Update Ready! 🚀"
+                tvSubtitle.text = "InstaSave v${updateInfo.versionName} is downloaded and ready to install."
+                layoutReleaseNotes.visibility = android.view.View.VISIBLE
+                tvReleaseVersion.text = "New Version: v${updateInfo.versionName}"
+                val sizeMb = if (updateInfo.fileSizeBytes > 0) String.format(java.util.Locale.US, "%.1f MB", updateInfo.fileSizeBytes / (1024.0 * 1024.0)) else ""
+                tvReleaseSize.text = sizeMb
+                tvReleaseNotes.text = updateInfo.releaseNotes
 
-            btnPositive.isEnabled = true
-            btnPositive.text = "Update Now"
-            btnNegative.text = "Later"
+                btnPositive.isEnabled = true
+                btnPositive.text = "Install Now"
+                btnNegative.text = "Re-download"
 
-            btnPositive.setOnClickListener {
-                performUpdateDownload(
-                    updateInfo,
-                    dialog,
-                    tvTitle,
-                    tvSubtitle,
-                    layoutProgress,
-                    pbDownload,
-                    tvUpdatePercent,
-                    tvProgressStatus,
-                    btnPositive,
-                    btnNegative
-                )
+                btnPositive.setOnClickListener {
+                    com.instadown.assist.util.AppUpdateManager.promptInstall(this@SettingsActivity, existingApk, updateInfo.apkUrl)
+                }
+                btnNegative.setOnClickListener {
+                    existingApk.delete()
+                    performUpdateDownload(
+                        updateInfo,
+                        dialog,
+                        tvTitle,
+                        tvSubtitle,
+                        layoutProgress,
+                        pbDownload,
+                        tvUpdatePercent,
+                        tvProgressStatus,
+                        btnPositive,
+                        btnNegative
+                    )
+                }
+            } else {
+                tvTitle.text = "Update Available! 🚀"
+                tvSubtitle.text = "A new version of InstaSave is ready to download."
+                layoutReleaseNotes.visibility = android.view.View.VISIBLE
+                tvReleaseVersion.text = "New Version: v${updateInfo.versionName}"
+                val sizeMb = if (updateInfo.fileSizeBytes > 0) String.format(java.util.Locale.US, "%.1f MB", updateInfo.fileSizeBytes / (1024.0 * 1024.0)) else ""
+                tvReleaseSize.text = sizeMb
+                tvReleaseNotes.text = updateInfo.releaseNotes
+
+                btnPositive.isEnabled = true
+                btnPositive.text = "Update Now"
+                btnNegative.text = "Later"
+
+                btnPositive.setOnClickListener {
+                    performUpdateDownload(
+                        updateInfo,
+                        dialog,
+                        tvTitle,
+                        tvSubtitle,
+                        layoutProgress,
+                        pbDownload,
+                        tvUpdatePercent,
+                        tvProgressStatus,
+                        btnPositive,
+                        btnNegative
+                    )
+                }
             }
         }
     }
@@ -388,6 +422,12 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Automatically resume update installation if user just returned from granting Unknown Sources permission
+        com.instadown.assist.util.AppUpdateManager.resumePendingInstallIfPermitted(this)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
