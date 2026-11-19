@@ -201,6 +201,7 @@ class DownloadHistoryAdapter(
         holder.btnOpenInstagram.setOnClickListener { onOpenInstagramClick(record) }
         holder.btnViewMedia.setOnClickListener { onViewClick(record) }
         holder.btnRedownload.setOnClickListener { onRedownloadClick(record) }
+        holder.btnMoreOptions.setOnClickListener { onItemLongClick(record) }
         holder.itemView.setOnClickListener {
             if (isDeleted) {
                 onRedownloadClick(record)
@@ -240,6 +241,7 @@ class DownloadHistoryAdapter(
         val btnOpenInstagram: Button = view.findViewById(R.id.btnOpenInstagram)
         val btnRedownload: Button = view.findViewById(R.id.btnRedownload)
         val btnViewMedia: Button = view.findViewById(R.id.btnViewMedia)
+        val btnMoreOptions: android.widget.ImageButton = view.findViewById(R.id.btnMoreOptions)
         val pbRedownload: ProgressBar = view.findViewById(R.id.pbRedownload)
 
         // Progress section

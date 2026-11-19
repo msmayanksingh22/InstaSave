@@ -218,4 +218,50 @@ class ReconciliationAndStorageTest {
         val overall = (sum / totalItems).coerceIn(0, 100)
         assertEquals(62, overall)
     }
+
+    @Test
+    fun testDeviceStorageOnlyDeletionPreservesHistoryAndThumbnail() {
+        val thumbPath = "/data/user/0/com.instadown.assist/files/thumbnails/SAVED999.jpg"
+        // Simulate record after deleteDeviceStorageOnly has cleared local media files but kept history row
+        val itemsAfterStorageDeletion = listOf(
+            DownloadItemRecord(
+                id = 1,
+                downloadId = 999,
+                itemIndex = 0,
+                mediaType = "VIDEO",
+                mediaUri = null, // Cleared because file was deleted from device
+                fileName = "reel_SAVED999.mp4",
+                status = ItemStatus.EXTERNAL_DELETED
+            )
+        )
+
+        val record = DownloadRecord(
+            id = 999,
+            transactionId = "TX_999",
+            shortcode = "SAVED999",
+            postType = "REEL",
+            sourceUrl = "https://instagram.com/reel/SAVED999/",
+            createdAt = System.currentTimeMillis(),
+            carouselCount = 1,
+            status = TransactionStatus.EXTERNAL_DELETED,
+            totalBytes = 15_000_000L,
+            items = itemsAfterStorageDeletion,
+            authorUsername = "natgeo",
+            caption = "Amazing Nature",
+            thumbnailPath = thumbPath
+        )
+
+        // 1. History record must still exist with all metadata intact
+        assertEquals("SAVED999", record.shortcode)
+        assertEquals("@natgeo", record.userFacingTitle)
+        assertEquals("https://www.instagram.com/reel/SAVED999/", record.targetDownloadUrl)
+
+        // 2. Storage status must reflect deleted from device
+        assertTrue(record.isDeletedFromDevice)
+        assertEquals(0, record.availableItemCount)
+        assertEquals("Deleted from device", record.userFacingStatus)
+
+        // 3. Fallback representativeUri must preserve thumbnailPath even without local video
+        assertEquals(thumbPath, record.representativeUri)
+    }
 }

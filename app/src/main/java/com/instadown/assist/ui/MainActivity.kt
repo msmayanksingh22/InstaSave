@@ -65,6 +65,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnClipBannerDismiss: ImageButton
 
     private lateinit var layoutUpdateBanner: LinearLayout
+    private lateinit var tvUpdateBannerTitle: TextView
     private lateinit var tvUpdateBannerSubtitle: TextView
     private lateinit var btnUpdateBannerAction: Button
     private lateinit var btnUpdateBannerDismiss: ImageButton
@@ -77,6 +78,7 @@ class MainActivity : AppCompatActivity() {
 
     private var lastDismissedClipUrl: String? = null
     private var hasCheckedUpdateThisSession = false
+    private var hasPromptedAutoUpdateThisSession = false
 
     companion object {
         private const val TAG = "MainActivity"
@@ -104,6 +106,7 @@ class MainActivity : AppCompatActivity() {
         btnClipBannerDismiss = findViewById(R.id.btnClipBannerDismiss)
 
         layoutUpdateBanner = findViewById(R.id.layoutUpdateAvailableBanner)
+        tvUpdateBannerTitle = findViewById(R.id.tvUpdateBannerTitle)
         tvUpdateBannerSubtitle = findViewById(R.id.tvUpdateBannerSubtitle)
         btnUpdateBannerAction = findViewById(R.id.btnUpdateBannerAction)
         btnUpdateBannerDismiss = findViewById(R.id.btnUpdateBannerDismiss)
@@ -282,7 +285,8 @@ class MainActivity : AppCompatActivity() {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     if (info != null && info.isAvailable) {
                         layoutUpdateBanner.visibility = View.VISIBLE
-                        tvUpdateBannerSubtitle.text = "InstaSave v${info.versionName} is ready to install"
+                        tvUpdateBannerTitle.text = "🎉 New Version Ready! (v${info.versionName})"
+                        tvUpdateBannerSubtitle.text = "InstaSave v${info.versionName} is ready with major upgrades"
                         btnUpdateBannerAction.setOnClickListener {
                             showUpdateAvailablePrompt(info)
                         }
@@ -291,6 +295,12 @@ class MainActivity : AppCompatActivity() {
                         }
                         btnUpdateBannerDismiss.setOnClickListener {
                             layoutUpdateBanner.visibility = View.GONE
+                        }
+
+                        // Automatically ask the user to update when detected on home screen
+                        if (!hasPromptedAutoUpdateThisSession && !isFinishing && !isDestroyed) {
+                            hasPromptedAutoUpdateThisSession = true
+                            showUpdateAvailablePrompt(info)
                         }
                     } else {
                         layoutUpdateBanner.visibility = View.GONE

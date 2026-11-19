@@ -140,43 +140,56 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:background="@drawable/card_background"
-            android:backgroundTint="#1B2D38"
-            android:padding="12dp"
+            android:backgroundTint="#2A1428"
+            android:padding="14dp"
             android:layout_marginBottom="16dp"
             android:gravity="center_vertical"
             android:visibility="gone">
 
-            <ImageView
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:src="@drawable/ic_cloud_download"
-                android:tint="@color/insta_pink"
-                android:contentDescription="Update Available" />
+            <FrameLayout
+                android:layout_width="38dp"
+                android:layout_height="38dp">
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/card_background"
+                    android:backgroundTint="#33E1306C" />
+
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_cloud_download"
+                    android:tint="@color/insta_pink"
+                    android:contentDescription="Update Available" />
+            </FrameLayout>
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:orientation="vertical"
-                android:layout_marginStart="10dp"
+                android:layout_marginStart="12dp"
                 android:layout_marginEnd="8dp">
 
                 <TextView
                     android:id="@+id/tvUpdateBannerTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="New Update Available! 🚀"
+                    android:text="🎉 New Version Ready! 🚀"
                     android:textColor="@color/white"
                     android:textStyle="bold"
-                    android:textSize="13sp" />
+                    android:textSize="13.5sp" />
 
                 <TextView
                     android:id="@+id/tvUpdateBannerSubtitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="InstaSave v1.1.2 is ready to install"
+                    android:layout_marginTop="2dp"
+                    android:text="InstaSave v1.2.1 is ready to install"
                     android:textColor="@color/text_secondary"
-                    android:textSize="11sp"
+                    android:textSize="11.5sp"
                     android:singleLine="true"
                     android:ellipsize="end" />
             </LinearLayout>
@@ -186,9 +199,11 @@
                 style="@style/Widget.AppCompat.Button.Borderless"
                 android:layout_width="wrap_content"
                 android:layout_height="36dp"
-                android:text="Update"
+                android:text="Update ⚡"
                 android:textColor="@color/white"
+                android:textStyle="bold"
                 android:background="@drawable/btn_rounded_accent"
+                android:backgroundTint="@color/insta_pink"
                 android:textSize="12sp"
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp" />

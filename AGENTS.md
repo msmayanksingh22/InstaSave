@@ -87,7 +87,7 @@ You are an expert principal Android systems engineer and architect working on In
   - `androidx.viewpager2:viewpager2:1.1.0`
   - `org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1`
   - `com.squareup.okhttp3:okhttp:4.12.0`
-- **Current Version**: `versionCode = 12`, `versionName = "1.2.0"`
+- **Current Version**: `versionCode = 13`, `versionName = "1.2.1"`
 
 ---
 
@@ -235,6 +235,41 @@ All release builds must be signed with the dedicated production keystore:
   - `app/src/main/res/layout/activity_media_viewer.xml`
 - Uses Android's native `MediaExtractor` and `MediaMuxer` (API 26+) to losslessly demux AAC audio from MP4 Reels directly into `MediaStore.Audio.Media` (`Music/InstaSave/`).
 - 0 KB added APK bloat, 0 audio generation loss, executed in <150 ms. Available via 1-tap in Media Viewer and auto-extraction preference.
+
+### 18. Storage-Only Media Deletion & Deep Archive Purge Architecture
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/data/db/DownloadRepository.kt` (`deleteDeviceStorageOnly`)
+  - `app/src/main/java/com/instadown/assist/ui/HistoryItemOptionsBottomSheet.kt`
+- Implements decoupled storage deletion: removes physical media from `MediaStore` to free up phone storage while completely preserving the history database record, author username, post shortcode, and private cover thumbnail (`filesDir/thumbnails/${shortcode}.jpg`).
+- Switches item state to `EXTERNAL_DELETED`, enabling 1-tap differential re-download anytime.
+- Deep-tucks permanent history deletion inside an "Archive Management (Danger Zone)" accordion with explicit confirmation, preventing accidental history purges.
+
+### 19. Modern Glassmorphic Options & Actions Bottom Sheet
+- **Files**:
+  - `app/src/main/res/layout/bottom_sheet_history_item_options.xml`
+  - `app/src/main/java/com/instadown/assist/ui/HistoryItemOptionsBottomSheet.kt`
+  - `app/src/main/res/layout/item_history_card.xml` (`btnMoreOptions`)
+  - `app/src/main/java/com/instadown/assist/ui/DownloadHistoryAdapter.kt`
+- Replaces legacy black-and-white `AlertDialog` popups with a Material 3 dark glassmorphic bottom sheet (`#161422`).
+- Features rich post cover thumbnail preview, live on-device vs deleted status badge, 1-tap "Free Up Phone Storage", "Open in Instagram", "Copy Link", and expandable Danger Zone.
+
+### 20. Animated Welcome / Splash Screen
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/ui/SplashActivity.kt`
+  - `app/src/main/res/layout/activity_splash.xml`
+  - `app/src/main/AndroidManifest.xml`
+- Delivers an ultra-smooth ~850 ms welcome experience on app open featuring the InstaSave gradient logo with overshoot spring scale physics, subtitle fade/slide, glowing progress bar, and seamless activity transition.
+- Zero-friction sharing: automatically detects incoming external `ACTION_SEND` intents and immediately forwards them to `MainActivity` with 0 ms delay.
+
+### 21. Proactive Home Screen Update Notification & Engaging OTA Assistant
+- **Files**:
+  - `app/src/main/res/layout/activity_main.xml` (`layoutUpdateAvailableBanner`)
+  - `app/src/main/java/com/instadown/assist/ui/MainActivity.kt` (`checkSilentAutoUpdate`)
+  - `app/src/main/res/layout/dialog_in_app_update.xml`
+  - `app/src/main/java/com/instadown/assist/util/AppUpdateManager.kt`
+- Redesigned home screen update banner with wine/purple gradient card, glowing rocket icon, and 1-tap "Update ⚡" action.
+- Automatically checks for updates and proactively presents the exciting update sheet on app startup when a new version is detected.
+- Upgraded update sheet features glowing version badges, feature chips (`⚡ 2x Speed`, `🎨 Modern UI`, `🛡️ Free & Private`), formatted changelog card, and real-time download progress with animated percentage and "Install Now 🚀" button.
 
 ---
 

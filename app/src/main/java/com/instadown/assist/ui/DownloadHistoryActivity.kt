@@ -523,54 +523,15 @@ class DownloadHistoryActivity : AppCompatActivity() {
     }
 
     private fun showItemOptionsDialog(record: DownloadRecord) {
-        val options = mutableListOf<String>()
-        options.add("Copy Instagram Link")
-        options.add("Open in Instagram")
-        options.add("Remove from History")
-        if (!record.isDeletedFromDevice) {
-            options.add("Delete from Storage & History")
-        } else {
-            options.add("Re-download to Device")
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle(record.userFacingTitle)
-            .setItems(options.toTypedArray()) { _, which ->
-                when (options[which]) {
-                    "Copy Instagram Link" -> {
-                        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        cm.setPrimaryClip(ClipData.newPlainText("instagram_url", record.targetDownloadUrl))
-                        Toast.makeText(this, "Link copied to clipboard", Toast.LENGTH_SHORT).show()
-                    }
-                    "Open in Instagram" -> {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(record.targetDownloadUrl))
-                            startActivity(intent)
-                        } catch (e: Exception) {
-                            Toast.makeText(this, "Cannot open link", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                    "Remove from History" -> {
-                        lifecycleScope.launch {
-                            repo.deleteDownload(record.id, deleteFiles = false)
-                            loadHistory(forceReconcile = false)
-                            Toast.makeText(this@DownloadHistoryActivity, "Removed from history", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                    "Delete from Storage & History" -> {
-                        lifecycleScope.launch {
-                            repo.deleteDownload(record.id, deleteFiles = true)
-                            StorageAccountant.invalidateCache()
-                            loadHistory(forceReconcile = true)
-                            Toast.makeText(this@DownloadHistoryActivity, "Deleted from storage", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                    "Re-download to Device" -> {
-                        showReDownloadDialogOrSheet(record)
-                    }
-                }
+        val sheet = HistoryItemOptionsBottomSheet.newInstance(record.id)
+        sheet.setListener(object : HistoryItemOptionsBottomSheet.Listener {
+            override fun onHistoryChanged() {
+                loadHistory(forceReconcile = true)
             }
-            .setNegativeButton("Close", null)
-            .show()
+            override fun onReDownloadRequested(rec: DownloadRecord) {
+                showReDownloadDialogOrSheet(rec)
+            }
+        })
+        sheet.show(supportFragmentManager, HistoryItemOptionsBottomSheet.TAG)
     }
 }

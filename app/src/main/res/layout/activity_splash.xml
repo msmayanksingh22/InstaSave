@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootSplashLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0C0A12">
+
+    <!-- Center Brand Branding Container -->
+    <LinearLayout
+        android:id="@+id/layoutSplashBrand"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:padding="24dp">
+
+        <!-- Animated Logo Container with Glow -->
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <!-- Subtle Logo Glow -->
+            <View
+                android:layout_width="100dp"
+                android:layout_height="100dp"
+                android:layout_gravity="center"
+                android:background="@drawable/card_background"
+                android:backgroundTint="#33E1306C" />
+
+            <ImageView
+                android:id="@+id/ivSplashLogo"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_app_logo"
+                android:scaleType="fitCenter"
+                android:contentDescription="InstaSave Logo" />
+        </FrameLayout>
+
+        <!-- App Name -->
+        <TextView
+            android:id="@+id/tvSplashTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="InstaSave"
+            android:textColor="@color/white"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.03" />
+
+        <!-- Tagline -->
+        <TextView
+            android:id="@+id/tvSplashTagline"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Lightning-Fast Media &amp; Reel Downloader"
+            android:textColor="@color/insta_coral"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.02" />
+    </LinearLayout>
+
+    <!-- Bottom Footer (Progress & Version) -->
+    <LinearLayout
+        android:id="@+id/layoutSplashFooter"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingBottom="40dp"
+        android:paddingHorizontal="48dp">
+
+        <ProgressBar
+            android:id="@+id/pbSplashProgress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="140dp"
+            android:layout_height="3dp"
+            android:indeterminate="true"
+            android:indeterminateTint="@color/insta_pink" />
+
+        <TextView
+            android:id="@+id/tvSplashVersion"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="v1.2.1 • Ultra-Fast Edition"
+            android:textColor="@color/text_muted"
+            android:textSize="11.5sp"
+            android:letterSpacing="0.04" />
+    </LinearLayout>
+
+</FrameLayout>

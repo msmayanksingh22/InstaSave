@@ -1,0 +1,356 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@color/card_bg"
+    android:paddingBottom="24dp">
+
+    <!-- Drag Handle -->
+    <View
+        android:layout_width="36dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="14dp"
+        android:background="#4DFFFFFF" />
+
+    <!-- Post Info Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="20dp"
+        android:paddingBottom="16dp">
+
+        <ImageView
+            android:id="@+id/ivOptionsThumbnail"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:scaleType="centerCrop"
+            android:background="@drawable/card_background"
+            android:contentDescription="Post Thumbnail" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginStart="14dp">
+
+            <TextView
+                android:id="@+id/tvOptionsTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@username"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:singleLine="true"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/tvOptionsSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="Carousel • 6 items • 14.2 MB"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <!-- Status Pill -->
+            <LinearLayout
+                android:id="@+id/layoutOptionsStatusBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="3dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/card_background"
+                android:backgroundTint="#1B2B20">
+
+                <View
+                    android:id="@+id/dotOptionsStatus"
+                    android:layout_width="6dp"
+                    android:layout_height="6dp"
+                    android:background="@color/status_green" />
+
+                <TextView
+                    android:id="@+id/tvOptionsStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="On Device • Ready in Gallery"
+                    android:textColor="@color/status_green"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#1AFFFFFF"
+        android:layout_marginBottom="14dp" />
+
+    <!-- Actions List -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="20dp">
+
+        <!-- Card 1: Free Up Device Storage / Re-download -->
+        <LinearLayout
+            android:id="@+id/cardStorageAction"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/card_background"
+            android:backgroundTint="#241E26"
+            android:padding="14dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <ImageView
+                android:id="@+id/ivStorageActionIcon"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@drawable/ic_delete"
+                android:tint="#EF4444"
+                android:contentDescription="Storage Action" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="14dp"
+                android:layout_marginEnd="8dp">
+
+                <TextView
+                    android:id="@+id/tvStorageActionTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Free Up Phone Storage"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvStorageActionSubtitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Deletes media files from device storage to save space. Keeps post &amp; cover thumbnail in History so you can re-download anytime."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11.5sp"
+                    android:lineSpacingExtra="2dp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvStorageActionPill"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Free Up"
+                android:textColor="#EF4444"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:background="@drawable/card_background"
+                android:backgroundTint="#3A1C20"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="5dp" />
+        </LinearLayout>
+
+        <!-- Card 2: View in Instagram -->
+        <LinearLayout
+            android:id="@+id/cardOpenInstagram"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/card_background"
+            android:backgroundTint="#1D1D2B"
+            android:padding="14dp"
+            android:layout_marginTop="8dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <ImageView
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:src="@drawable/ic_share"
+                android:tint="@color/insta_pink"
+                android:contentDescription="Open in Instagram" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="14dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Open in Instagram"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="View original creator post and comments"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11.5sp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="↗"
+                android:textColor="@color/insta_pink"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Card 3: Copy Instagram Link -->
+        <LinearLayout
+            android:id="@+id/cardCopyLink"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/card_background"
+            android:backgroundTint="#1D1D2B"
+            android:padding="14dp"
+            android:layout_marginTop="8dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <ImageView
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:src="@drawable/ic_link"
+                android:tint="@color/insta_purple"
+                android:contentDescription="Copy Link" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="14dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Copy Instagram Link"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Copy clean post URL to clipboard"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11.5sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Deep Danger Zone Header (Accordioned / Hidden deep) -->
+        <LinearLayout
+            android:id="@+id/layoutDangerHeader"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="16dp"
+            android:paddingVertical="8dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Archive Management (Danger Zone)"
+                android:textColor="@color/text_muted"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvDangerChevron"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="▾"
+                android:textColor="@color/text_muted"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <!-- Deep Danger Zone Content (Initially Gone) -->
+        <LinearLayout
+            android:id="@+id/layoutDangerContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_background"
+            android:backgroundTint="#241215"
+            android:padding="14dp"
+            android:layout_marginTop="4dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⚠️ Permanent Archive Removal"
+                android:textColor="#EF4444"
+                android:textSize="12.5sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Removing from History will permanently erase this post record and saved thumbnail from your archive. You will not be able to re-download it from here."
+                android:textColor="@color/text_secondary"
+                android:textSize="11.5sp"
+                android:lineSpacingExtra="2dp" />
+
+            <Button
+                android:id="@+id/btnPermanentDelete"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="match_parent"
+                android:layout_height="38dp"
+                android:text="Permanently Erase from History"
+                android:textColor="#EF4444"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:background="@drawable/card_background"
+                android:backgroundTint="#3B171A"
+                android:layout_marginTop="12dp" />
+        </LinearLayout>
+
+        <!-- Close Button -->
+        <Button
+            android:id="@+id/btnCloseOptions"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="match_parent"
+            android:layout_height="42dp"
+            android:text="Close"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:layout_marginTop="12dp" />
+
+    </LinearLayout>
+
+</LinearLayout>

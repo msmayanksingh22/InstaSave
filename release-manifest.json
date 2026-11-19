@@ -1,9 +1,9 @@
 {
-  "versionCode": 12,
-  "versionName": "1.2.0",
-  "releaseNotes": "• Dynamic Island Progress HUD Pill: Sleek top floating HUD providing real-time visual progress (link detected, resolving, downloading, saved) across all apps without focus theft\n• Smart Differential Re-Download: Interactive Bottom Sheet inspecting MediaStore and IS_TRASHED to detect missing/corrupted files with 1-tap restore\n• Sub-300ms Thumbnail Grid: Extracts low-res GraphQL thumbnail resources (~320px, ~25KB) with Semaphore(4) concurrency and in-flight deduplication\n• Modern Material 3 Settings UI: Hero storage card with dynamic breakdown, live Accessibility watchdog telemetry with OEM quick-fix actions, and categorized cards\n• Native Lossless Reel Audio Extractor: Zero-bloat demuxing of background music (.m4a) via native MediaExtractor + MediaMuxer into Music/InstaSave/ with 0 KB APK bloat",
+  "versionCode": 13,
+  "versionName": "1.2.1",
+  "releaseNotes": "• Storage-Only Deletion & Deep History Purge: Free up phone storage from local gallery while keeping the post record and cover thumbnail in the History archive for 1-tap re-download anytime. Permanent history deletion is safely tucked inside an advanced danger zone.\n• Modern Glassmorphic Options Bottom Sheet: Replaced old-fashioned black-and-white dialogs with sleek Material 3 bottom sheets featuring post previews, direct status badges, and 1-tap actions.\n• Beautiful Welcome / Splash Screen: Ultra-smooth ~850ms entrance animation with brand gradient logo and tagline, seamlessly transitioning to MainActivity.\n• Engaging In-App Software Update & Home Screen Banner: Vibrant update assistant with gradient highlight chips, real-time download stats, and proactive automatic Home Screen update notification.",
   "apkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
-  "fallbackApkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.2.0/app-release.apk",
-  "fileSizeBytes": 3952677,
-  "sha256": "0f86a602b37fd109e915447623cb31d9b24fc4c48fc524f8afb94db462213b40"
+  "fallbackApkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.2.1/app-release.apk",
+  "fileSizeBytes": 3966625,
+  "sha256": "f314bc33dd76e54bb713fbf91b1ea9b12e6a21ac6e77131fa073001bc5fca38b"
 }

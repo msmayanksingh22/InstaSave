@@ -274,19 +274,16 @@ class MediaViewerActivity : AppCompatActivity() {
 
     private fun confirmDeleteCurrentDownload() {
         val record = currentRecord ?: return
-        AlertDialog.Builder(this)
-            .setTitle("Delete Media?")
-            .setMessage("This will remove this item from history and delete its downloaded files from your device.")
-            .setPositiveButton("Delete") { _, _ ->
-                lifecycleScope.launch {
-                    repo.deleteDownload(record.id, deleteFiles = true)
-                    StorageAccountant.invalidateCache()
-                    Toast.makeText(this@MediaViewerActivity, "Media deleted", Toast.LENGTH_SHORT).show()
-                    finish()
-                }
+        val sheet = HistoryItemOptionsBottomSheet.newInstance(record.id)
+        sheet.setListener(object : HistoryItemOptionsBottomSheet.Listener {
+            override fun onHistoryChanged() {
+                finish()
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+            override fun onReDownloadRequested(rec: DownloadRecord) {
+                finish()
+            }
+        })
+        sheet.show(supportFragmentManager, HistoryItemOptionsBottomSheet.TAG)
     }
 
     // ViewPager2 Adapter
