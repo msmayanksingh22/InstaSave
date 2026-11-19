@@ -11,8 +11,8 @@ android {
         applicationId = "com.instadown.assist"
         minSdk = 26
         targetSdk = 36
-        versionCode = 15
-        versionName = "1.2.3"
+        versionCode = 16
+        versionName = "1.2.4"
     }
 
     signingConfigs {

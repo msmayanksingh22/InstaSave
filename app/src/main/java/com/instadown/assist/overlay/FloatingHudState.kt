@@ -43,8 +43,7 @@ sealed class FloatingHudState {
 
 /**
  * Concurrency-safe event bus for the Floating HUD Pill.
- * Any background service, coroutine scope, or broadcast receiver can post status updates
- * to render real-time progress without blocking the user or stealing focus.
+ * Interoperable bridge delegating to ResilientHudBus.
  */
 object FloatingHudBus {
     private val _state = MutableStateFlow<FloatingHudState>(FloatingHudState.Idle)
@@ -52,9 +51,29 @@ object FloatingHudBus {
 
     fun emit(newState: FloatingHudState) {
         _state.value = newState
+
+        // Forward to mathematically bounded ResilientHudBus
+        val activeOpId = ResilientHudBus.getActiveOperationId().let { if (it == 0L) ResilientHudBus.startOperation() else it }
+        val mappedResilient: ResilientHudState = when (newState) {
+            is FloatingHudState.Idle -> ResilientHudState.Hidden(activeOpId)
+            is FloatingHudState.LinkDetected -> ResilientHudState.LinkDetected(activeOpId, newState.shortcode.ifBlank { "Instagram Post" })
+            is FloatingHudState.Resolving -> ResilientHudState.Resolving(activeOpId, newState.message)
+            is FloatingHudState.Downloading -> ResilientHudState.Downloading(
+                operationId = activeOpId,
+                currentIndex = newState.currentItem,
+                totalCount = newState.totalItems,
+                downloadedBytes = 0L,
+                totalBytes = 0L,
+                percent = newState.percent
+            )
+            is FloatingHudState.Success -> ResilientHudState.Success(activeOpId, newState.message, newState.totalItems)
+            is FloatingHudState.Error -> ResilientHudState.Error(activeOpId, newState.message)
+        }
+        ResilientHudBus.emit(mappedResilient)
     }
 
     fun reset() {
         _state.value = FloatingHudState.Idle
+        ResilientHudBus.dismiss(force = true)
     }
 }

@@ -6,6 +6,9 @@ import android.graphics.Rect
 import android.util.Log
 import com.instadown.assist.download.model.*
 import com.instadown.assist.model.AutomationResult
+import com.instadown.assist.overlay.ResilientHudBus
+import com.instadown.assist.overlay.ResilientHudState
+import com.instadown.assist.overlay.runHudTrackedOperation
 import com.instadown.assist.resolver.CompositeInstagramResolver
 import com.instadown.assist.resolver.InstagramResolver
 import com.instadown.assist.resolver.UrlNormalizer
@@ -77,12 +80,18 @@ class InstagramDownloadCoordinator(
                 // Step 2: At this point, the AutomationEngine has ALREADY dismissed the Share sheet
                 // and restored Instagram! Now we proceed with background resolution and download.
                 coordinatorScope.launch(Dispatchers.IO) {
-                    handleAutomationResult(
-                        autoResult = autoResult,
-                        onStatusUpdate = onStatusUpdate,
-                        onProgress = onProgress,
-                        onComplete = onComplete
-                    )
+                    runHudTrackedOperation(
+                        initialLinkLabel = "Instagram Post Detected",
+                        totalTimeoutMs = 35_000L
+                    ) { opId ->
+                        handleAutomationResult(
+                            autoResult = autoResult,
+                            operationId = opId,
+                            onStatusUpdate = onStatusUpdate,
+                            onProgress = onProgress,
+                            onComplete = onComplete
+                        )
+                    }
                 }
             }
         )
@@ -93,13 +102,14 @@ class InstagramDownloadCoordinator(
      */
     private suspend fun handleAutomationResult(
         autoResult: AutomationResult,
+        operationId: Long,
         onStatusUpdate: ((String) -> Unit)?,
         onProgress: ((DownloadProgress) -> Unit)?,
         onComplete: ((DownloadResult) -> Unit)?
     ) {
         if (autoResult.verdict != "PASS" || !autoResult.validInstagramUrl || autoResult.instagramUrl.isBlank()) {
-            com.instadown.assist.overlay.FloatingHudBus.emit(
-                com.instadown.assist.overlay.FloatingHudState.Error("", "Instagram URL capture failed")
+            ResilientHudBus.emit(
+                ResilientHudState.Error(operationId, "Instagram URL capture failed")
             )
             val fail = DownloadResult(
                 transactionId = "AUTO_FAIL_${System.currentTimeMillis() % 10000}",
@@ -155,15 +165,15 @@ class InstagramDownloadCoordinator(
         }
 
         val autoShortcode = UrlNormalizer.normalize(autoResult.instagramUrl)?.shortcode ?: ""
-        com.instadown.assist.overlay.FloatingHudBus.emit(
-            com.instadown.assist.overlay.FloatingHudState.LinkDetected(autoShortcode)
+        ResilientHudBus.emit(
+            ResilientHudState.LinkDetected(operationId, autoShortcode.ifBlank { "Instagram Post" })
         )
 
         // 1. Resolve media metadata first so actual post type and item count are known
         withContext(Dispatchers.Main) {
             onStatusUpdate?.invoke("Resolving post...")
-            com.instadown.assist.overlay.FloatingHudBus.emit(
-                com.instadown.assist.overlay.FloatingHudState.Resolving(autoShortcode, "Resolving Post...")
+            ResilientHudBus.emit(
+                ResilientHudState.Resolving(operationId, "Resolving Post...")
             )
         }
         val resolveStart = System.currentTimeMillis()
@@ -186,9 +196,9 @@ class InstagramDownloadCoordinator(
                 error = resolveResult.error?.message ?: "Failed to resolve media metadata",
                 errorCode = DownloadErrorCode.RESOLUTION_FAILED
             )
-            com.instadown.assist.overlay.FloatingHudBus.emit(
-                com.instadown.assist.overlay.FloatingHudState.Error(
-                    shortcode = autoShortcode,
+            ResilientHudBus.emit(
+                ResilientHudState.Error(
+                    operationId = operationId,
                     message = "Could not resolve post"
                 )
             )
@@ -227,6 +237,7 @@ class InstagramDownloadCoordinator(
                         )
                     }
 
+                    ResilientHudBus.dismiss(operationId)
                     val promptPostedResult = DownloadResult(
                         transactionId = "ASK_PROMPT_POSTED",
                         shortcode = resolveResult.shortcode,
@@ -275,6 +286,9 @@ class InstagramDownloadCoordinator(
                                 error = "Safe Refusal: Couldn't identify the current slide (${slideEval.reason})",
                                 errorCode = DownloadErrorCode.TARGET_SELECTION_FAILED
                             )
+                            ResilientHudBus.emit(
+                                ResilientHudState.Error(operationId, "Ambiguous slide")
+                            )
                             withContext(Dispatchers.Main) {
                                 onStatusUpdate?.invoke("REFUSED: Ambiguous slide")
                                 onComplete?.invoke(fail)
@@ -294,6 +308,7 @@ class InstagramDownloadCoordinator(
             url = autoResult.instagramUrl,
             selectedIndices = targetIndices,
             preResolvedResult = resolveResult,
+            operationId = operationId,
             onStatusUpdate = onStatusUpdate,
             onProgress = onProgress
         )
@@ -361,11 +376,16 @@ class InstagramDownloadCoordinator(
         selectedIndices: Set<Int>? = null,
         recordInDb: Boolean = true,
         preResolvedResult: com.instadown.assist.resolver.model.ResolveResult? = null,
+        operationId: Long? = null,
         onStatusUpdate: ((String) -> Unit)? = null,
         onProgress: ((DownloadProgress) -> Unit)? = null
     ): DownloadResult = withContext(Dispatchers.IO) {
+        val opId = operationId ?: ResilientHudBus.startOperation()
         val normalized = UrlNormalizer.normalize(url)
         if (normalized == null) {
+            ResilientHudBus.emit(
+                ResilientHudState.Error(opId, "Could not parse shortcode from URL")
+            )
             return@withContext DownloadResult(
                 transactionId = "INVALID_URL",
                 shortcode = null,
@@ -384,8 +404,8 @@ class InstagramDownloadCoordinator(
 
         val shortcode = normalized.shortcode
 
-        com.instadown.assist.overlay.FloatingHudBus.emit(
-            com.instadown.assist.overlay.FloatingHudState.Resolving(shortcode)
+        ResilientHudBus.emit(
+            ResilientHudState.Resolving(opId, "Resolving Post...")
         )
 
         // 1. Resolve media metadata (or reuse preResolvedResult if provided)
@@ -414,9 +434,9 @@ class InstagramDownloadCoordinator(
                 error = resolveResult.error?.message ?: "Failed to resolve media metadata",
                 errorCode = DownloadErrorCode.RESOLUTION_FAILED
             )
-            com.instadown.assist.overlay.FloatingHudBus.emit(
-                com.instadown.assist.overlay.FloatingHudState.Error(
-                    shortcode = shortcode,
+            ResilientHudBus.emit(
+                ResilientHudState.Error(
+                    operationId = opId,
                     message = fail.error ?: "Resolution failed"
                 )
             )
@@ -446,9 +466,9 @@ class InstagramDownloadCoordinator(
                 error = plan.error ?: "Download safety checks failed",
                 errorCode = plan.errorCode ?: DownloadErrorCode.VERIFICATION_FAILED
             )
-            com.instadown.assist.overlay.FloatingHudBus.emit(
-                com.instadown.assist.overlay.FloatingHudState.Error(
-                    shortcode = shortcode,
+            ResilientHudBus.emit(
+                ResilientHudState.Error(
+                    operationId = opId,
                     message = fail.error ?: "Safety verification failed"
                 )
             )
@@ -460,6 +480,7 @@ class InstagramDownloadCoordinator(
             onStatusUpdate?.invoke(if (plan.items.size > 1) "Saving 1/${plan.items.size}..." else "Downloading...")
         }
 
+        var lastProgressTime = 0L
         val result = downloadManager.executeDownload(
             plan = plan,
             reResolveCallback = { expiredShortcode ->
@@ -468,15 +489,20 @@ class InstagramDownloadCoordinator(
                 if (freshResult.success) freshResult else null
             },
             onProgress = { progress ->
-                com.instadown.assist.overlay.FloatingHudBus.emit(
-                    com.instadown.assist.overlay.FloatingHudState.Downloading(
-                        shortcode = shortcode,
-                        percent = progress.overallPercent,
-                        currentItem = progress.currentItemIndex + 1,
-                        totalItems = progress.totalItems,
-                        message = progress.statusMessage
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (now - lastProgressTime >= 250L || progress.overallPercent == 100 || progress.overallPercent == 0) {
+                    lastProgressTime = now
+                    ResilientHudBus.emit(
+                        ResilientHudState.Downloading(
+                            operationId = opId,
+                            currentIndex = progress.currentItemIndex + 1,
+                            totalCount = progress.totalItems,
+                            downloadedBytes = progress.currentItemBytes,
+                            totalBytes = progress.currentItemTotalBytes ?: 0L,
+                            percent = progress.overallPercent
+                        )
                     )
-                )
+                }
                 mainHandler.post {
                     onStatusUpdate?.invoke(progress.statusMessage)
                     onProgress?.invoke(progress)
@@ -485,17 +511,17 @@ class InstagramDownloadCoordinator(
         )
 
         if (result.success) {
-            com.instadown.assist.overlay.FloatingHudBus.emit(
-                com.instadown.assist.overlay.FloatingHudState.Success(
-                    shortcode = shortcode,
+            ResilientHudBus.emit(
+                ResilientHudState.Success(
+                    operationId = opId,
                     message = if (result.completedCount > 1) "Saved ${result.completedCount} items" else "Saved to Gallery",
                     totalItems = result.completedCount
                 )
             )
         } else {
-            com.instadown.assist.overlay.FloatingHudBus.emit(
-                com.instadown.assist.overlay.FloatingHudState.Error(
-                    shortcode = shortcode,
+            ResilientHudBus.emit(
+                ResilientHudState.Error(
+                    operationId = opId,
                     message = result.error ?: "Download failed"
                 )
             )

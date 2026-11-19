@@ -88,7 +88,7 @@ You are an expert principal Android systems engineer and architect working on In
   - `androidx.viewpager2:viewpager2:1.1.0`
   - `org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1`
   - `com.squareup.okhttp3:okhttp:4.12.0`
-- **Current Version**: `versionCode = 14`, `versionName = "1.2.2"`
+- **Current Version**: `versionCode = 16`, `versionName = "1.2.4"`
 
 ---
 
@@ -284,6 +284,27 @@ All release builds must be signed with the dedicated production keystore:
 - Employs `MediaStore.createDeleteRequest` targeting valid Images/Video/Audio tables to request OS user consent without throwing crashes on download volumes.
 - Features `SelfDeleteGuard` to prevent self-deletion race conditions with `reconcileWithMediaStore()` `ContentObserver` callbacks.
 - Atomically finalizes DB row updates to `EXTERNAL_DELETED` only for confirmed deleted files.
+
+### 23. Bulletproof Dynamic Island HUD State Machine
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/overlay/ResilientHudStateMachine.kt`
+  - `app/src/main/java/com/instadown/assist/overlay/FloatingHudOverlayController.kt`
+  - `app/src/main/java/com/instadown/assist/overlay/FloatingHudPillView.kt`
+  - `app/src/main/java/com/instadown/assist/download/InstagramDownloadCoordinator.kt`
+- Implements monotonic `operationId` lease tokens via `AtomicLong` to mathematically prevent stale or out-of-order coroutines from clobbering newer HUD states.
+- Declares strict per-state finite TTL watchdogs (`LinkDetected = 4s`, `Resolving = 10s`, `Downloading = 18s stall timeout`, `Success = 2.4s`, `Error = 3.5s`) running inside `collectLatest` so continuous progress resets the watchdog while hangs or silent drops self-clean automatically back to `Hidden`.
+- Wraps coordinator execution in structured `runHudTrackedOperation` with `NonCancellable` terminal emission guards for timeouts, cancellations, and unexpected errors.
+- Provides 1-tap manual escape hatch dismissing the overlay immediately across any application without stealing window focus.
+
+### 24. Fast-Fail Circuit Breakers & Multi-Pattern Media Extraction
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/resolver/CompositeInstagramResolver.kt`
+  - `app/src/main/java/com/instadown/assist/resolver/EmbedFallbackResolver.kt`
+  - `app/src/main/java/com/instadown/assist/resolver/DirectOkHttpInstagramResolver.kt`
+- `TierCircuitBreaker` tracks unauthenticated challenges (HTTP 302 login redirects, 401, 429 rate limits) and bypasses stalled tiers in <1ms with a 10-minute cooldown, avoiding IP throttling and battery drain.
+- Prioritizes fast 250ms captioned embed extraction before slow headless WebViews, extracting high-res photos and Reels instantly.
+- Expanded regex patterns for modern Instagram video tags (`<video src="...">`), JSON `video_versions`, and CDN MP4 links, complete with unicode and slash unescaping (`\/`, `\u0026`).
+- Defers multi-item carousels to `HeadlessWebBridgeResolver` for full 15+ item DOM and Vue state extraction.
 
 ---
 

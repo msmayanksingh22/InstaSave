@@ -150,6 +150,7 @@ class FloatingTriggerService : Service() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
         Log.i(TAG, "onTaskRemoved: Task dismissed from recents on OPPO K13 Turbo 5G (ColorOS V16.0.0). Keeping FloatingTriggerService alive.")
+        floatingHudController?.stop()
         startForegroundNotification()
     }
 

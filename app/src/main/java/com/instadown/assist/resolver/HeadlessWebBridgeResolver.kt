@@ -32,7 +32,7 @@ class HeadlessWebBridgeResolver(
     companion object {
         private const val TAG = "HeadlessWebBridge"
         private const val EXTRACTOR_URL = "https://fastdl.app/"
-        private const val TIMEOUT_MS = 14000L
+        private const val TIMEOUT_MS = 9000L
         private const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
         @Volatile

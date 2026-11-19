@@ -140,7 +140,87 @@ class FloatingHudPillView @JvmOverloads constructor(
     }
 
     /**
-     * Binds state and triggers fluid micro-animations.
+     * Binds mathematically bounded resilient state and triggers fluid micro-animations.
+     */
+    fun bindResilientState(state: ResilientHudState) {
+        mainHandler.post {
+            when (state) {
+                is ResilientHudState.Hidden -> {
+                    hidePill()
+                }
+                is ResilientHudState.LinkDetected -> {
+                    showPill()
+                    pbIndeterminate.visibility = View.GONE
+                    ivStatusIcon.visibility = View.VISIBLE
+                    ivStatusIcon.setImageResource(R.drawable.ic_link)
+                    ivStatusIcon.imageTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.insta_pink))
+                    tvTitle.text = "Instagram Post Detected"
+                    tvSubtitle.text = state.label.ifBlank { "Analyzing link..." }
+                    tvTrailingPercent.visibility = View.GONE
+                    pbDeterminateBar.visibility = View.GONE
+                }
+                is ResilientHudState.Resolving -> {
+                    showPill()
+                    ivStatusIcon.visibility = View.GONE
+                    pbIndeterminate.visibility = View.VISIBLE
+                    tvTitle.text = "Resolving Media..."
+                    tvSubtitle.text = state.stageLabel.ifBlank { "Extracting high-res streams" }
+                    tvTrailingPercent.visibility = View.GONE
+                    pbDeterminateBar.visibility = View.GONE
+                }
+                is ResilientHudState.Downloading -> {
+                    showPill()
+                    pbIndeterminate.visibility = View.GONE
+                    ivStatusIcon.visibility = View.VISIBLE
+                    ivStatusIcon.setImageResource(R.drawable.ic_download_arrow)
+                    ivStatusIcon.imageTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.insta_pink))
+
+                    tvTitle.text = if (state.totalCount > 1) {
+                        "Saving Item ${state.currentIndex}/${state.totalCount}"
+                    } else {
+                        "Downloading Media"
+                    }
+                    tvSubtitle.text = if (state.totalBytes > 0) {
+                        "${state.percent}% (${state.downloadedBytes / 1024} KB / ${state.totalBytes / 1024} KB)"
+                    } else {
+                        "Downloading... ${state.percent}%"
+                    }
+                    tvTrailingPercent.visibility = View.VISIBLE
+                    tvTrailingPercent.text = "${state.percent}%"
+
+                    pbDeterminateBar.visibility = View.VISIBLE
+                    pbDeterminateBar.progress = state.percent
+                }
+                is ResilientHudState.Success -> {
+                    showPill()
+                    pbIndeterminate.visibility = View.GONE
+                    ivStatusIcon.visibility = View.VISIBLE
+                    ivStatusIcon.setImageResource(R.drawable.ic_check_circle)
+                    ivStatusIcon.imageTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.status_green))
+
+                    tvTitle.text = state.message
+                    tvSubtitle.text = if (state.totalItems > 1) "${state.totalItems} items saved to Gallery" else "Ready in Gallery"
+                    tvTrailingPercent.visibility = View.GONE
+                    pbDeterminateBar.visibility = View.GONE
+                }
+                is ResilientHudState.Error -> {
+                    showPill()
+                    pbIndeterminate.visibility = View.GONE
+                    ivStatusIcon.visibility = View.VISIBLE
+                    ivStatusIcon.setImageResource(R.drawable.ic_close)
+                    ivStatusIcon.imageTintList = ColorStateList.valueOf(ContextCompat.getColor(context, R.color.status_red))
+
+                    tvTitle.text = "Download Failed"
+                    tvSubtitle.text = state.message.take(35)
+                    tvTrailingPercent.visibility = View.GONE
+                    pbDeterminateBar.visibility = View.GONE
+                }
+            }
+        }
+    }
+
+    /**
+     * Legacy bind state overload bridging to FloatingHudState.
      */
     fun bindState(state: FloatingHudState) {
         mainHandler.post {

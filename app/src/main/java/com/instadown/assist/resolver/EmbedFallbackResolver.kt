@@ -16,11 +16,30 @@ class EmbedFallbackResolver(
     companion object {
         private const val TAG = "EmbedFallbackResolver"
 
-        private val EMBED_IMAGE_PATTERN = Pattern.compile(
-            """(?:\"display_url\"|\"thumbnail_src\")\s*:\s*\"([^\"]+)\""""
+        private fun unescapeUrl(raw: String): String {
+            return raw
+                .replace("\\u0026", "&")
+                .replace("&amp;", "&")
+                .replace("\\/", "/")
+                .replace("\\u0025", "%")
+                .trim()
+        }
+
+        private val EMBED_VIDEO_PATTERNS = listOf(
+            Pattern.compile("""\"video_url\"\s*:\s*\"([^\"]+)\""""),
+            Pattern.compile("""\"video_versions\"\s*:\s*\[\s*\{\s*\"url\"\s*:\s*\"([^\"]+)\""""),
+            Pattern.compile("""<video[^>]+src=[\"']([^\"']+)[\"']"""),
+            Pattern.compile("""\"playable_url\"\s*:\s*\"([^\"]+)\""""),
+            Pattern.compile("""\"playable_url_quality_hd\"\s*:\s*\"([^\"]+)\""""),
+            Pattern.compile("""\"(https?:\\\\/\\\\/[^\"]+\.mp4[^\"]*)\""""),
+            Pattern.compile("""\"(https?://[^\"'\s<>]+\.mp4[^\"'\s<>]*)\"""")
         )
-        private val EMBED_VIDEO_PATTERN = Pattern.compile(
-            """\"video_url\"\s*:\s*\"([^\"]+)\""""
+
+        private val EMBED_IMAGE_PATTERNS = listOf(
+            Pattern.compile("""(?:\"display_url\"|\"thumbnail_src\")\s*:\s*\"([^\"]+)\""""),
+            Pattern.compile("""<img[^>]+class=[\"'][^\"']*EmbeddedMediaImage[^\"']*[\"'][^>]+src=[\"']([^\"']+)[\"']"""),
+            Pattern.compile("""\"image_versions2\"\s*:\s*\{\s*\"candidates\"\s*:\s*\[\s*\{\s*\"url\"\s*:\s*\"([^\"]+)\""""),
+            Pattern.compile("""<img[^>]+src=[\"'](https?://[^\"'\s<>]*(?:cdninstagram\.com|fbcdn\.net)[^\"'\s<>]*)[\"']""")
         )
     }
 
@@ -142,18 +161,32 @@ class EmbedFallbackResolver(
             )
         }
 
-        // Search for video URL first
-        val vidMatcher = EMBED_VIDEO_PATTERN.matcher(html!!)
+        // Search for video URL first across multiple pattern variants
         var videoUrl: String? = null
-        if (vidMatcher.find()) {
-            videoUrl = vidMatcher.group(1)?.replace("\\u0026", "&")?.replace("&amp;", "&")
+        for (pattern in EMBED_VIDEO_PATTERNS) {
+            val matcher = pattern.matcher(html!!)
+            if (matcher.find()) {
+                val raw = matcher.group(1) ?: continue
+                val candidate = unescapeUrl(raw)
+                if (candidate.startsWith("http") && (candidate.contains(".mp4") || candidate.contains("fbcdn.net") || candidate.contains("cdninstagram.com"))) {
+                    videoUrl = candidate
+                    break
+                }
+            }
         }
 
-        // Search for image URL
-        val imgMatcher = EMBED_IMAGE_PATTERN.matcher(html!!)
+        // Search for image URL across multiple pattern variants
         var imageUrl: String? = null
-        if (imgMatcher.find()) {
-            imageUrl = imgMatcher.group(1)?.replace("\\u0026", "&")?.replace("&amp;", "&")
+        for (pattern in EMBED_IMAGE_PATTERNS) {
+            val matcher = pattern.matcher(html!!)
+            if (matcher.find()) {
+                val raw = matcher.group(1) ?: continue
+                val candidate = unescapeUrl(raw)
+                if (candidate.startsWith("http")) {
+                    imageUrl = candidate
+                    break
+                }
+            }
         }
 
         val isReelSource = normalized.sourcePathType.contains("reel") || normalized.sourcePathType.contains("reels")
