@@ -82,12 +82,13 @@ You are an expert principal Android systems engineer and architect working on In
 - **JDK Target**: Java 17
 - **Key Libraries**:
   - `androidx.core:core-ktx:1.15.0`
+  - `androidx.core:core-splashscreen:1.0.1`
   - `androidx.appcompat:appcompat:1.7.0`
   - `androidx.recyclerview:recyclerview:1.3.2`
   - `androidx.viewpager2:viewpager2:1.1.0`
   - `org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1`
   - `com.squareup.okhttp3:okhttp:4.12.0`
-- **Current Version**: `versionCode = 13`, `versionName = "1.2.1"`
+- **Current Version**: `versionCode = 14`, `versionName = "1.2.2"`
 
 ---
 
@@ -253,23 +254,36 @@ All release builds must be signed with the dedicated production keystore:
 - Replaces legacy black-and-white `AlertDialog` popups with a Material 3 dark glassmorphic bottom sheet (`#161422`).
 - Features rich post cover thumbnail preview, live on-device vs deleted status badge, 1-tap "Free Up Phone Storage", "Open in Instagram", "Copy Link", and expandable Danger Zone.
 
-### 20. Animated Welcome / Splash Screen
+### 20. Zero-Flicker Native Splash Screen (API 31-36 Compliant)
 - **Files**:
-  - `app/src/main/java/com/instadown/assist/ui/SplashActivity.kt`
-  - `app/src/main/res/layout/activity_splash.xml`
+  - `app/src/main/res/values/themes.xml` (`Theme.InstaSave.Starting`)
+  - `app/src/main/java/com/instadown/assist/ui/MainActivity.kt` (`installSplashScreen`)
   - `app/src/main/AndroidManifest.xml`
-- Delivers an ultra-smooth ~850 ms welcome experience on app open featuring the InstaSave gradient logo with overshoot spring scale physics, subtitle fade/slide, glowing progress bar, and seamless activity transition.
-- Zero-friction sharing: automatically detects incoming external `ACTION_SEND` intents and immediately forwards them to `MainActivity` with 0 ms delay.
+- Fully adheres to Android 12–16 window splash specifications using `androidx.core:core-splashscreen`.
+- Eliminates legacy trampoline `SplashActivity` double-window flashes and maintains native Predictive Back physics.
+- Directly routes incoming external `ACTION_SEND` share sheets into `MainActivity` in 0 ms with unstripped `ClipData` URI grants.
 
-### 21. Proactive Home Screen Update Notification & Engaging OTA Assistant
+### 21. Hardened Enterprise Self-Updater with EMA Rate Smoothing
 - **Files**:
-  - `app/src/main/res/layout/activity_main.xml` (`layoutUpdateAvailableBanner`)
-  - `app/src/main/java/com/instadown/assist/ui/MainActivity.kt` (`checkSilentAutoUpdate`)
-  - `app/src/main/res/layout/dialog_in_app_update.xml`
+  - `app/src/main/java/com/instadown/assist/util/HardenedApkInstaller.kt`
+  - `app/src/main/java/com/instadown/assist/util/EmaTransferEstimator.kt`
   - `app/src/main/java/com/instadown/assist/util/AppUpdateManager.kt`
-- Redesigned home screen update banner with wine/purple gradient card, glowing rocket icon, and 1-tap "Update ⚡" action.
-- Automatically checks for updates and proactively presents the exciting update sheet on app startup when a new version is detected.
-- Upgraded update sheet features glowing version badges, feature chips (`⚡ 2x Speed`, `🎨 Modern UI`, `🛡️ Free & Private`), formatted changelog card, and real-time download progress with animated percentage and "Install Now 🚀" button.
+  - `release-manifest.json`
+- Protects users from APK tampering by cryptographically checking APK signing certificates against the running app's certificates.
+- Complies with Android Enterprise restrictions (`UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES`).
+- Features cross-process `ClipData.newRawUri` grants for dual-installer OEM environments (e.g. Xiaomi HyperOS).
+- Smooths network bursts and download progress rendering with an Exponential Moving Average filter ($\alpha = 0.25$, 250 ms throttling).
+
+### 22. Android 16 Scoped Storage Deletion Consent Coordinator
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/data/db/StorageDeletionCoordinator.kt`
+  - `app/src/main/java/com/instadown/assist/data/db/DownloadRepository.kt`
+  - `app/src/main/java/com/instadown/assist/ui/DownloadHistoryActivity.kt`
+  - `app/src/main/java/com/instadown/assist/ui/MediaViewerActivity.kt`
+- Seamlessly manages Android 11–16 MediaStore ownership loss (e.g. after reinstalls or restores).
+- Employs `MediaStore.createDeleteRequest` targeting valid Images/Video/Audio tables to request OS user consent without throwing crashes on download volumes.
+- Features `SelfDeleteGuard` to prevent self-deletion race conditions with `reconcileWithMediaStore()` `ContentObserver` callbacks.
+- Atomically finalizes DB row updates to `EXTERNAL_DELETED` only for confirmed deleted files.
 
 ---
 

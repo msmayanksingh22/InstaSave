@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.Dispatchers
@@ -312,7 +313,8 @@ object AppUpdateManager {
     suspend fun downloadUpdate(
         context: Context,
         updateInfo: AppUpdateInfo,
-        onProgress: (percent: Int, bytesRead: Long, totalBytes: Long) -> Unit
+        onProgress: (percent: Int, bytesRead: Long, totalBytes: Long) -> Unit = { _, _, _ -> },
+        onProgressSnapshot: ((TransferProgressSnapshot) -> Unit)? = null
     ): File? = withContext(Dispatchers.IO) {
         // Pre-flight disk space check before wasting cellular data
         if (!hasEnoughDiskSpace(context, updateInfo.fileSizeBytes)) {
@@ -328,7 +330,7 @@ object AppUpdateManager {
 
         for (url in urlsToTry) {
             AppLogger.i(TAG, "Attempting update download from: $url")
-            val file = downloadSingleUrl(context, url, updateInfo, onProgress)
+            val file = downloadSingleUrl(context, url, updateInfo, onProgress, onProgressSnapshot)
             if (file != null && file.exists() && file.length() > 0) {
                 // Post-download validation of archive structure & checksum
                 if (verifyDownloadedApk(context, file, updateInfo.versionCode, updateInfo.sha256)) {
@@ -347,7 +349,8 @@ object AppUpdateManager {
         context: Context,
         targetUrl: String,
         updateInfo: AppUpdateInfo,
-        onProgress: (percent: Int, bytesRead: Long, totalBytes: Long) -> Unit
+        onProgress: (percent: Int, bytesRead: Long, totalBytes: Long) -> Unit,
+        onProgressSnapshot: ((TransferProgressSnapshot) -> Unit)? = null
     ): File? {
         try {
             val updateDir = File(context.filesDir, "updates")
@@ -376,23 +379,25 @@ object AppUpdateManager {
             val inputStream = body.byteStream()
             val outputStream = FileOutputStream(tempFile)
 
+            val estimator = EmaTransferEstimator()
             val buffer = ByteArray(64 * 1024)
             var read: Int
             var totalRead = 0L
-            var lastPercent = -1
 
             while (inputStream.read(buffer).also { read = it } != -1) {
                 outputStream.write(buffer, 0, read)
                 totalRead += read
-                if (totalBytes > 0) {
-                    val percent = ((totalRead * 100) / totalBytes).toInt().coerceIn(0, 100)
-                    if (percent != lastPercent) {
-                        lastPercent = percent
-                        onProgress(percent, totalRead, totalBytes)
-                    }
-                } else {
-                    onProgress(-1, totalRead, 0L)
+                val snapshot = estimator.update(totalRead, totalBytes)
+                if (snapshot != null) {
+                    onProgress(snapshot.percent, totalRead, totalBytes)
+                    onProgressSnapshot?.invoke(snapshot)
                 }
+            }
+
+            // Force emit final completion snapshot
+            estimator.update(totalRead, totalBytes, forceEmit = true)?.let { finalSnapshot ->
+                onProgress(finalSnapshot.percent, totalRead, totalBytes)
+                onProgressSnapshot?.invoke(finalSnapshot)
             }
 
             outputStream.flush()
@@ -420,9 +425,7 @@ object AppUpdateManager {
     }
 
     /**
-     * Prompts the native Android package installer to install the downloaded APK.
-     * If the user has not yet permitted installs from this app, saves the state to SharedPreferences
-     * (surviving Android 11+ process-kill) and directs the user to the Unknown App Sources settings page.
+     * Prompts the native Android package installer to install the downloaded APK via HardenedApkInstaller.
      */
     fun promptInstall(
         context: Context,
@@ -431,92 +434,32 @@ object AppUpdateManager {
         expectedVersionCode: Long = -1L,
         expectedSha256: String? = null
     ): Boolean {
-        if (!apkFile.exists() || apkFile.length() == 0L) {
-            AppLogger.e(TAG, "Cannot install: APK file does not exist or is empty")
-            return false
-        }
-
-        // Verify APK integrity before attempting package installer launch
-        if (!verifyDownloadedApk(context, apkFile, expectedVersionCode, expectedSha256)) {
-            AppLogger.e(TAG, "Pre-installation integrity check failed")
-            apkFile.delete()
-            try {
-                android.widget.Toast.makeText(context, "Update package corrupted. Please re-download.", android.widget.Toast.LENGTH_LONG).show()
-            } catch (_: Exception) {}
-            return false
-        }
-
-        // On Android 8.0+ (API 26+), verify and request unknown app sources permission if needed
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (!canInstallPackages(context)) {
-                // Persist state to disk so it survives Android 11+ process force-kill
-                savePendingInstall(context, apkFile, expectedVersionCode, expectedSha256)
-                AppLogger.i(TAG, "Install permission not yet granted. Saved state to disk & directing user to Settings...")
-
-                try {
-                    android.widget.Toast.makeText(
-                        context,
-                        "Please allow 'Install unknown apps' for InstaSave to complete update",
-                        android.widget.Toast.LENGTH_LONG
-                    ).show()
-                } catch (_: Exception) {}
-
-                val manageIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                    data = Uri.parse("package:${context.packageName}")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                try {
-                    context.startActivity(manageIntent)
-                } catch (e: Exception) {
-                    AppLogger.e(TAG, "Failed to open unknown sources settings: ${e.message}", e)
+        return when (val result = HardenedApkInstaller.installApk(context, apkFile, expectedVersionCode, expectedSha256)) {
+            is HardenedApkInstaller.InstallResult.Launched -> true
+            is HardenedApkInstaller.InstallResult.PermissionRequired -> false
+            is HardenedApkInstaller.InstallResult.Restricted -> false
+            is HardenedApkInstaller.InstallResult.IntegrityError -> {
+                if (!fallbackApkUrl.isNullOrBlank()) {
                     try {
-                        context.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS).apply {
+                        Toast.makeText(context, "Opening direct download...", Toast.LENGTH_SHORT).show()
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(fallbackApkUrl)).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         })
                     } catch (_: Exception) {}
                 }
-                return false
+                false
             }
-        }
-
-        try {
-            val contentUri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                apkFile
-            )
-
-            val installIntent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(contentUri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            is HardenedApkInstaller.InstallResult.Error -> {
+                if (!fallbackApkUrl.isNullOrBlank()) {
+                    try {
+                        Toast.makeText(context, "Opening direct download...", Toast.LENGTH_SHORT).show()
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(fallbackApkUrl)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        })
+                    } catch (_: Exception) {}
+                }
+                false
             }
-
-            // Explicitly grant URI read permission to all matching activities (now found via <queries>)
-            val resInfoList = context.packageManager.queryIntentActivities(
-                installIntent,
-                android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
-            )
-            for (resolveInfo in resInfoList) {
-                val targetPackage = resolveInfo.activityInfo.packageName
-                context.grantUriPermission(targetPackage, contentUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-
-            clearPendingInstall(context)
-            context.startActivity(installIntent)
-            AppLogger.i(TAG, "Successfully launched Android PackageInstaller for $contentUri")
-            return true
-        } catch (e: Exception) {
-            AppLogger.e(TAG, "Failed to launch package installer: ${e.message}", e)
-            if (!fallbackApkUrl.isNullOrBlank()) {
-                try {
-                    android.widget.Toast.makeText(context, "Opening direct download...", android.widget.Toast.LENGTH_SHORT).show()
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(fallbackApkUrl)).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    })
-                } catch (_: Exception) {}
-            }
-            return false
         }
     }
 

@@ -34,6 +34,7 @@ class HistoryItemOptionsBottomSheet : DialogFragment() {
     interface Listener {
         fun onHistoryChanged()
         fun onReDownloadRequested(record: DownloadRecord)
+        fun onConsentRequired(downloadId: Long, intentSender: android.content.IntentSender, itemIds: List<Long>)
     }
 
     private var listener: Listener? = null
@@ -190,14 +191,25 @@ class HistoryItemOptionsBottomSheet : DialogFragment() {
 
                 cardStorageAction.setOnClickListener {
                     lifecycleScope.launch {
-                        val result = repo.deleteDeviceStorageOnly(loadedRecord.id)
-                        Toast.makeText(
-                            requireContext(),
-                            "✓ Freed storage (${result.filesDeleted} files deleted). Post preserved in History!",
-                            Toast.LENGTH_LONG
-                        ).show()
-                        listener?.onHistoryChanged()
-                        dismiss()
+                        when (val result = repo.deleteDeviceStorageOnly(loadedRecord.id)) {
+                            is com.instadown.assist.data.db.DeleteStorageResult.Completed -> {
+                                Toast.makeText(
+                                    requireContext(),
+                                    "✓ Freed storage (${result.deletedCount} files deleted). Post preserved in History!",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                listener?.onHistoryChanged()
+                                dismiss()
+                            }
+                            is com.instadown.assist.data.db.DeleteStorageResult.RequiresUserConsent -> {
+                                listener?.onConsentRequired(result.downloadId, result.intentSender, result.pendingItemIds)
+                                dismiss()
+                            }
+                            is com.instadown.assist.data.db.DeleteStorageResult.Failed -> {
+                                Toast.makeText(requireContext(), "Failed: ${result.reason}", Toast.LENGTH_SHORT).show()
+                                dismiss()
+                            }
+                        }
                     }
                 }
             }

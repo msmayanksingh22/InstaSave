@@ -110,4 +110,29 @@ class AppUpdateManagerTest {
             tempFile.delete()
         }
     }
+
+    @Test
+    fun testEmaTransferEstimator_formatting() {
+        assertEquals("0 B/s", EmaTransferEstimator.formatSpeed(0.0))
+        assertEquals("500 B/s", EmaTransferEstimator.formatSpeed(500.0))
+        assertEquals("500 KB/s", EmaTransferEstimator.formatSpeed(500.0 * 1024.0))
+        assertEquals("3.5 MB/s", EmaTransferEstimator.formatSpeed(3.5 * 1024.0 * 1024.0))
+
+        assertEquals("--", EmaTransferEstimator.formatEta(-1L))
+        assertEquals("45s left", EmaTransferEstimator.formatEta(45L))
+        assertEquals("2m 15s left", EmaTransferEstimator.formatEta(135L))
+
+        assertEquals("5.0 / 10.0 MB", EmaTransferEstimator.formatBytes(5L * 1024 * 1024, 10L * 1024 * 1024))
+        assertEquals("5.0 MB", EmaTransferEstimator.formatBytes(5L * 1024 * 1024, 0L))
+    }
+
+    @Test
+    fun testEmaTransferEstimator_forceEmit() {
+        val estimator = EmaTransferEstimator()
+        val snapshot = estimator.update(bytesRead = 1024L, totalBytes = 2048L, forceEmit = true)
+        assertNotNull(snapshot)
+        assertEquals(50, snapshot!!.percent)
+        assertEquals(1024L, snapshot.bytesRead)
+        assertEquals(2048L, snapshot.totalBytes)
+    }
 }

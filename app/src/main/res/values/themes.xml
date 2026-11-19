@@ -9,6 +9,13 @@
         <item name="android:navigationBarColor">#101016</item>
     </style>
 
+    <!-- Official Android 12-16 Splash Screen Theme -->
+    <style name="Theme.InstaSave.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#0C0A12</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_app_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.InstaSave</item>
+    </style>
+
     <!-- Backward compatibility alias -->
     <style name="Theme.InstaDown" parent="Theme.InstaSave" />
 </resources>

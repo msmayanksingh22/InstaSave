@@ -396,23 +396,29 @@ class SettingsActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             val downloadedApk = com.instadown.assist.util.AppUpdateManager.downloadUpdate(
-                this@SettingsActivity,
-                updateInfo
-            ) { percent, bytesRead, totalBytes ->
-                runOnUiThread {
-                    if (percent >= 0) {
-                        pbDownload.isIndeterminate = false
-                        pbDownload.progress = percent
-                        tvUpdatePercent.text = "$percent%"
-                    } else {
-                        pbDownload.isIndeterminate = true
-                        tvUpdatePercent.text = ""
+                context = this@SettingsActivity,
+                updateInfo = updateInfo,
+                onProgress = { percent, _, _ ->
+                    runOnUiThread {
+                        if (percent >= 0) {
+                            pbDownload.isIndeterminate = false
+                            pbDownload.progress = percent
+                            tvUpdatePercent.text = "$percent%"
+                        } else {
+                            pbDownload.isIndeterminate = true
+                            tvUpdatePercent.text = ""
+                        }
                     }
-                    val readMb = String.format(java.util.Locale.US, "%.1f", bytesRead / (1024.0 * 1024.0))
-                    val totMb = if (totalBytes > 0) String.format(java.util.Locale.US, "%.1f MB", totalBytes / (1024.0 * 1024.0)) else "..."
-                    tvProgressStatus.text = "Downloading... ($readMb of $totMb)"
+                },
+                onProgressSnapshot = { snapshot ->
+                    runOnUiThread {
+                        pbDownload.isIndeterminate = false
+                        pbDownload.progress = snapshot.percent
+                        tvUpdatePercent.text = "${snapshot.percent}%"
+                        tvProgressStatus.text = "Downloading (${snapshot.formattedBytes}) • ${snapshot.formattedSpeed} • ${snapshot.formattedEta}"
+                    }
                 }
-            }
+            )
 
             if (downloadedApk != null && downloadedApk.exists()) {
                 tvTitle.text = "Download Complete!"

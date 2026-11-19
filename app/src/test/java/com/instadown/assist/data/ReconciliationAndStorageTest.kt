@@ -264,4 +264,23 @@ class ReconciliationAndStorageTest {
         // 3. Fallback representativeUri must preserve thumbnailPath even without local video
         assertEquals(thumbPath, record.representativeUri)
     }
+
+    @Test
+    fun testSelfDeleteGuardTracksUrisCorrectly() {
+        val testUri = "content://media/external/images/media/777"
+        assertFalse(com.instadown.assist.data.db.SelfDeleteGuard.isSelfDeleting(testUri))
+
+        com.instadown.assist.data.db.SelfDeleteGuard.markDeleting(testUri)
+        assertTrue(com.instadown.assist.data.db.SelfDeleteGuard.isSelfDeleting(testUri))
+
+        com.instadown.assist.data.db.SelfDeleteGuard.unmarkDeleting(testUri)
+        assertFalse(com.instadown.assist.data.db.SelfDeleteGuard.isSelfDeleting(testUri))
+
+        com.instadown.assist.data.db.SelfDeleteGuard.withSelfDeleting(listOf("uri_a", "uri_b")) {
+            assertTrue(com.instadown.assist.data.db.SelfDeleteGuard.isSelfDeleting("uri_a"))
+            assertTrue(com.instadown.assist.data.db.SelfDeleteGuard.isSelfDeleting("uri_b"))
+        }
+        assertFalse(com.instadown.assist.data.db.SelfDeleteGuard.isSelfDeleting("uri_a"))
+        assertFalse(com.instadown.assist.data.db.SelfDeleteGuard.isSelfDeleting("uri_b"))
+    }
 }

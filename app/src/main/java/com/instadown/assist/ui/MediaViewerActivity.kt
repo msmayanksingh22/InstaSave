@@ -11,7 +11,10 @@ import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.content.IntentSender
 import android.widget.*
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -59,6 +62,31 @@ class MediaViewerActivity : AppCompatActivity() {
     private var mediaItems: List<DownloadItemRecord> = emptyList()
     private val repo by lazy { DownloadRepository.getInstance(this) }
     private var isControlsVisible = true
+
+    private var pendingConsentDownloadId: Long? = null
+    private var pendingConsentItemIds: List<Long>? = null
+
+    private val deleteConsentLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        val dlId = pendingConsentDownloadId
+        val itemIds = pendingConsentItemIds
+        pendingConsentDownloadId = null
+        pendingConsentItemIds = null
+        if (result.resultCode == RESULT_OK && dlId != null && itemIds != null) {
+            lifecycleScope.launch {
+                repo.finalizeConsentedDeletion(dlId, itemIds)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@MediaViewerActivity,
+                        "✓ Media deleted from device. Post preserved in History!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    finish()
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -281,6 +309,17 @@ class MediaViewerActivity : AppCompatActivity() {
             }
             override fun onReDownloadRequested(rec: DownloadRecord) {
                 finish()
+            }
+            override fun onConsentRequired(downloadId: Long, intentSender: IntentSender, itemIds: List<Long>) {
+                pendingConsentDownloadId = downloadId
+                pendingConsentItemIds = itemIds
+                try {
+                    deleteConsentLauncher.launch(
+                        IntentSenderRequest.Builder(intentSender).build()
+                    )
+                } catch (e: Exception) {
+                    Toast.makeText(this@MediaViewerActivity, "Failed to request delete permission: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             }
         })
         sheet.show(supportFragmentManager, HistoryItemOptionsBottomSheet.TAG)

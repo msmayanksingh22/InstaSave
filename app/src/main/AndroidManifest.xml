@@ -58,22 +58,16 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
-        <!-- Welcome / Splash Screen -->
+        <!-- Main Dashboard Activity with Native Splash Screen -->
         <activity
-            android:name=".ui.SplashActivity"
+            android:name=".ui.MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.InstaSave">
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.InstaSave.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
-
-        <!-- Main Dashboard Activity -->
-        <activity
-            android:name=".ui.MainActivity"
-            android:exported="true"
-            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.ASSIST" />
                 <category android:name="android.intent.category.DEFAULT" />

@@ -12,8 +12,11 @@ import android.widget.Button
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.content.IntentSender
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -66,6 +69,31 @@ class DownloadHistoryActivity : AppCompatActivity() {
     private val queuedOrActiveIds = ConcurrentHashMap.newKeySet<Long>()
     private var isQueueProcessing = false
     private var metadataFetchJob: Job? = null
+
+    private var pendingConsentDownloadId: Long? = null
+    private var pendingConsentItemIds: List<Long>? = null
+
+    private val deleteConsentLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        val dlId = pendingConsentDownloadId
+        val itemIds = pendingConsentItemIds
+        pendingConsentDownloadId = null
+        pendingConsentItemIds = null
+        if (result.resultCode == RESULT_OK && dlId != null && itemIds != null) {
+            lifecycleScope.launch {
+                repo.finalizeConsentedDeletion(dlId, itemIds)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@DownloadHistoryActivity,
+                        "✓ Media deleted from device. Post preserved in History!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    loadHistory(forceReconcile = true)
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -530,6 +558,18 @@ class DownloadHistoryActivity : AppCompatActivity() {
             }
             override fun onReDownloadRequested(rec: DownloadRecord) {
                 showReDownloadDialogOrSheet(rec)
+            }
+            override fun onConsentRequired(downloadId: Long, intentSender: IntentSender, itemIds: List<Long>) {
+                pendingConsentDownloadId = downloadId
+                pendingConsentItemIds = itemIds
+                try {
+                    deleteConsentLauncher.launch(
+                        IntentSenderRequest.Builder(intentSender).build()
+                    )
+                } catch (e: Exception) {
+                    Log.e("DownloadHistory", "Failed to launch delete consent dialog: ${e.message}", e)
+                    Toast.makeText(this@DownloadHistoryActivity, "Failed to request permission to delete media", Toast.LENGTH_SHORT).show()
+                }
             }
         })
         sheet.show(supportFragmentManager, HistoryItemOptionsBottomSheet.TAG)

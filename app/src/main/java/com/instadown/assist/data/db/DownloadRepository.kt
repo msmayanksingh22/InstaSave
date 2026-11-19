@@ -494,97 +494,18 @@ class DownloadRepository private constructor(private val context: Context) {
         }
     }
 
-    suspend fun deleteDeviceStorageOnly(downloadId: Long): DeleteHistoryResult = withContext(Dispatchers.IO) {
-        val db = dbHelper.writableDatabase
-        val items = getItemsForDownload(db, downloadId)
-
-        var deleted = 0
-        var missing = 0
-        var failed = 0
-        val targetUris = items.mapNotNull { it.mediaUri }
-
-        for (uriStr in targetUris) {
-            val uri = try { Uri.parse(uriStr) } catch (e: Exception) { null }
-            if (uri == null) {
-                missing++
-                continue
-            }
-
-            try {
-                val checkCursor = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-                val exists = checkCursor?.use { it.moveToFirst() } ?: false
-                if (!exists) {
-                    missing++
-                    continue
-                }
-
-                val delCount = context.contentResolver.delete(uri, null, null)
-                if (delCount > 0) {
-                    deleted++
-                } else {
-                    failed++
-                }
-            } catch (se: SecurityException) {
-                Log.w(TAG, "deleteDeviceStorageOnly: SecurityException deleting $uri: ${se.message}")
-                failed++
-            } catch (e: Exception) {
-                Log.w(TAG, "deleteDeviceStorageOnly: Failed to delete $uri: ${e.message}")
-                failed++
-            }
+    val storageDeletionCoordinator by lazy {
+        StorageDeletionCoordinator(context, dbHelper) { event ->
+            _transactionEvents.tryEmit(event)
         }
+    }
 
-        // Keep the history record in TABLE_DOWNLOADS and keep the persistent thumbnail!
-        // Mark items as EXTERNAL_DELETED with null URI so they are recognized as Deleted from Device and eligible for 1-tap re-download.
-        db.beginTransaction()
-        try {
-            val itemValues = ContentValues().apply {
-                put(InstaSaveDatabaseHelper.COL_ITEM_STATUS, ItemStatus.EXTERNAL_DELETED.name)
-                putNull(InstaSaveDatabaseHelper.COL_ITEM_MEDIA_URI)
-            }
-            db.update(
-                InstaSaveDatabaseHelper.TABLE_DOWNLOAD_ITEMS,
-                itemValues,
-                "${InstaSaveDatabaseHelper.COL_ITEM_DOWNLOAD_ID} = ?",
-                arrayOf(downloadId.toString())
-            )
+    suspend fun deleteDeviceStorageOnly(downloadId: Long): DeleteStorageResult {
+        return storageDeletionCoordinator.deleteDeviceStorageOnly(downloadId)
+    }
 
-            val dlValues = ContentValues().apply {
-                put(InstaSaveDatabaseHelper.COL_DL_STATUS, TransactionStatus.EXTERNAL_DELETED.name)
-            }
-            db.update(
-                InstaSaveDatabaseHelper.TABLE_DOWNLOADS,
-                dlValues,
-                "${InstaSaveDatabaseHelper.COL_DL_ID} = ?",
-                arrayOf(downloadId.toString())
-            )
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
-        }
-
-        Log.i(TAG, "deleteDeviceStorageOnly: Freed storage (deleted=$deleted, missing=$missing, failed=$failed) while preserving history record id=$downloadId")
-        com.instadown.assist.data.StorageAccountant.invalidateCache()
-        _transactionEvents.tryEmit(
-            DownloadTransactionEvent(
-                transactionId = "STORAGE_DELETED",
-                status = TransactionStatus.EXTERNAL_DELETED,
-                shortcode = "",
-                postType = "",
-                sourceUrl = "",
-                completedCount = 0,
-                failedCount = 0,
-                totalBytes = 0,
-                timestamp = System.currentTimeMillis()
-            )
-        )
-
-        DeleteHistoryResult(
-            historyRemoved = false,
-            filesRequested = targetUris.size,
-            filesDeleted = deleted,
-            filesAlreadyMissing = missing,
-            filesFailed = failed
-        )
+    suspend fun finalizeConsentedDeletion(downloadId: Long, itemIds: List<Long>) {
+        storageDeletionCoordinator.finalizeConsentedDeletion(downloadId, itemIds)
     }
 
     suspend fun deleteDownload(downloadId: Long, deleteFiles: Boolean): DeleteHistoryResult = withContext(Dispatchers.IO) {
@@ -698,6 +619,9 @@ class DownloadRepository private constructor(private val context: Context) {
                     val itemId = it.getLong(it.getColumnIndexOrThrow(InstaSaveDatabaseHelper.COL_ITEM_ID))
                     val dlId = it.getLong(it.getColumnIndexOrThrow(InstaSaveDatabaseHelper.COL_ITEM_DOWNLOAD_ID))
                     val uriStr = it.getString(it.getColumnIndexOrThrow(InstaSaveDatabaseHelper.COL_ITEM_MEDIA_URI))
+                    if (SelfDeleteGuard.isSelfDeleting(uriStr)) {
+                        continue
+                    }
                     val currentStatus = it.getString(it.getColumnIndexOrThrow(InstaSaveDatabaseHelper.COL_ITEM_STATUS))
 
                     val newStatus = verifyUriState(uriStr)

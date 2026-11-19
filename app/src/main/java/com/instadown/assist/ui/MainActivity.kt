@@ -1,5 +1,7 @@
 package com.instadown.assist.ui
 
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -13,6 +15,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.View
+import android.view.animation.DecelerateInterpolator
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -20,6 +23,8 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.animation.doOnEnd
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
@@ -34,8 +39,15 @@ import com.instadown.assist.service.InstaAccessibilityService
 import com.instadown.assist.util.ClipboardReader
 import com.instadown.assist.util.DownloadNotificationManager
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
+
+object UpdatePromptTracker {
+    var hasPromptedThisSession: Boolean = false
+}
 
 class MainActivity : AppCompatActivity() {
+
+    private val isBootReady = AtomicBoolean(false)
 
     private lateinit var dotService: View
     private lateinit var tvServiceTitle: TextView
@@ -78,15 +90,51 @@ class MainActivity : AppCompatActivity() {
 
     private var lastDismissedClipUrl: String? = null
     private var hasCheckedUpdateThisSession = false
-    private var hasPromptedAutoUpdateThisSession = false
 
     companion object {
         private const val TAG = "MainActivity"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        val isDirectShareIntent =
+            intent?.action == Intent.ACTION_SEND || intent?.action == Intent.ACTION_VIEW
+
+        // Hold splash screen only until views are inflated; 0 ms bypass for Share intents
+        splashScreen.setKeepOnScreenCondition { !isDirectShareIntent && !isBootReady.get() }
+
+        splashScreen.setOnExitAnimationListener { splashViewProvider ->
+            if (isDirectShareIntent) {
+                splashViewProvider.remove()
+                return@setOnExitAnimationListener
+            }
+
+            val rootView = splashViewProvider.view
+            val iconView = runCatching { splashViewProvider.iconView }.getOrNull()
+
+            val fadeOut = ObjectAnimator.ofFloat(rootView, View.ALPHA, 1f, 0f).apply {
+                duration = 260L
+                interpolator = DecelerateInterpolator()
+            }
+
+            if (iconView != null) {
+                val scaleX = ObjectAnimator.ofFloat(iconView, View.SCALE_X, 1f, 1.18f).apply { duration = 260L }
+                val scaleY = ObjectAnimator.ofFloat(iconView, View.SCALE_Y, 1f, 1.18f).apply { duration = 260L }
+                AnimatorSet().apply {
+                    playTogether(fadeOut, scaleX, scaleY)
+                    doOnEnd { splashViewProvider.remove() }
+                    start()
+                }
+            } else {
+                fadeOut.doOnEnd { splashViewProvider.remove() }
+                fadeOut.start()
+            }
+        }
+
         setContentView(R.layout.activity_main)
+        isBootReady.set(true)
 
         prefs = InstaSavePreferences(this)
         DownloadNotificationManager.createNotificationChannels(this)
@@ -298,8 +346,8 @@ class MainActivity : AppCompatActivity() {
                         }
 
                         // Automatically ask the user to update when detected on home screen
-                        if (!hasPromptedAutoUpdateThisSession && !isFinishing && !isDestroyed) {
-                            hasPromptedAutoUpdateThisSession = true
+                        if (!UpdatePromptTracker.hasPromptedThisSession && !isFinishing && !isDestroyed) {
+                            UpdatePromptTracker.hasPromptedThisSession = true
                             showUpdateAvailablePrompt(info)
                         }
                     } else {
@@ -400,17 +448,22 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             val apk = com.instadown.assist.util.AppUpdateManager.downloadUpdate(
-                this@MainActivity,
-                info
-            ) { percent, bytesRead, totalBytes ->
-                runOnUiThread {
-                    pbDownload.progress = percent
-                    tvUpdatePercent.text = "$percent%"
-                    val readMb = String.format(java.util.Locale.US, "%.1f", bytesRead / (1024.0 * 1024.0))
-                    val totMb = String.format(java.util.Locale.US, "%.1f MB", totalBytes / (1024.0 * 1024.0))
-                    tvProgressStatus.text = "Downloading... ($readMb of $totMb)"
+                context = this@MainActivity,
+                updateInfo = info,
+                onProgress = { percent, _, _ ->
+                    runOnUiThread {
+                        pbDownload.progress = percent
+                        tvUpdatePercent.text = "$percent%"
+                    }
+                },
+                onProgressSnapshot = { snapshot ->
+                    runOnUiThread {
+                        pbDownload.progress = snapshot.percent
+                        tvUpdatePercent.text = "${snapshot.percent}%"
+                        tvProgressStatus.text = "Downloading (${snapshot.formattedBytes}) • ${snapshot.formattedSpeed} • ${snapshot.formattedEta}"
+                    }
                 }
-            }
+            )
 
             if (apk != null && apk.exists()) {
                 tvTitle.text = "Ready to Install"
