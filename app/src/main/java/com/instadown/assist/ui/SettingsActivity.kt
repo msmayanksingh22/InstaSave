@@ -103,10 +103,10 @@ class SettingsActivity : AppCompatActivity() {
         val tvAppVersion = findViewById<android.widget.TextView>(R.id.tvSettingsAppVersion)
         try {
             val pInfo = packageManager.getPackageInfo(packageName, 0)
-            val buildNum = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) pInfo.longVersionCode else pInfo.versionCode
+            val buildNum = androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(pInfo)
             tvAppVersion?.text = "Version ${pInfo.versionName} (Build $buildNum)"
         } catch (_: Exception) {
-            tvAppVersion?.text = "Version 1.1.2 (Build 4)"
+            tvAppVersion?.text = "Version 1.1.7 (Build 10)"
         }
 
         // In-App Software Updates (Clean native OTA dialog)
@@ -302,7 +302,13 @@ class SettingsActivity : AppCompatActivity() {
                 btnNegative.text = "Re-download"
 
                 btnPositive.setOnClickListener {
-                    com.instadown.assist.util.AppUpdateManager.promptInstall(this@SettingsActivity, existingApk, updateInfo.apkUrl)
+                    com.instadown.assist.util.AppUpdateManager.promptInstall(
+                        this@SettingsActivity,
+                        existingApk,
+                        updateInfo.apkUrl,
+                        updateInfo.versionCode,
+                        updateInfo.sha256
+                    )
                 }
                 btnNegative.setOnClickListener {
                     existingApk.delete()
@@ -402,10 +408,22 @@ class SettingsActivity : AppCompatActivity() {
                 btnNegative.text = "Dismiss"
                 dialog.setCancelable(true)
 
-                com.instadown.assist.util.AppUpdateManager.promptInstall(this@SettingsActivity, downloadedApk, updateInfo.apkUrl)
+                com.instadown.assist.util.AppUpdateManager.promptInstall(
+                    this@SettingsActivity,
+                    downloadedApk,
+                    updateInfo.apkUrl,
+                    updateInfo.versionCode,
+                    updateInfo.sha256
+                )
 
                 btnPositive.setOnClickListener {
-                    com.instadown.assist.util.AppUpdateManager.promptInstall(this@SettingsActivity, downloadedApk, updateInfo.apkUrl)
+                    com.instadown.assist.util.AppUpdateManager.promptInstall(
+                        this@SettingsActivity,
+                        downloadedApk,
+                        updateInfo.apkUrl,
+                        updateInfo.versionCode,
+                        updateInfo.sha256
+                    )
                 }
             } else {
                 tvTitle.text = "Download Failed"

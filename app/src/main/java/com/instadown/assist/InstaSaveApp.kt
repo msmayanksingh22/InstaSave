@@ -6,6 +6,7 @@ import com.instadown.assist.resolver.HeadlessWebBridgeResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class InstaSaveApp : Application() {
 
@@ -26,6 +27,11 @@ class InstaSaveApp : Application() {
             HeadlessWebBridgeResolver.preWarm(this)
         } catch (e: Exception) {
             Log.w(TAG, "Pre-warm notice on app startup: ${e.message}")
+        }
+
+        // Clean up obsolete APKs in filesDir/updates/ asynchronously
+        applicationScope.launch {
+            com.instadown.assist.util.AppUpdateManager.cleanupOldUpdateApks(this@InstaSaveApp)
         }
     }
 }

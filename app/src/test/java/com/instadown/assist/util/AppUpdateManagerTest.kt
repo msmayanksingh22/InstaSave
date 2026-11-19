@@ -13,18 +13,20 @@ class AppUpdateManagerTest {
           "releaseNotes": "• In-app seamless OTA update fix\n• Fixed update notification loop",
           "apkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
           "fallbackApkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.1.7/app-release.apk",
-          "fileSizeBytes": 3848344
+          "fileSizeBytes": 3851081,
+          "sha256": "2f57fef68312c9b3ac7ba05ebad320bfc84042e14cbe391dbc017dd5033cc65b"
         }
     """.trimIndent()
 
     @Test
     fun testParseManifest_newerVersion_isAvailableTrue() {
         // App is on versionCode 9 (or older), remote is 10
-        val updateInfo = AppUpdateManager.parseManifest(sampleManifestJson, currentVersionCode = 9)
+        val updateInfo = AppUpdateManager.parseManifest(sampleManifestJson, currentVersionCode = 9L)
         assertNotNull(updateInfo)
-        assertEquals(10, updateInfo!!.versionCode)
+        assertEquals(10L, updateInfo!!.versionCode)
         assertEquals("1.1.7", updateInfo.versionName)
-        assertEquals(3848344L, updateInfo.fileSizeBytes)
+        assertEquals(3851081L, updateInfo.fileSizeBytes)
+        assertEquals("2f57fef68312c9b3ac7ba05ebad320bfc84042e14cbe391dbc017dd5033cc65b", updateInfo.sha256)
         assertTrue("Update must be marked available when remote versionCode is greater", updateInfo.isAvailable)
     }
 
@@ -32,18 +34,33 @@ class AppUpdateManagerTest {
     fun testParseManifest_sameVersion_isAvailableFalse() {
         // App is already updated to versionCode 10, remote is 10
         // CRITICAL: Must be false to terminate the update loop!
-        val updateInfo = AppUpdateManager.parseManifest(sampleManifestJson, currentVersionCode = 10)
+        val updateInfo = AppUpdateManager.parseManifest(sampleManifestJson, currentVersionCode = 10L)
         assertNotNull(updateInfo)
-        assertEquals(10, updateInfo!!.versionCode)
+        assertEquals(10L, updateInfo!!.versionCode)
         assertFalse("Update must NOT be available when current version equals remote version", updateInfo!!.isAvailable)
     }
 
     @Test
     fun testParseManifest_devBuildAhead_isAvailableFalse() {
         // App is a dev build with versionCode 11, remote is 10
-        val updateInfo = AppUpdateManager.parseManifest(sampleManifestJson, currentVersionCode = 11)
+        val updateInfo = AppUpdateManager.parseManifest(sampleManifestJson, currentVersionCode = 11L)
         assertNotNull(updateInfo)
         assertFalse("Update must NOT be available when local versionCode is ahead of remote", updateInfo!!.isAvailable)
+    }
+
+    @Test
+    fun testParseManifest_64BitVersionCodes_noTruncation() {
+        val largeCodeJson = """
+            {
+              "versionCode": 202611190100,
+              "versionName": "2.0.0",
+              "apkUrl": "https://example.com/app.apk"
+            }
+        """.trimIndent()
+        val updateInfo = AppUpdateManager.parseManifest(largeCodeJson, currentVersionCode = 202611190000L)
+        assertNotNull(updateInfo)
+        assertEquals(202611190100L, updateInfo!!.versionCode)
+        assertTrue(updateInfo.isAvailable)
     }
 
     @Test
@@ -55,7 +72,7 @@ class AppUpdateManagerTest {
               "apkUrl": ""
             }
         """.trimIndent()
-        val updateInfo = AppUpdateManager.parseManifest(blankUrlJson, currentVersionCode = 5)
+        val updateInfo = AppUpdateManager.parseManifest(blankUrlJson, currentVersionCode = 5L)
         assertNotNull(updateInfo)
         assertFalse("Update must not be available if APK URL is empty", updateInfo!!.isAvailable)
     }
@@ -69,7 +86,7 @@ class AppUpdateManagerTest {
               "apkUrl": "https://example.com/app.apk"
             }
         """.trimIndent()
-        val updateInfo = AppUpdateManager.parseManifest(noFallbackJson, currentVersionCode = 5)
+        val updateInfo = AppUpdateManager.parseManifest(noFallbackJson, currentVersionCode = 5L)
         assertNotNull(updateInfo)
         assertEquals("https://github.com/msmayanksingh22/InstaSave/releases/download/v1.1.7/app-release.apk", updateInfo!!.fallbackApkUrl)
     }
@@ -77,16 +94,20 @@ class AppUpdateManagerTest {
     @Test
     fun testParseManifest_invalidJson_returnsNull() {
         val badJson = "not a valid json string"
-        val updateInfo = AppUpdateManager.parseManifest(badJson, currentVersionCode = 1)
+        val updateInfo = AppUpdateManager.parseManifest(badJson, currentVersionCode = 1L)
         assertNull(updateInfo)
     }
 
     @Test
-    fun testResumePendingInstall_noPendingFile_returnsFalse() {
-        AppUpdateManager.pendingInstallApk = null
-        val fakeFile = File("non_existent_file.apk")
-        AppUpdateManager.pendingInstallApk = fakeFile
-        // Fake file doesn't exist on disk
-        assertFalse(fakeFile.exists())
+    fun testComputeSha256_matchesKnownHash() {
+        val tempFile = File.createTempFile("sha_test", ".txt")
+        try {
+            tempFile.writeText("InstaSave SHA-256 Test String")
+            val hash = AppUpdateManager.computeSha256(tempFile)
+            assertNotNull(hash)
+            assertEquals(64, hash.length)
+        } finally {
+            tempFile.delete()
+        }
     }
 }

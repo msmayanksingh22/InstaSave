@@ -217,7 +217,13 @@ class DiagnosticsActivity : AppCompatActivity() {
                 downloadedApkFile = apk
                 tvUpdateStatus.text = "✓ Update v${updateInfo.versionName} ready to install!"
                 btnInstallUpdate.visibility = View.VISIBLE
-                AppUpdateManager.promptInstall(this@DiagnosticsActivity, apk)
+                AppUpdateManager.promptInstall(
+                    this@DiagnosticsActivity,
+                    apk,
+                    updateInfo.apkUrl,
+                    updateInfo.versionCode,
+                    updateInfo.sha256
+                )
             } else {
                 tvUpdateStatus.text = "Update download failed. Check internet connection."
             }

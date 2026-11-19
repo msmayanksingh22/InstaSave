@@ -1,8 +1,9 @@
 {
   "versionCode": 10,
   "versionName": "1.1.7",
-  "releaseNotes": "• Seamless In-App OTA Update: Direct native PackageInstaller without opening Chrome or external browser\n• Smart Return-from-Settings: Automatically prompts installation as soon as Unknown Sources permission is granted\n• Permanent Fix for Update Notification Loop: Version synchronization fully aligned\n• Fix: Re-download works flawlessly after deleting media from gallery\n• Full 15+ carousel extraction & high-speed pre-warmed background resolver",
+  "releaseNotes": "• Seamless In-App OTA Update: Direct native PackageInstaller without opening Chrome or external browser\n• Smart Return-from-Settings: Automatically prompts installation as soon as Unknown Sources permission is granted\n• Hardened Production OTA: SHA-256 integrity validation, pre-flight storage check & Package Visibility queries\n• Permanent Fix for Update Notification Loop: Version synchronization fully aligned\n• Fix: Re-download works flawlessly after deleting media from gallery\n• Full 15+ carousel extraction & high-speed pre-warmed background resolver",
   "apkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
   "fallbackApkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.1.7/app-release.apk",
-  "fileSizeBytes": 3848483
+  "fileSizeBytes": 3851081,
+  "sha256": "2f57fef68312c9b3ac7ba05ebad320bfc84042e14cbe391dbc017dd5033cc65b"
 }

@@ -342,7 +342,13 @@ class MainActivity : AppCompatActivity() {
             btnNegative.text = "Re-download"
 
             btnPositive.setOnClickListener {
-                com.instadown.assist.util.AppUpdateManager.promptInstall(this@MainActivity, existingApk)
+                com.instadown.assist.util.AppUpdateManager.promptInstall(
+                    this@MainActivity,
+                    existingApk,
+                    info.apkUrl,
+                    info.versionCode,
+                    info.sha256
+                )
             }
             btnNegative.setOnClickListener {
                 existingApk.delete()
@@ -409,10 +415,22 @@ class MainActivity : AppCompatActivity() {
                 btnNegative.text = "Dismiss"
                 dialog.setCancelable(true)
 
-                com.instadown.assist.util.AppUpdateManager.promptInstall(this@MainActivity, apk)
+                com.instadown.assist.util.AppUpdateManager.promptInstall(
+                    this@MainActivity,
+                    apk,
+                    info.apkUrl,
+                    info.versionCode,
+                    info.sha256
+                )
 
                 btnPositive.setOnClickListener {
-                    com.instadown.assist.util.AppUpdateManager.promptInstall(this@MainActivity, apk)
+                    com.instadown.assist.util.AppUpdateManager.promptInstall(
+                        this@MainActivity,
+                        apk,
+                        info.apkUrl,
+                        info.versionCode,
+                        info.sha256
+                    )
                 }
             } else {
                 tvTitle.text = "Download Failed"
