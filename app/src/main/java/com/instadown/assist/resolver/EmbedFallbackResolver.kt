@@ -22,6 +22,9 @@ class EmbedFallbackResolver(
                 .replace("&amp;", "&")
                 .replace("\\/", "/")
                 .replace("\\u0025", "%")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
                 .trim()
         }
 
@@ -62,62 +65,47 @@ class EmbedFallbackResolver(
                 )
             )
 
-        val embedUrl = "https://www.instagram.com/p/${normalized.shortcode}/embed/captioned/"
+        val pathTypesToTry = if (normalized.sourcePathType in listOf("reel", "reels", "r")) {
+            listOf("reel", "p")
+        } else {
+            listOf("p", "reel")
+        }
+
         var initialHost: String? = null
         var finalHost: String? = null
         var html: String? = null
+        var lastHttpCode = 0
 
-        try {
-            initialHost = URI(embedUrl).host
-            val request = Request.Builder()
-                .url(embedUrl)
-                .addHeader("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1")
-                .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                .build()
+        for (pathType in pathTypesToTry) {
+            val embedUrl = "https://www.instagram.com/$pathType/${normalized.shortcode}/embed/captioned/"
+            var candidateBody: String? = null
+            try {
+                initialHost = URI(embedUrl).host
+                val request = Request.Builder()
+                    .url(embedUrl)
+                    .addHeader("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1")
+                    .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    .build()
 
-            client.newCall(request).execute().use { response ->
-                val finalUrl = response.request.url.toString()
-                finalHost = URI(finalUrl).host
-                if (!response.isSuccessful) {
-                    return@withContext ResolveResult(
-                        success = false,
-                        originalInputUrl = url,
-                        canonicalUrl = normalized.canonicalUrl,
-                        shortcode = normalized.shortcode,
-                        sourcePathType = normalized.sourcePathType,
-                        postType = null,
-                        items = emptyList(),
-                        methodUsed = "EmbedFallbackResolver",
-                        totalResolutionTimeMs = System.currentTimeMillis() - startTime,
-                        initialHost = initialHost,
-                        finalHost = finalHost,
-                        error = ResolveError(
-                            code = if (response.code == 404) ResolveErrorCode.CONTENT_NOT_FOUND else ResolveErrorCode.NETWORK_ERROR,
-                            message = "Embed page returned HTTP ${response.code}"
-                        )
-                    )
+                client.newCall(request).execute().use { response ->
+                    lastHttpCode = response.code
+                    val finalUrl = response.request.url.toString()
+                    finalHost = URI(finalUrl).host
+                    if (response.isSuccessful) {
+                        candidateBody = response.body?.string()
+                    }
                 }
-                html = response.body?.string()
+            } catch (e: Exception) {
+                Log.w(TAG, "Embed fetch failed for $pathType: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Embed fetch failed", e)
-            return@withContext ResolveResult(
-                success = false,
-                originalInputUrl = url,
-                canonicalUrl = normalized.canonicalUrl,
-                shortcode = normalized.shortcode,
-                sourcePathType = normalized.sourcePathType,
-                postType = null,
-                items = emptyList(),
-                methodUsed = "EmbedFallbackResolver",
-                totalResolutionTimeMs = System.currentTimeMillis() - startTime,
-                initialHost = initialHost,
-                finalHost = finalHost,
-                error = ResolveError(
-                    code = ResolveErrorCode.NETWORK_ERROR,
-                    message = "Embed request exception: ${e.message}"
-                )
-            )
+
+            if (!candidateBody.isNullOrBlank() &&
+                !candidateBody!!.contains("httpErrorPage") &&
+                !candidateBody!!.contains("Page Not Found")
+            ) {
+                html = candidateBody
+                break
+            }
         }
 
         if (html.isNullOrBlank()) {
@@ -134,8 +122,8 @@ class EmbedFallbackResolver(
                 initialHost = initialHost,
                 finalHost = finalHost,
                 error = ResolveError(
-                    code = ResolveErrorCode.PARSE_ERROR,
-                    message = "Empty embed response"
+                    code = if (lastHttpCode == 404) ResolveErrorCode.CONTENT_NOT_FOUND else ResolveErrorCode.NETWORK_ERROR,
+                    message = if (lastHttpCode > 0) "Embed page returned HTTP $lastHttpCode" else "Failed to load embed page"
                 )
             )
         }

@@ -2,11 +2,14 @@ package com.instadown.assist.ui
 
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
+import android.app.Dialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -14,12 +17,17 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
+import android.view.Window
 import android.view.animation.DecelerateInterpolator
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -33,6 +41,9 @@ import androidx.recyclerview.widget.RecyclerView
 import com.instadown.assist.R
 import com.instadown.assist.data.StorageAccountant
 import com.instadown.assist.data.db.DownloadRepository
+import com.instadown.assist.overlay.ResilientHudBus
+import com.instadown.assist.overlay.ResilientHudState
+import com.instadown.assist.overlay.runHudTrackedOperation
 import com.instadown.assist.overlay.InstaSavePreferences
 import com.instadown.assist.service.FloatingTriggerService
 import com.instadown.assist.service.InstaAccessibilityService
@@ -613,16 +624,73 @@ class MainActivity : AppCompatActivity() {
         val current = prefs.saveLocationRelativePath
         val selectedIdx = options.indexOfFirst { it.equals(current, ignoreCase = true) }.coerceAtLeast(0)
 
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Select Save Location")
-            .setSingleChoiceItems(options, selectedIdx) { dialog, which ->
-                val chosen = options[which]
-                prefs.saveLocationRelativePath = chosen
-                onUpdated()
+        val dialog = Dialog(this)
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.card_background)
+            setPadding(48, 48, 48, 36)
+        }
+
+        val titleTv = TextView(this).apply {
+            text = "Select Save Location"
+            setTextColor(Color.WHITE)
+            textSize = 17f
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setPadding(0, 0, 0, 24)
+        }
+        container.addView(titleTv)
+
+        val radioGroup = RadioGroup(this)
+        options.forEachIndexed { index, path ->
+            val rb = RadioButton(this).apply {
+                text = path
+                setTextColor(Color.WHITE)
+                textSize = 14f
+                id = View.generateViewId()
+                isChecked = (index == selectedIdx)
+                buttonTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.insta_pink))
+                setPadding(16, 16, 16, 16)
+            }
+            radioGroup.addView(rb)
+        }
+        container.addView(radioGroup)
+
+        val btnLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END
+            setPadding(0, 24, 0, 0)
+        }
+
+        val btnCancel = Button(this, null, androidx.appcompat.R.attr.borderlessButtonStyle).apply {
+            text = "Cancel"
+            setTextColor(getColor(R.color.text_secondary))
+            setOnClickListener { dialog.dismiss() }
+        }
+
+        val btnSave = Button(this, null, androidx.appcompat.R.attr.borderlessButtonStyle).apply {
+            text = "Apply"
+            setTextColor(getColor(R.color.insta_pink))
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setOnClickListener {
+                val checkedId = radioGroup.checkedRadioButtonId
+                val checkedIndex = (0 until radioGroup.childCount).indexOfFirst { radioGroup.getChildAt(it).id == checkedId }
+                if (checkedIndex >= 0 && checkedIndex < options.size) {
+                    prefs.saveLocationRelativePath = options[checkedIndex]
+                    onUpdated()
+                }
                 dialog.dismiss()
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+        }
+
+        btnLayout.addView(btnCancel)
+        btnLayout.addView(btnSave)
+        container.addView(btnLayout)
+
+        dialog.setContentView(container)
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels * 0.90).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
+        dialog.show()
     }
 
     private fun checkClipboardForInstagramLink() {
@@ -812,100 +880,108 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun executeManualDownload(cleanUrl: String) {
-        val progressDialog = androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Resolving Link")
-            .setMessage("Fetching media info\u2026")
-            .setCancelable(false)
-            .create()
-        progressDialog.show()
+        Toast.makeText(this, "Resolving Instagram link...", Toast.LENGTH_SHORT).show()
 
         lifecycleScope.launch {
-            var resolveResult: com.instadown.assist.resolver.model.ResolveResult? = null
-            try {
-                resolveResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val operationResult = runHudTrackedOperation(initialLinkLabel = "Resolving Link...") { opId ->
+                ResilientHudBus.emit(ResilientHudState.Resolving(opId, "Resolving Instagram media..."))
+
+                val resolveResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     coordinator.resolver.resolve(cleanUrl, validateCdn = false)
                 }
-            } catch (e: Exception) {
-                progressDialog.dismiss()
-                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Error")
-                    .setMessage("Could not connect. Check internet and try again.\n${e.message}")
-                    .setPositiveButton("OK", null)
-                    .show()
-                return@launch
-            }
 
-            if (resolveResult == null || !resolveResult.success) {
-                progressDialog.dismiss()
-                val errMsg = resolveResult?.error?.message ?: "Unknown error"
-                val userMsg = when {
-                    errMsg.contains("timeout", ignoreCase = true) -> "Request timed out. Please try again."
-                    errMsg.contains("network", ignoreCase = true) || errMsg.contains("connect", ignoreCase = true) -> "No internet connection."
-                    errMsg.contains("private", ignoreCase = true) -> "This post is from a private account."
-                    errMsg.contains("not found", ignoreCase = true) || errMsg.contains("404") -> "Post not found or deleted."
-                    else -> "Could not load media. Please try again.\n\n${errMsg}"
+                if (!resolveResult.success || resolveResult.items.isEmpty()) {
+                    val errMsg = resolveResult.error?.message ?: "Could not resolve media"
+                    throw IllegalStateException(errMsg)
                 }
-                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Could Not Resolve")
-                    .setMessage(userMsg)
-                    .setPositiveButton("Retry") { _, _ -> executeManualDownload(cleanUrl) }
-                    .setNegativeButton("Cancel", null)
-                    .show()
-                return@launch
-            }
 
-            val behavior = prefs.carouselDownloadBehavior
-            val totalItems = resolveResult.items.size
+                val behavior = prefs.carouselDownloadBehavior
+                val totalItems = resolveResult.items.size
 
-            if (totalItems > 1 && behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.ASK) {
-                progressDialog.dismiss()
-                com.instadown.assist.ui.MediaSelectionActivity.start(this@MainActivity, cleanUrl, resolveResult)
-                return@launch
-            }
+                if (totalItems > 1 && behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.ASK) {
+                    ResilientHudBus.dismiss(opId)
+                    com.instadown.assist.ui.MediaSelectionActivity.start(this@MainActivity, cleanUrl, resolveResult)
+                    return@runHudTrackedOperation null
+                }
 
-            var targetIndices: Set<Int>? = null
-            if (totalItems > 1 && behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.CURRENT_ITEM) {
-                val observedSlide = com.instadown.assist.service.InstaAccessibilityService.lastObservedSlide
-                val slideEval = clipboardCoordinator.resolveCurrentSlideIndex(
-                    autoResult = null, totalMediaItems = totalItems, observedSlide = observedSlide
-                )
-                when (slideEval) {
-                    is com.instadown.assist.download.ClipboardDownloadCoordinator.SlideEvaluationResult.Valid ->
-                        targetIndices = setOf(slideEval.targetIndex)
-                    is com.instadown.assist.download.ClipboardDownloadCoordinator.SlideEvaluationResult.Ambiguous -> {
-                        progressDialog.dismiss()
-                        Toast.makeText(this@MainActivity, "Could not identify current slide.", Toast.LENGTH_LONG).show()
-                        return@launch
+                var targetIndices: Set<Int>? = null
+                if (totalItems > 1 && behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.CURRENT_ITEM) {
+                    val observedSlide = com.instadown.assist.service.InstaAccessibilityService.lastObservedSlide
+                    val slideEval = clipboardCoordinator.resolveCurrentSlideIndex(
+                        autoResult = null, totalMediaItems = totalItems, observedSlide = observedSlide
+                    )
+                    when (slideEval) {
+                        is com.instadown.assist.download.ClipboardDownloadCoordinator.SlideEvaluationResult.Valid ->
+                            targetIndices = setOf(slideEval.targetIndex)
+                        is com.instadown.assist.download.ClipboardDownloadCoordinator.SlideEvaluationResult.Ambiguous -> {
+                            ResilientHudBus.dismiss(opId)
+                            Toast.makeText(this@MainActivity, "Could not identify current slide.", Toast.LENGTH_LONG).show()
+                            return@runHudTrackedOperation null
+                        }
                     }
                 }
-            }
 
-            progressDialog.setTitle("Saving")
-            progressDialog.setMessage(
-                if (targetIndices != null) "Saving slide ${targetIndices!!.first() + 1} of ${totalItems}\u2026"
-                else if (totalItems > 1) "Saving ${totalItems} items\u2026"
-                else "Saving to gallery\u2026"
-            )
-
-            val downloadResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                coordinator.executeDirectDownload(
-                    url = cleanUrl, selectedIndices = targetIndices, preResolvedResult = resolveResult
+                ResilientHudBus.emit(
+                    ResilientHudState.Downloading(
+                        operationId = opId,
+                        currentIndex = 1,
+                        totalCount = targetIndices?.size ?: totalItems,
+                        downloadedBytes = 0L,
+                        totalBytes = 0L,
+                        percent = 15
+                    )
                 )
+
+                val downloadResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    coordinator.executeDirectDownload(
+                        url = cleanUrl, selectedIndices = targetIndices, preResolvedResult = resolveResult
+                    )
+                }
+
+                if (downloadResult.success || downloadResult.completedCount > 0) {
+                    val count = downloadResult.completedCount
+                    ResilientHudBus.emit(
+                        ResilientHudState.Success(
+                            operationId = opId,
+                            message = if (count > 1) "Saved $count items to gallery!" else "Saved to gallery!",
+                            totalItems = count
+                        )
+                    )
+                    downloadResult
+                } else {
+                    throw IllegalStateException(downloadResult.error ?: "Download write failed")
+                }
             }
 
-            progressDialog.dismiss()
-            if (downloadResult.success || downloadResult.completedCount > 0) {
-                val count = downloadResult.completedCount
-                Toast.makeText(this@MainActivity, if (count > 1) "\u2714 ${count} items saved" else "\u2714 Saved to gallery", Toast.LENGTH_SHORT).show()
-                loadRecentDownloads()
-                loadStorageSummary()
-            } else {
-                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Download Failed")
-                    .setMessage("Failed to save.\n\n${downloadResult.error ?: "Unknown error"}")
-                    .setPositiveButton("Retry") { _, _ -> executeManualDownload(cleanUrl) }
-                    .setNegativeButton("Cancel", null)
-                    .show()
+            operationResult.onSuccess { dlResult ->
+                if (dlResult != null) {
+                    val count = dlResult.completedCount
+                    Toast.makeText(this@MainActivity, if (count > 1) "✔ $count items saved" else "✔ Saved to gallery", Toast.LENGTH_SHORT).show()
+                    loadRecentDownloads()
+                    loadStorageSummary()
+                }
+            }.onFailure { err ->
+                val errMsg = err.message ?: "Unknown error"
+                val (userTitle, userSub) = when {
+                    errMsg.contains("timeout", ignoreCase = true) ->
+                        "Request Timed Out" to "The Instagram request took too long. Tap retry to try again."
+                    errMsg.contains("network", ignoreCase = true) || errMsg.contains("connect", ignoreCase = true) ->
+                        "No Internet Connection" to "Could not connect to the network. Please check your Wi-Fi or data connection."
+                    errMsg.contains("private", ignoreCase = true) ->
+                        "Private Account Post" to "This post is from a private account and cannot be downloaded anonymously."
+                    errMsg.contains("not found", ignoreCase = true) || errMsg.contains("404") ->
+                        "Post Not Found" to "This Instagram post was deleted or the link is invalid."
+                    else ->
+                        "Could Not Resolve Media" to "Could not load media streams from Instagram. Tap retry to attempt alternate resolution tiers."
+                }
+                val sheet = DownloadErrorBottomSheet.newInstance(
+                    title = userTitle,
+                    subtitle = userSub,
+                    diagnostic = errMsg,
+                    url = cleanUrl
+                )
+                sheet.setOnRetryListener { executeManualDownload(cleanUrl) }
+                sheet.show(supportFragmentManager, DownloadErrorBottomSheet.TAG)
             }
         }
     }

@@ -6,12 +6,14 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.widget.*
-import androidx.appcompat.app.AlertDialog
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -20,6 +22,7 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.instadown.assist.R
 import com.instadown.assist.data.StorageAccountant
+import com.instadown.assist.data.db.DeleteStorageResult
 import com.instadown.assist.data.db.DownloadRecord
 import com.instadown.assist.data.db.DownloadRepository
 import com.instadown.assist.data.db.TransactionStatus
@@ -66,6 +69,31 @@ class GalleryActivity : AppCompatActivity() {
         com.instadown.assist.data.MediaStoreSyncObserver(this, lifecycleScope)
     }
     private lateinit var adapter: GalleryAdapter
+
+    private var pendingConsentDownloadId: Long? = null
+    private var pendingConsentItemIds: List<Long>? = null
+
+    private val deleteConsentLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        val dlId = pendingConsentDownloadId
+        val itemIds = pendingConsentItemIds
+        pendingConsentDownloadId = null
+        pendingConsentItemIds = null
+        if (result.resultCode == RESULT_OK && dlId != null && itemIds != null) {
+            lifecycleScope.launch {
+                repo.finalizeConsentedDeletion(dlId, itemIds)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@GalleryActivity,
+                        "✓ Media deleted from device. Post preserved in History!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    loadGallery()
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -274,34 +302,62 @@ class GalleryActivity : AppCompatActivity() {
 
         val targetIds = adapter.selectedIds.toList()
 
-        AlertDialog.Builder(this)
-            .setTitle("Delete $count Item(s)?")
-            .setMessage("Choose whether to delete the physical files from your storage or just remove them from history.")
-            .setPositiveButton("Delete Files & History") { _, _ ->
+        val sheet = GalleryBatchOptionsBottomSheet.newInstance(targetIds)
+        sheet.setListener(object : GalleryBatchOptionsBottomSheet.Listener {
+            override fun onFreeUpStorage(selectedIds: List<Long>) {
+                lifecycleScope.launch {
+                    var freedCount = 0
+                    for (id in selectedIds) {
+                        when (val res = repo.deleteDeviceStorageOnly(id)) {
+                            is DeleteStorageResult.Completed -> {
+                                freedCount += res.deletedCount
+                            }
+                            is DeleteStorageResult.RequiresUserConsent -> {
+                                pendingConsentDownloadId = res.downloadId
+                                pendingConsentItemIds = res.pendingItemIds
+                                try {
+                                    deleteConsentLauncher.launch(
+                                        IntentSenderRequest.Builder(res.intentSender).build()
+                                    )
+                                } catch (e: Exception) {
+                                    Log.e("GalleryActivity", "Failed to launch delete consent: ${e.message}")
+                                }
+                            }
+                            is DeleteStorageResult.Failed -> {
+                                Log.w("GalleryActivity", "deleteDeviceStorageOnly failed for $id: ${res.reason}")
+                            }
+                        }
+                    }
+                    StorageAccountant.invalidateCache()
+                    Toast.makeText(
+                        this@GalleryActivity,
+                        "✓ Freed up storage for $count item(s). Posts preserved in History!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    exitSelectionMode()
+                    loadGallery()
+                }
+            }
+
+            override fun onPurgePermanently(selectedIds: List<Long>) {
                 lifecycleScope.launch {
                     var totalDeleted = 0
-                    for (id in targetIds) {
+                    for (id in selectedIds) {
                         val res = repo.deleteDownload(id, deleteFiles = true)
                         totalDeleted += res.filesDeleted
                     }
                     StorageAccountant.invalidateCache()
-                    Toast.makeText(this@GalleryActivity, "Deleted $totalDeleted file(s)", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this@GalleryActivity,
+                        "Permanently erased $count item(s) from history and storage",
+                        Toast.LENGTH_SHORT
+                    ).show()
                     exitSelectionMode()
                     loadGallery()
                 }
             }
-            .setNeutralButton("Remove from History Only") { _, _ ->
-                lifecycleScope.launch {
-                    for (id in targetIds) {
-                        repo.deleteDownload(id, deleteFiles = false)
-                    }
-                    Toast.makeText(this@GalleryActivity, "Removed $count item(s) from history", Toast.LENGTH_SHORT).show()
-                    exitSelectionMode()
-                    loadGallery()
-                }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        })
+        sheet.show(supportFragmentManager, GalleryBatchOptionsBottomSheet.TAG)
     }
 
     private fun setFilter(filter: FilterType) {

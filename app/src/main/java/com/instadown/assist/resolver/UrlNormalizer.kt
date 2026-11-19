@@ -13,11 +13,11 @@ data class NormalizedUrl(
 object UrlNormalizer {
 
     // Matches:
-    // /p/{code}, /reel/{code}, /reels/{code}, /tv/{code}
-    // /share/p/{code}, /share/reel/{code}, /share/{code}, /s/{code}
+    // /p/{code}, /reel/{code}, /reels/{code}, /tv/{code}, /r/{code}
+    // /share/p/{code}, /share/reel/{code}, /share/r/{code}, /share/{code}, /s/{code}
     // Supports domains: instagram.com, instagr.am, with optional http(s)
     private val INSTA_URL_PATTERN = Pattern.compile(
-        """(?:https?://(?:www\.)?(?:instagram\.com|instagr\.am))?/(?:share/)?(p|reel|reels|tv|share|s)/([a-zA-Z0-9_-]+)""",
+        """(?:https?://(?:www\.)?(?:instagram\.com|instagr\.am))?/(?:share/)?(p|reel|reels|tv|share|s|r)/([a-zA-Z0-9_-]+)""",
         Pattern.CASE_INSENSITIVE
     )
 
@@ -84,7 +84,7 @@ object UrlNormalizer {
 
         // Map share aliases to standard canonical types
         val canonicalPathType = when (rawPathType) {
-            "reel", "reels" -> "reel"
+            "reel", "reels", "r" -> "reel"
             "tv" -> "tv"
             "p", "share", "s" -> "p"
             else -> "p"
@@ -113,6 +113,71 @@ object UrlNormalizer {
             sourcePathType = rawPathType,
             queryParams = queryParams
         )
+    }
+
+    private val redirectProbeClient: okhttp3.OkHttpClient by lazy {
+        okhttp3.OkHttpClient.Builder()
+            .connectTimeout(4, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(6, java.util.concurrent.TimeUnit.SECONDS)
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build()
+    }
+
+    /**
+     * Resolves an Instagram URL to its canonical form, performing a fast HTTP redirect probe
+     * if the URL contains an opaque share token (/share/r/, /share/p/, /share/, /s/).
+     */
+    suspend fun resolveCanonical(
+        input: String,
+        client: okhttp3.OkHttpClient = redirectProbeClient
+    ): NormalizedUrl? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val extracted = extractUrlFromText(input) ?: input.trim()
+        val initialNormalized = normalize(extracted)
+
+        // If it's not a share token, initial normalization is already accurate
+        if (initialNormalized != null &&
+            !extracted.contains("/share/") &&
+            !extracted.contains("/s/") &&
+            initialNormalized.sourcePathType != "share" &&
+            initialNormalized.sourcePathType != "s" &&
+            initialNormalized.sourcePathType != "r"
+        ) {
+            return@withContext initialNormalized
+        }
+
+        // Fast HTTP probe to follow redirect and discover true shortcode
+        try {
+            val probeUrl = if (extracted.startsWith("http://") || extracted.startsWith("https://")) {
+                extracted
+            } else {
+                "https://$extracted"
+            }
+
+            val request = okhttp3.Request.Builder()
+                .url(probeUrl)
+                .head()
+                .header("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1")
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (response.code in 301..308) {
+                    val location = response.header("Location")
+                    if (!location.isNullOrBlank()) {
+                        val probedNormalized = normalize(location)
+                        if (probedNormalized != null) {
+                            com.instadown.assist.util.AppLogger.i("UrlNormalizer", "Probed share redirect: $extracted -> ${probedNormalized.canonicalUrl}")
+                            return@withContext probedNormalized
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            com.instadown.assist.util.AppLogger.w("UrlNormalizer", "Redirect probe error for $extracted: ${e.message}")
+        }
+
+        return@withContext initialNormalized
     }
 
     /**

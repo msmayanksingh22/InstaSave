@@ -236,13 +236,41 @@ object AppUpdateManager {
     }
 
     /**
-     * Checks if a newer version of InstaSave is available, with CDN cache busting.
+     * Checks if a newer version of InstaSave is available, with CDN cache busting and zero-delay tag probe.
      */
     suspend fun checkForUpdates(context: Context, customUrl: String? = null): AppUpdateInfo? = withContext(Dispatchers.IO) {
+        val currentVersionCode = getCurrentVersionCode(context)
+        val pInfo = try { context.packageManager.getPackageInfo(context.packageName, 0) } catch (e: Exception) { null }
+        val currentVersionName = pInfo?.versionName ?: "1.0.0"
+
+        if (customUrl.isNullOrBlank()) {
+            try {
+                AppLogger.i(TAG, "Checking for updates via DualSourceUpdateResolver...")
+                val resolver = DualSourceUpdateResolver(context, httpClient)
+                val otaInfo = resolver.fetchLatestRelease()
+                if (otaInfo != null) {
+                    val isAvailable = resolver.isUpdateNewer(otaInfo, currentVersionCode, currentVersionName)
+                    val updateInfo = AppUpdateInfo(
+                        versionCode = otaInfo.versionCode ?: (currentVersionCode + 1),
+                        versionName = otaInfo.versionName,
+                        releaseNotes = otaInfo.releaseNotes,
+                        apkUrl = otaInfo.apkUrl,
+                        fallbackApkUrl = "https://github.com/msmayanksingh22/InstaSave/releases/download/${otaInfo.tagName}/app-release.apk",
+                        fileSizeBytes = otaInfo.sizeBytes,
+                        sha256 = otaInfo.sha256,
+                        isAvailable = isAvailable
+                    )
+                    AppLogger.i(TAG, "DualSource update check: Current=$currentVersionCode ($currentVersionName), Remote=${updateInfo.versionCode} (${updateInfo.versionName}), Available=${updateInfo.isAvailable}")
+                    return@withContext updateInfo
+                }
+            } catch (e: Exception) {
+                AppLogger.w(TAG, "DualSource resolver failed, falling back to direct URL: ${e.message}")
+            }
+        }
+
         val targetUrl = customUrl?.ifBlank { null } ?: DEFAULT_UPDATE_URL
         try {
             AppLogger.i(TAG, "Checking for updates from $targetUrl...")
-            val currentVersionCode = getCurrentVersionCode(context)
 
             // Bust GitHub Raw and CDN caches by appending timestamp query and no-cache headers
             val separator = if (targetUrl.contains("?")) "&" else "?"

@@ -88,7 +88,7 @@ You are an expert principal Android systems engineer and architect working on In
   - `androidx.viewpager2:viewpager2:1.1.0`
   - `org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1`
   - `com.squareup.okhttp3:okhttp:4.12.0`
-- **Current Version**: `versionCode = 16`, `versionName = "1.2.4"`
+- **Current Version**: `versionCode = 17`, `versionName = "1.2.5"`
 
 ---
 
@@ -305,6 +305,36 @@ All release builds must be signed with the dedicated production keystore:
 - Prioritizes fast 250ms captioned embed extraction before slow headless WebViews, extracting high-res photos and Reels instantly.
 - Expanded regex patterns for modern Instagram video tags (`<video src="...">`), JSON `video_versions`, and CDN MP4 links, complete with unicode and slash unescaping (`\/`, `\u0026`).
 - Defers multi-item carousels to `HeadlessWebBridgeResolver` for full 15+ item DOM and Vue state extraction.
+
+### 25. Zero-Delay Dual-Source OTA Update Resolver
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/util/DualSourceUpdateResolver.kt`
+  - `app/src/main/java/com/instadown/assist/util/AppUpdateManager.kt`
+- Probes HTTP 302 redirect on `https://github.com/.../releases/latest` via HEAD request (0-second CDN lag, zero GitHub API quota consumption) to extract latest release tag.
+- Fetches release manifest directly from immutable release asset URL (`releases/download/{tag}/release-manifest.json`).
+- Falls back to ETag-cached GitHub REST API and raw manifest with hybrid SemVer and exact 64-bit `versionCode` validation.
+
+### 26. Modern Gallery Batch Storage Management
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/ui/GalleryBatchOptionsBottomSheet.kt`
+  - `app/src/main/res/layout/bottom_sheet_gallery_batch_options.xml`
+  - `app/src/main/java/com/instadown/assist/ui/GalleryActivity.kt`
+- Replaces legacy black-and-white `AlertDialog` dialogs with a Material 3 dark glassmorphic bottom sheet (`#161422`).
+- Defaults to "Free Up Phone Storage" (deleting physical `MediaStore` media while preserving History records, post author, and 20 KB cover thumbnails in `filesDir/thumbnails/${shortcode}.jpg`).
+- Supports Android 11–16 `MediaStore.createDeleteRequest` user consent via `ActivityResultContracts.StartIntentSenderForResult`.
+- Deeply tucks permanent history erase behind a collapsible "Archive Management (Danger Zone)" accordion with two-tap arming safety confirmation.
+
+### 27. Two-Stage 2026 Instagram URL Normalizer & Error HUD Sheet
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/resolver/UrlNormalizer.kt`
+  - `app/src/main/java/com/instadown/assist/resolver/CompositeInstagramResolver.kt`
+  - `app/src/main/java/com/instadown/assist/resolver/EmbedFallbackResolver.kt`
+  - `app/src/main/java/com/instadown/assist/ui/DownloadErrorBottomSheet.kt`
+  - `app/src/main/res/layout/bottom_sheet_download_error.xml`
+  - `app/src/main/java/com/instadown/assist/ui/MainActivity.kt`
+- Implements two-stage canonicalization: performs fast HTTP redirect probes on opaque `/share/r/`, `/share/p/`, `/share/`, and `/s/` tokens to discover true canonical post and reel shortcodes.
+- Multi-endpoint embed resolution tries both `/reel/` and `/p/` captioned embeds with unescaping of `&amp;`, `\u0026`, `\/`, `&lt;`, `&gt;`, and `&quot;`.
+- Eradicates blocking white modal dialogs in `MainActivity.kt` in favor of non-blocking background operations, real-time Dynamic Island HUD tracking, and `DownloadErrorBottomSheet` with 1-tap Retry, Open in Instagram, and Copy Debug Info.
 
 ---
 

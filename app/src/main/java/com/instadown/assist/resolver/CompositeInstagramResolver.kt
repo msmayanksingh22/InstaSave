@@ -65,13 +65,15 @@ class CompositeInstagramResolver(
 
     override suspend fun resolve(url: String, validateCdn: Boolean): ResolveResult {
         val startTime = System.currentTimeMillis()
-        AppLogger.i(TAG, "Starting multi-tier resolution for: $url")
+        val canonicalNormalized = UrlNormalizer.resolveCanonical(url)
+        val targetUrl = canonicalNormalized?.canonicalUrl ?: url
+        AppLogger.i(TAG, "Starting multi-tier resolution for: $url (canonical: $targetUrl)")
 
         // 0. TIER 0: Direct OkHttp GraphQL (Zero-WebView ~200ms) with Circuit Breaker
         if (!TierCircuitBreaker.isTripped("Tier0_GraphQL")) {
             val tier0Result = try {
                 withTimeoutOrNull(1500L) {
-                    directResolver.resolve(url, validateCdn)
+                    directResolver.resolve(targetUrl, validateCdn)
                 }
             } catch (e: Exception) {
                 AppLogger.w(TAG, "Tier 0 Direct OkHttp GraphQL exception: ${e.message}")
@@ -93,7 +95,7 @@ class CompositeInstagramResolver(
         // 1. TIER 1: Fast Embed Fallback (~250ms execution for single photos & reels)
         val fallbackResult = try {
             withTimeoutOrNull(FALLBACK_TIMEOUT_MS) {
-                fallbackResolver.resolve(url, validateCdn)
+                fallbackResolver.resolve(targetUrl, validateCdn)
             }
         } catch (e: Exception) {
             AppLogger.w(TAG, "Fast Embed fallback exception: ${e.message}")
@@ -109,7 +111,7 @@ class CompositeInstagramResolver(
         preWarm()
         if (webBridgeResolver != null) {
             AppLogger.i(TAG, "Attempting Headless Web Bridge for complete extraction...")
-            val bridgeResult = webBridgeResolver.resolve(url, validateCdn)
+            val bridgeResult = webBridgeResolver.resolve(targetUrl, validateCdn)
             if (bridgeResult.success && bridgeResult.items.isNotEmpty()) {
                 AppLogger.i(TAG, "Headless Web Bridge succeeded in ${bridgeResult.totalResolutionTimeMs}ms with ${bridgeResult.items.size} items!")
                 return bridgeResult
@@ -120,7 +122,7 @@ class CompositeInstagramResolver(
         // 3. TIER 3: WebPage SJS Resolver
         val sjsResult = try {
             withTimeoutOrNull(FALLBACK_TIMEOUT_MS) {
-                primaryResolver.resolve(url, validateCdn)
+                primaryResolver.resolve(targetUrl, validateCdn)
             }
         } catch (e: Exception) {
             AppLogger.w(TAG, "Tier 3 SJS resolver exception: ${e.message}")
@@ -135,9 +137,9 @@ class CompositeInstagramResolver(
         val finalResult = fallbackResult ?: sjsResult ?: ResolveResult(
             success = false,
             originalInputUrl = url,
-            canonicalUrl = null,
-            shortcode = null,
-            sourcePathType = null,
+            canonicalUrl = targetUrl,
+            shortcode = canonicalNormalized?.shortcode,
+            sourcePathType = canonicalNormalized?.sourcePathType,
             postType = null,
             items = emptyList(),
             methodUsed = "CompositeInstagramResolver",
