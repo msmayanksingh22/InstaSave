@@ -31,7 +31,7 @@ class HeadlessWebBridgeResolver(
 
     companion object {
         private const val TAG = "HeadlessWebBridge"
-        private const val EXTRACTOR_URL = "https://fastdl.app/en"
+        private const val EXTRACTOR_URL = "https://fastdl.app/"
         private const val TIMEOUT_MS = 14000L
         private const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
@@ -51,6 +51,10 @@ class HeadlessWebBridgeResolver(
             settings.databaseEnabled = true
             settings.loadsImagesAutomatically = false // Prevent heavy ad/image downloads
             settings.userAgentString = DESKTOP_UA // Desktop UA prevents "Download our Android app" banners!
+            try {
+                webView.resumeTimers()
+                webView.onResume()
+            } catch (_: Exception) {}
         }
 
         fun preWarm(context: Context) {
@@ -207,6 +211,7 @@ class HeadlessWebBridgeResolver(
                 if (isFinished) return
                 isFinished = true
                 activeBridgeCallback = null
+                com.instadown.assist.util.AppLogger.i(TAG, "Headless web bridge finished with success: ${items.size} items")
 
                 if (usingPrewarmed) {
                     isPrewarmBusy = false
@@ -284,6 +289,7 @@ class HeadlessWebBridgeResolver(
                 if (isFinished) return
                 isFinished = true
                 activeBridgeCallback = null
+                com.instadown.assist.util.AppLogger.w(TAG, "Headless web bridge finished with error: $errorMsg")
 
                 if (usingPrewarmed) {
                     isPrewarmBusy = false
@@ -348,6 +354,10 @@ class HeadlessWebBridgeResolver(
             if (usingPrewarmed && prewarmedWebView != null) {
                 isPrewarmBusy = true
                 Log.i(TAG, "Executing INSTANT resolution using pre-warmed WebView for: $targetUrl")
+                try {
+                    prewarmedWebView?.resumeTimers()
+                    prewarmedWebView?.onResume()
+                } catch (_: Exception) {}
                 prewarmedWebView?.evaluateJavascript(injectionJs, null)
             } else {
                 Log.i(TAG, "Pre-warmed WebView not ready. Launching on-demand WebView for: $targetUrl")

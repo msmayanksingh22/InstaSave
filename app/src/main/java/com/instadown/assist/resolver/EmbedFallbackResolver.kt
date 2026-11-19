@@ -172,7 +172,7 @@ class EmbedFallbackResolver(
                 html!!.contains("class=\"Carousel")
 
         if (isCarousel) {
-            Log.i(TAG, "Embed payload represents a carousel (edge_sidecar_to_children / carousel indicators). Deferring to bridge resolver for complete extraction.")
+            com.instadown.assist.util.AppLogger.i(TAG, "Embed payload represents carousel. Deferring to HeadlessWebBridgeResolver for full extraction.")
             return@withContext ResolveResult(
                 success = false,
                 isPartial = true,

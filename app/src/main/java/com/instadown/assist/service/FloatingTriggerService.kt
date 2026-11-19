@@ -477,6 +477,12 @@ class FloatingTriggerService : Service() {
                             DownloadErrorCode.MEDIA_URL_EXPIRED -> "Couldn't resolve media"
                             else -> "Couldn't download media"
                         }
+                        com.instadown.assist.overlay.FloatingHudBus.emit(
+                            com.instadown.assist.overlay.FloatingHudState.Error(
+                                shortcode = result.shortcode ?: "",
+                                message = failMsg
+                            )
+                        )
                         Toast.makeText(this, failMsg, Toast.LENGTH_SHORT).show()
                     }
 

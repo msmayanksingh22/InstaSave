@@ -73,8 +73,9 @@ class FloatingHudOverlayController(private val context: Context) {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                     }
                     context.startActivity(intent)
-                    FloatingHudBus.reset()
                 }
+                // Tapping the pill at any time dismisses it immediately
+                FloatingHudBus.reset()
             }
         }
         pillView = view
@@ -134,6 +135,23 @@ class FloatingHudOverlayController(private val context: Context) {
         pillView?.bindState(state)
 
         when (state) {
+            is FloatingHudState.LinkDetected -> {
+                // Pulse state: auto-dismiss after 3.5s if resolving does not start
+                dismissRunnable = Runnable { FloatingHudBus.reset() }
+                mainHandler.postDelayed(dismissRunnable!!, 3500)
+            }
+            is FloatingHudState.Resolving -> {
+                // Safeguard: auto-timeout resolution state after 14s
+                dismissRunnable = Runnable {
+                    FloatingHudBus.emit(FloatingHudState.Error("", "Resolution timed out"))
+                }
+                mainHandler.postDelayed(dismissRunnable!!, 14000)
+            }
+            is FloatingHudState.Downloading -> {
+                // Safeguard: auto-reset if download hangs longer than 45s
+                dismissRunnable = Runnable { FloatingHudBus.reset() }
+                mainHandler.postDelayed(dismissRunnable!!, 45000)
+            }
             is FloatingHudState.Success -> {
                 dismissRunnable = Runnable { FloatingHudBus.reset() }
                 mainHandler.postDelayed(dismissRunnable!!, 2500)
@@ -142,8 +160,8 @@ class FloatingHudOverlayController(private val context: Context) {
                 dismissRunnable = Runnable { FloatingHudBus.reset() }
                 mainHandler.postDelayed(dismissRunnable!!, 3200)
             }
-            else -> {
-                // In-progress states (LinkDetected, Resolving, Downloading) persist until next state
+            is FloatingHudState.Idle -> {
+                // Already handled above
             }
         }
     }

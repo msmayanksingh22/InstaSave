@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.instadown.assist.resolver.model.ResolveErrorCode
 import com.instadown.assist.resolver.model.ResolveResult
+import com.instadown.assist.util.AppLogger
 import kotlinx.coroutines.withTimeoutOrNull
 
 class CompositeInstagramResolver(
@@ -32,6 +33,7 @@ class CompositeInstagramResolver(
 
     override suspend fun resolve(url: String, validateCdn: Boolean): ResolveResult {
         val startTime = System.currentTimeMillis()
+        AppLogger.i(TAG, "Starting multi-tier resolution for: $url")
 
         // 0. TIER 0: Ultra-fast Direct OkHttp GraphQL (Zero-WebView 180ms - 350ms)
         val tier0Result = try {
@@ -39,12 +41,12 @@ class CompositeInstagramResolver(
                 directResolver.resolve(url, validateCdn)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Tier 0 Direct OkHttp GraphQL exception", e)
+            AppLogger.w(TAG, "Tier 0 Direct OkHttp GraphQL exception: ${e.message}")
             null
         }
 
         if (tier0Result != null && tier0Result.success && tier0Result.items.isNotEmpty()) {
-            Log.i(TAG, "Tier 0 (Direct OkHttp GraphQL) succeeded in ${System.currentTimeMillis() - startTime}ms with ${tier0Result.items.size} items!")
+            AppLogger.i(TAG, "Tier 0 (GraphQL) succeeded in ${System.currentTimeMillis() - startTime}ms with ${tier0Result.items.size} items!")
             return tier0Result
         }
 
@@ -55,10 +57,10 @@ class CompositeInstagramResolver(
         if (webBridgeResolver != null) {
             val bridgeResult = webBridgeResolver.resolve(url, validateCdn)
             if (bridgeResult.success && bridgeResult.items.isNotEmpty()) {
-                Log.i(TAG, "Tier 1 (Headless Web Bridge) succeeded in ${bridgeResult.totalResolutionTimeMs}ms with ${bridgeResult.items.size} items!")
+                AppLogger.i(TAG, "Tier 1 (Headless Web Bridge) succeeded in ${bridgeResult.totalResolutionTimeMs}ms with ${bridgeResult.items.size} items!")
                 return bridgeResult
             }
-            Log.w(TAG, "Tier 1 Web Bridge did not succeed: ${bridgeResult.error?.message}. Attempting fast fallbacks...")
+            AppLogger.w(TAG, "Tier 1 Web Bridge did not succeed: ${bridgeResult.error?.message}. Attempting fast fallbacks...")
         }
 
         // 2. TIER 2: Fast Embed Fallback
@@ -67,12 +69,12 @@ class CompositeInstagramResolver(
                 fallbackResolver.resolve(url, validateCdn)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Fallback resolver exception", e)
+            AppLogger.w(TAG, "Tier 2 Embed fallback exception: ${e.message}")
             null
         }
 
         if (fallbackResult != null && fallbackResult.success && fallbackResult.items.isNotEmpty()) {
-            Log.i(TAG, "Tier 2 (Embed Fallback) succeeded in ${System.currentTimeMillis() - startTime}ms")
+            AppLogger.i(TAG, "Tier 2 (Embed Fallback) succeeded in ${System.currentTimeMillis() - startTime}ms with ${fallbackResult.items.size} items!")
             return fallbackResult
         }
 
@@ -82,17 +84,16 @@ class CompositeInstagramResolver(
                 primaryResolver.resolve(url, validateCdn)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "SJS resolver exception", e)
+            AppLogger.w(TAG, "Tier 3 SJS resolver exception: ${e.message}")
             null
         }
 
         if (sjsResult != null && sjsResult.success && sjsResult.items.isNotEmpty()) {
-            Log.i(TAG, "Tier 3 (SJS Resolver) succeeded in ${System.currentTimeMillis() - startTime}ms")
+            AppLogger.i(TAG, "Tier 3 (SJS Resolver) succeeded in ${System.currentTimeMillis() - startTime}ms with ${sjsResult.items.size} items!")
             return sjsResult
         }
 
-        // If all tiers failed, return the primary error
-        return fallbackResult ?: sjsResult ?: ResolveResult(
+        val finalResult = fallbackResult ?: sjsResult ?: ResolveResult(
             success = false,
             originalInputUrl = url,
             canonicalUrl = null,
@@ -107,5 +108,7 @@ class CompositeInstagramResolver(
                 message = "Failed to resolve Instagram post media"
             )
         )
+        AppLogger.e(TAG, "All resolution tiers failed for $url: ${finalResult.error?.message}")
+        return finalResult
     }
 }

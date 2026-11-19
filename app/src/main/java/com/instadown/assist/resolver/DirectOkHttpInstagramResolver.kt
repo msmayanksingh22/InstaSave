@@ -171,6 +171,7 @@ class DirectOkHttpInstagramResolver(
         try {
             client.newCall(request).execute().use { response ->
                 if (response.code in 300..399 || response.code == 401 || response.code == 429) {
+                    com.instadown.assist.util.AppLogger.d("DirectOkHttpResolver", "GraphQL unauthenticated challenge: HTTP ${response.code}")
                     return@withContext FastResolveOutcome.FallbackNeeded(
                         reason = "Auth/rate challenge",
                         httpCode = response.code

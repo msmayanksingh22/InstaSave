@@ -160,7 +160,12 @@ class InstagramDownloadCoordinator(
         )
 
         // 1. Resolve media metadata first so actual post type and item count are known
-        withContext(Dispatchers.Main) { onStatusUpdate?.invoke("Resolving post...") }
+        withContext(Dispatchers.Main) {
+            onStatusUpdate?.invoke("Resolving post...")
+            com.instadown.assist.overlay.FloatingHudBus.emit(
+                com.instadown.assist.overlay.FloatingHudState.Resolving(autoShortcode, "Resolving Post...")
+            )
+        }
         val resolveStart = System.currentTimeMillis()
         val resolveResult = resolver.resolve(autoResult.instagramUrl, validateCdn = false)
         val resolveLatency = System.currentTimeMillis() - resolveStart
@@ -180,6 +185,12 @@ class InstagramDownloadCoordinator(
                 elapsedTimeMs = resolveLatency,
                 error = resolveResult.error?.message ?: "Failed to resolve media metadata",
                 errorCode = DownloadErrorCode.RESOLUTION_FAILED
+            )
+            com.instadown.assist.overlay.FloatingHudBus.emit(
+                com.instadown.assist.overlay.FloatingHudState.Error(
+                    shortcode = autoShortcode,
+                    message = "Could not resolve post"
+                )
             )
             withContext(Dispatchers.Main) {
                 onStatusUpdate?.invoke("FAIL: ${fail.error?.take(25)}")
