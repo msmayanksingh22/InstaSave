@@ -144,6 +144,19 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnViewDiagnosticLogs).setOnClickListener {
             showDiagnosticLogsDialog()
         }
+
+        // Share InstaSave with Friends
+        findViewById<Button>(R.id.btnShareApp)?.setOnClickListener {
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, "InstaSave for Android")
+                putExtra(
+                    Intent.EXTRA_TEXT,
+                    "Download InstaSave — the fastest, private, watermark-free Instagram media downloader for Android!\n\nDownload latest APK:\nhttps://github.com/msmayanksingh22/InstaSave/releases/latest"
+                )
+            }
+            startActivity(Intent.createChooser(shareIntent, "Share InstaSave with Friends"))
+        }
     }
 
     private fun showDiagnosticLogsDialog() {

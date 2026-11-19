@@ -4,6 +4,6 @@
   "releaseNotes": "• Android 16 Scoped Storage Consent: Full support for MediaStore.createDeleteRequest on Android 11–16, safely handling storage clearance for reinstalls and legacy downloads while keeping history records intact.\n• Seamless Zero-Flicker Native Splash Screen: Integrated androidx.core:core-splashscreen directly into MainActivity, eliminating trampoline flickers and preserving full ClipData intents and Predictive Back physics.\n• Hardened Self-Updater & APK Signature Verification: Enterprise-grade updater verifying device policy (DISALLOW_INSTALL_UNKNOWN_SOURCES), cryptographic APK signing certificates against running app, and cross-process ClipData grants for dual-installer OEMs.\n• EMA Monotonic Transfer Rate & ETA Smoothing: Real-time download progress displaying exponentially smoothed network throughput and accurate time remaining.",
   "apkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
   "fallbackApkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.2.2/app-release.apk",
-  "fileSizeBytes": 3998610,
-  "sha256": "355dbdd547b78c441a53b02ac86f853cdb80c7869c3ba9aa6302aa976400bcd7"
+  "fileSizeBytes": 3999070,
+  "sha256": "479d2fd48ed03aa7fb98edb8751710502f0a2fb4b2582bf82d5e81325880aac1"
 }
