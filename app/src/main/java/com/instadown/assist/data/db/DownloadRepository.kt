@@ -183,7 +183,9 @@ class DownloadRepository private constructor(private val context: Context) {
 
     suspend fun recordDownloadResult(
         result: com.instadown.assist.download.model.DownloadResult,
-        thumbnailPath: String? = null
+        thumbnailPath: String? = null,
+        authorUsername: String? = null,
+        caption: String? = null
     ): Long = withContext(Dispatchers.IO) {
         if (result.transactionId.startsWith("AUTO_FAIL_") ||
             result.transactionId.startsWith("NO_A11Y") ||
@@ -249,6 +251,8 @@ class DownloadRepository private constructor(private val context: Context) {
                 totalBytes = result.totalBytes,
                 timestamp = System.currentTimeMillis(),
                 items = itemEvents,
+                authorUsername = authorUsername,
+                caption = caption,
                 thumbnailPath = resolvedThumbPath
             )
             val rowId = recordTransaction(event)

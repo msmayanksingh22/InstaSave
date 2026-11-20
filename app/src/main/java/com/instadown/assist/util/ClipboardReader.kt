@@ -5,14 +5,16 @@ import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.util.Log
+import com.instadown.assist.resolver.UrlNormalizer
 import java.util.regex.Pattern
 
 object ClipboardReader {
-    private const val TAG = "InstaDownloaderPOC"
+    private const val TAG = "ClipboardReader"
 
-    // Matches https://www.instagram.com/p/... or /reel/... or /reels/... or without www
+    // Legacy fallback regex matching https://www.instagram.com/p/... or /reel/...
     val INSTAGRAM_URL_REGEX: Pattern = Pattern.compile(
-        "https?://(?:www\\.)?instagram\\.com/(?:p|reel|reels)/([a-zA-Z0-9_-]+)/?.*"
+        """https?://(?:www\.)?(?:instagram\.com|instagr\.am)/(?:p|reel|reels|share|tv)/([a-zA-Z0-9_-]+)/?.*""",
+        Pattern.CASE_INSENSITIVE
     )
 
     data class ClipResult(
@@ -57,6 +59,8 @@ object ClipboardReader {
         val (isValid, cleanUrl) = validateInstagramUrl(rawText)
         val clipTime = description?.timestamp ?: 0L
 
+        AppLogger.d(TAG, "readCurrentClip: rawText='${rawText.take(60)}', isValid=$isValid, cleanUrl='$cleanUrl', clipTime=$clipTime")
+
         return ClipResult(
             text = rawText,
             mimeTypes = mimes,
@@ -66,8 +70,20 @@ object ClipboardReader {
         )
     }
 
+    /**
+     * Validates and extracts an Instagram post/reel/carousel link from raw text.
+     * Uses UrlNormalizer for comprehensive 2026 support (/share/r/, /share/p/, /share/, /s/, /tv/, captions).
+     */
     fun validateInstagramUrl(text: String): Pair<Boolean, String> {
         if (text.isBlank()) return false to ""
+        
+        // 1. Primary: Use 2026 UrlNormalizer (handles share tokens, embedded text, shortcodes)
+        val normalized = UrlNormalizer.normalize(text)
+        if (normalized != null && normalized.shortcode.isNotBlank()) {
+            return true to normalized.originalUrl
+        }
+
+        // 2. Secondary fallback: Regex match
         val matcher = INSTAGRAM_URL_REGEX.matcher(text)
         return if (matcher.find()) {
             val url = matcher.group()

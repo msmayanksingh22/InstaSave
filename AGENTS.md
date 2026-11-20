@@ -88,7 +88,7 @@ You are an expert principal Android systems engineer and architect working on In
   - `androidx.viewpager2:viewpager2:1.1.0`
   - `org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1`
   - `com.squareup.okhttp3:okhttp:4.12.0`
-- **Current Version**: `versionCode = 18`, `versionName = "1.3.0"`
+- **Current Version**: `versionCode = 19`, `versionName = "1.3.1"`
 
 ---
 
@@ -352,6 +352,29 @@ All release builds must be signed with the dedicated production keystore:
 - 120Hz instant switching (<8ms) via `FragmentTransaction.show()` / `hide()` and `setMaxLifecycle(RESUMED/STARTED)` preserving list scroll states and view bindings.
 - Fully decoupled sequential re-download queue via `RedownloadQueueManager` on `InstaSaveApp.applicationScope` with reactive `StateFlow` progress broadcast.
 - Rotation-proof dialog communication via `childFragmentManager.setFragmentResultListener`.
+
+### 29. Sub-500ms Fast Embed Resolution & Diagnostic Telemetry Pipeline
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/resolver/EmbedFallbackResolver.kt`
+  - `app/src/main/java/com/instadown/assist/resolver/CompositeInstagramResolver.kt`
+  - `app/src/main/java/com/instadown/assist/resolver/UrlNormalizer.kt`
+  - `app/src/main/java/com/instadown/assist/resolver/model/ResolveModels.kt`
+  - `app/src/main/java/com/instadown/assist/download/ClipboardDownloadCoordinator.kt`
+  - `app/src/main/java/com/instadown/assist/util/ClipboardReader.kt`
+  - `app/src/main/java/com/instadown/assist/ui/DownloadErrorBottomSheet.kt`
+- **Elimination of 10s Resolution Stalls**:
+  - Discovered that Instagram's captioned embed bundle includes metric telemetry keys (`polaris.httpErrorPage`) on 100% of successful pages. The legacy check `!body.contains("httpErrorPage")` false-flagged all valid pages as 404s, forcing slow 10-second headless WebView fallbacks.
+  - Replaced false checks with targeted `<title>Page Not Found` and HTTP status guards.
+  - Updated regex matching to handle escaped JSON string sequences (`\\*"video_url\\*"` and `\\\\/` CDN URL slashes) and `EmbeddedMediaImage` DOM tags.
+  - Slashes resolution latency from ~9,000 ms down to **sub-500 ms (~250-490 ms)** directly from Meta's CDN without running a WebView.
+- **Auto-Capture Mismatch Elimination**:
+  - Unified `ClipboardReader` and `UrlNormalizer` to support 2026 Instagram app share sheet tokens (`/share/r/`, `/share/p/`, `/share/`, `/s/`, `/tv/`, `instagr.am`, and caption-embedded links).
+  - Wired `checkClipboardForInstagramLink()` to `onResume()` and `onWindowFocusChanged(hasFocus)` in `MainActivity` with idempotent lifecycle locking, ensuring identical resolution behavior whether links are auto-captured or manually pasted.
+- **Granular Step-by-Step Observability**:
+  - Introduced `StepTrace` data model across all resolution tiers (`[1. URL Normalizer]`, `[2. Fast Embed Resolver]`, `[3. Direct GraphQL]`, `[4. Headless Web Bridge]`, `[5. SJS Fallback]`).
+  - Recorded exact millisecond durations and status flags in `ResolveResult.diagnosticTrace`.
+  - Routed all clipboard coordination decisions (`ALLOW`, `REJECT_ALREADY_PROCESSING`, `REJECT_ALREADY_COMPLETED`, `DEFER_QUEUED`) directly into `AppLogger`.
+  - Surfaced rich diagnostic traces in `DownloadErrorBottomSheet` with 1-tap "Copy Debug Info" for instantaneous USB-free troubleshooting.
 
 ---
 

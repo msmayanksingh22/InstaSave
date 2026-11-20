@@ -88,6 +88,19 @@ data class StageBResult(
     val error: String? = null
 )
 
+data class StepTrace(
+    val stepIndex: Int,
+    val stepName: String,
+    val durationMs: Long,
+    val success: Boolean,
+    val details: String
+) {
+    override fun toString(): String {
+        val status = if (success) "✔ OK" else "✘ FAIL"
+        return "[$stepIndex. $stepName] ${durationMs}ms -> $status: $details"
+    }
+}
+
 data class ResolveResult(
     val success: Boolean,
     val isPartial: Boolean = false,
@@ -105,5 +118,26 @@ data class ResolveResult(
     val stageB: StageBResult? = null,
     val initialHost: String? = null,
     val finalHost: String? = null,
-    val error: ResolveError? = null
-)
+    val authorUsername: String? = null,
+    val caption: String? = null,
+    val error: ResolveError? = null,
+    val diagnosticTrace: List<StepTrace> = emptyList()
+) {
+    val formattedTrace: String
+        get() = buildString {
+            if (diagnosticTrace.isNotEmpty()) {
+                appendLine("=== RESOLUTION DIAGNOSTIC TRACE ===")
+                diagnosticTrace.forEach { appendLine(it.toString()) }
+                appendLine("===================================")
+            }
+            appendLine("Method: $methodUsed (${totalResolutionTimeMs}ms)")
+            if (success) {
+                appendLine("Items: ${items.size} media stream(s) found")
+            } else {
+                appendLine("Error [${error?.code}]: ${error?.message}")
+                if (!error?.rawDetails.isNullOrBlank()) {
+                    appendLine("Details: ${error?.rawDetails}")
+                }
+            }
+        }
+}

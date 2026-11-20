@@ -65,35 +65,50 @@ class CompositeInstagramResolver(
 
     override suspend fun resolve(url: String, validateCdn: Boolean): ResolveResult {
         val startTime = System.currentTimeMillis()
+        val trace = mutableListOf<com.instadown.assist.resolver.model.StepTrace>()
+        var stepIndex = 1
+
+        // Step 1: URL Normalization & Canonical Redirect Probe
+        val step1Start = System.currentTimeMillis()
         val canonicalNormalized = UrlNormalizer.resolveCanonical(url)
         val targetUrl = canonicalNormalized?.canonicalUrl ?: url
-        AppLogger.i(TAG, "Starting multi-tier resolution for: $url (canonical: $targetUrl)")
+        val step1Dur = System.currentTimeMillis() - step1Start
+        val normSuccess = canonicalNormalized != null && canonicalNormalized.shortcode.isNotBlank()
+        trace.add(
+            com.instadown.assist.resolver.model.StepTrace(
+                stepIndex = stepIndex++,
+                stepName = "URL Normalizer",
+                durationMs = step1Dur,
+                success = normSuccess,
+                details = if (normSuccess) "Shortcode=${canonicalNormalized?.shortcode}, Type=${canonicalNormalized?.sourcePathType}, Canonical=$targetUrl" else "Could not extract valid shortcode"
+            )
+        )
+        AppLogger.i(TAG, "Step 1: ${trace.last()}")
 
-        // 0. TIER 0: Direct OkHttp GraphQL (Zero-WebView ~200ms) with Circuit Breaker
-        if (!TierCircuitBreaker.isTripped("Tier0_GraphQL")) {
-            val tier0Result = try {
-                withTimeoutOrNull(1500L) {
-                    directResolver.resolve(targetUrl, validateCdn)
-                }
-            } catch (e: Exception) {
-                AppLogger.w(TAG, "Tier 0 Direct OkHttp GraphQL exception: ${e.message}")
-                null
-            }
-
-            if (tier0Result != null && tier0Result.success && tier0Result.items.isNotEmpty()) {
-                TierCircuitBreaker.reset("Tier0_GraphQL")
-                AppLogger.i(TAG, "Tier 0 (GraphQL) succeeded in ${System.currentTimeMillis() - startTime}ms with ${tier0Result.items.size} items!")
-                return tier0Result
-            } else if (tier0Result?.error?.code == ResolveErrorCode.AUTH_REQUIRED || tier0Result?.error?.code == ResolveErrorCode.RATE_LIMITED) {
-                AppLogger.w(TAG, "Tier 0 received unauthenticated login/rate challenge. Tripping circuit breaker for 10 minutes.")
-                TierCircuitBreaker.trip("Tier0_GraphQL")
-            }
-        } else {
-            AppLogger.d(TAG, "Tier 0 GraphQL circuit breaker is active (cooldown). Bypassing to fast fallbacks.")
+        if (!normSuccess) {
+            val errResult = ResolveResult(
+                success = false,
+                originalInputUrl = url,
+                canonicalUrl = null,
+                shortcode = null,
+                sourcePathType = null,
+                postType = null,
+                items = emptyList(),
+                methodUsed = "UrlNormalizer",
+                totalResolutionTimeMs = System.currentTimeMillis() - startTime,
+                error = com.instadown.assist.resolver.model.ResolveError(
+                    code = ResolveErrorCode.UNSUPPORTED_URL,
+                    message = "Could not parse a valid Instagram shortcode from URL: '$url'"
+                ),
+                diagnosticTrace = trace
+            )
+            AppLogger.e(TAG, errResult.formattedTrace)
+            return errResult
         }
 
-        // 1. TIER 1: Fast Embed Fallback (~250ms execution for single photos & reels)
-        val fallbackResult = try {
+        // Step 2: High-Speed Fast Embed Resolver (~250-400ms for single photos & reels)
+        val step2Start = System.currentTimeMillis()
+        val embedResult = try {
             withTimeoutOrNull(FALLBACK_TIMEOUT_MS) {
                 fallbackResolver.resolve(targetUrl, validateCdn)
             }
@@ -101,25 +116,131 @@ class CompositeInstagramResolver(
             AppLogger.w(TAG, "Fast Embed fallback exception: ${e.message}")
             null
         }
+        val step2Dur = System.currentTimeMillis() - step2Start
+        val embedSuccess = embedResult != null && embedResult.success && embedResult.items.isNotEmpty()
+        val isEmbedCarousel = embedResult?.isPartial == true && embedResult.postType == PostType.CAROUSEL
 
-        if (fallbackResult != null && fallbackResult.success && fallbackResult.items.isNotEmpty()) {
-            AppLogger.i(TAG, "Fast Embed succeeded in ${System.currentTimeMillis() - startTime}ms with ${fallbackResult.items.size} items!")
-            return fallbackResult
+        trace.add(
+            com.instadown.assist.resolver.model.StepTrace(
+                stepIndex = stepIndex++,
+                stepName = "Fast Embed Resolver",
+                durationMs = step2Dur,
+                success = embedSuccess,
+                details = when {
+                    embedSuccess -> "Extracted ${embedResult?.items?.size} items (${embedResult?.postType}) directly from Meta CDN"
+                    isEmbedCarousel -> "Detected multi-item carousel (deferring to Headless Web Bridge)"
+                    embedResult != null -> "Failed: ${embedResult.error?.message}"
+                    else -> "Timed out after ${FALLBACK_TIMEOUT_MS}ms"
+                }
+            )
+        )
+        AppLogger.i(TAG, "Step 2: ${trace.last()}")
+
+        // Instant return if Fast Embed resolved single photo or reel
+        if (embedSuccess && embedResult != null) {
+            val finalRes = embedResult.copy(
+                totalResolutionTimeMs = System.currentTimeMillis() - startTime,
+                diagnosticTrace = trace
+            )
+            AppLogger.i(TAG, "Resolution completed successfully via Fast Embed in ${finalRes.totalResolutionTimeMs}ms:\n${finalRes.formattedTrace}")
+            return finalRes
         }
 
-        // 2. TIER 2: Headless Web Bridge (Executed for full 15+ carousels or if embed fails)
-        preWarm()
-        if (webBridgeResolver != null) {
-            AppLogger.i(TAG, "Attempting Headless Web Bridge for complete extraction...")
-            val bridgeResult = webBridgeResolver.resolve(targetUrl, validateCdn)
-            if (bridgeResult.success && bridgeResult.items.isNotEmpty()) {
-                AppLogger.i(TAG, "Headless Web Bridge succeeded in ${bridgeResult.totalResolutionTimeMs}ms with ${bridgeResult.items.size} items!")
-                return bridgeResult
+        // Step 3: Tier 0 Direct OkHttp GraphQL (Zero-WebView fallback if not tripped)
+        if (!isEmbedCarousel && !TierCircuitBreaker.isTripped("Tier0_GraphQL")) {
+            val step3Start = System.currentTimeMillis()
+            val tier0Result = try {
+                withTimeoutOrNull(1200L) {
+                    directResolver.resolve(targetUrl, validateCdn)
+                }
+            } catch (e: Exception) {
+                AppLogger.w(TAG, "Tier 0 GraphQL exception: ${e.message}")
+                null
             }
-            AppLogger.w(TAG, "Headless Web Bridge did not succeed: ${bridgeResult.error?.message}. Attempting webpage SJS fallback...")
+            val step3Dur = System.currentTimeMillis() - step3Start
+            val tier0Success = tier0Result != null && tier0Result.success && tier0Result.items.isNotEmpty()
+
+            trace.add(
+                com.instadown.assist.resolver.model.StepTrace(
+                    stepIndex = stepIndex++,
+                    stepName = "Direct OkHttp GraphQL",
+                    durationMs = step3Dur,
+                    success = tier0Success,
+                    details = when {
+                        tier0Success -> "GraphQL success with ${tier0Result?.items?.size} items"
+                        tier0Result?.error?.code == ResolveErrorCode.AUTH_REQUIRED || tier0Result?.error?.code == ResolveErrorCode.RATE_LIMITED -> {
+                            TierCircuitBreaker.trip("Tier0_GraphQL")
+                            "Unauthenticated auth/rate challenge (HTTP ${tier0Result.error?.rawDetails}). Tripped circuit breaker."
+                        }
+                        tier0Result != null -> "GraphQL error: ${tier0Result.error?.message}"
+                        else -> "GraphQL timed out after 1200ms"
+                    }
+                )
+            )
+            AppLogger.i(TAG, "Step 3: ${trace.last()}")
+
+            if (tier0Success && tier0Result != null) {
+                TierCircuitBreaker.reset("Tier0_GraphQL")
+                val finalRes = tier0Result.copy(
+                    totalResolutionTimeMs = System.currentTimeMillis() - startTime,
+                    diagnosticTrace = trace
+                )
+                AppLogger.i(TAG, "Resolution completed successfully via GraphQL in ${finalRes.totalResolutionTimeMs}ms:\n${finalRes.formattedTrace}")
+                return finalRes
+            }
+        } else if (!isEmbedCarousel) {
+            trace.add(
+                com.instadown.assist.resolver.model.StepTrace(
+                    stepIndex = stepIndex++,
+                    stepName = "Direct OkHttp GraphQL",
+                    durationMs = 0L,
+                    success = false,
+                    details = "Bypassed (Circuit breaker cooldown active for 10 minutes)"
+                )
+            )
+            AppLogger.d(TAG, "Step 3: ${trace.last()}")
         }
 
-        // 3. TIER 3: WebPage SJS Resolver
+        // Step 4: Headless Web Bridge (Executed for full 15+ carousels or if embed/GraphQL failed)
+        preWarm()
+        var bridgeResult: ResolveResult? = null
+        if (webBridgeResolver != null) {
+            val step4Start = System.currentTimeMillis()
+            AppLogger.i(TAG, "Attempting Headless Web Bridge for complete extraction...")
+            bridgeResult = try {
+                webBridgeResolver.resolve(targetUrl, validateCdn)
+            } catch (e: Exception) {
+                AppLogger.w(TAG, "Headless Web Bridge exception: ${e.message}")
+                null
+            }
+            val step4Dur = System.currentTimeMillis() - step4Start
+            val bridgeSuccess = bridgeResult != null && bridgeResult.success && bridgeResult.items.isNotEmpty()
+
+            trace.add(
+                com.instadown.assist.resolver.model.StepTrace(
+                    stepIndex = stepIndex++,
+                    stepName = "Headless Web Bridge",
+                    durationMs = step4Dur,
+                    success = bridgeSuccess,
+                    details = if (bridgeSuccess) "Extracted ${bridgeResult?.items?.size} items via ${bridgeResult?.methodUsed}" else "Failed: ${bridgeResult?.error?.message}"
+                )
+            )
+            AppLogger.i(TAG, "Step 4: ${trace.last()}")
+
+            if (bridgeSuccess && bridgeResult != null) {
+                val finalRes = bridgeResult.copy(
+                    authorUsername = bridgeResult.authorUsername ?: embedResult?.authorUsername,
+                    caption = bridgeResult.caption ?: embedResult?.caption,
+                    totalResolutionTimeMs = System.currentTimeMillis() - startTime,
+                    diagnosticTrace = trace
+                )
+                AppLogger.i(TAG, "Resolution completed successfully via Web Bridge in ${finalRes.totalResolutionTimeMs}ms:\n${finalRes.formattedTrace}")
+                return finalRes
+            }
+        }
+
+        // Step 5: WebPage SJS Resolver (Final fallback)
+        val step5Start = System.currentTimeMillis()
         val sjsResult = try {
             withTimeoutOrNull(FALLBACK_TIMEOUT_MS) {
                 primaryResolver.resolve(targetUrl, validateCdn)
@@ -128,13 +249,31 @@ class CompositeInstagramResolver(
             AppLogger.w(TAG, "Tier 3 SJS resolver exception: ${e.message}")
             null
         }
+        val step5Dur = System.currentTimeMillis() - step5Start
+        val sjsSuccess = sjsResult != null && sjsResult.success && sjsResult.items.isNotEmpty()
 
-        if (sjsResult != null && sjsResult.success && sjsResult.items.isNotEmpty()) {
-            AppLogger.i(TAG, "Tier 3 (SJS Resolver) succeeded in ${System.currentTimeMillis() - startTime}ms with ${sjsResult.items.size} items!")
-            return sjsResult
+        trace.add(
+            com.instadown.assist.resolver.model.StepTrace(
+                stepIndex = stepIndex++,
+                stepName = "WebPage SJS Resolver",
+                durationMs = step5Dur,
+                success = sjsSuccess,
+                details = if (sjsSuccess) "Extracted ${sjsResult?.items?.size} items" else "Failed: ${sjsResult?.error?.message ?: "Timed out"}"
+            )
+        )
+        AppLogger.i(TAG, "Step 5: ${trace.last()}")
+
+        if (sjsSuccess && sjsResult != null) {
+            val finalRes = sjsResult.copy(
+                totalResolutionTimeMs = System.currentTimeMillis() - startTime,
+                diagnosticTrace = trace
+            )
+            AppLogger.i(TAG, "Resolution completed successfully via SJS in ${finalRes.totalResolutionTimeMs}ms:\n${finalRes.formattedTrace}")
+            return finalRes
         }
 
-        val finalResult = fallbackResult ?: sjsResult ?: ResolveResult(
+        // All tiers failed: compile comprehensive diagnostic trace
+        val finalResult = ResolveResult(
             success = false,
             originalInputUrl = url,
             canonicalUrl = targetUrl,
@@ -146,10 +285,12 @@ class CompositeInstagramResolver(
             totalResolutionTimeMs = System.currentTimeMillis() - startTime,
             error = com.instadown.assist.resolver.model.ResolveError(
                 code = ResolveErrorCode.NETWORK_ERROR,
-                message = "Failed to resolve Instagram post media"
-            )
+                message = "All resolution tiers failed to extract media streams",
+                rawDetails = trace.joinToString(" -> ") { "${it.stepName}: ${if (it.success) "OK" else "FAIL"}" }
+            ),
+            diagnosticTrace = trace
         )
-        AppLogger.e(TAG, "All resolution tiers failed for $url: ${finalResult.error?.message}")
+        AppLogger.e(TAG, "All resolution tiers failed for $url:\n${finalResult.formattedTrace}")
         return finalResult
     }
 }

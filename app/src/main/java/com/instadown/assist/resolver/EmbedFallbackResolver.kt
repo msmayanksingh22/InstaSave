@@ -2,7 +2,10 @@ package com.instadown.assist.resolver
 
 import android.util.Log
 import com.instadown.assist.resolver.model.*
+import com.instadown.assist.util.AppLogger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -10,39 +13,60 @@ import java.net.URI
 import java.util.regex.Pattern
 
 class EmbedFallbackResolver(
-    private val client: OkHttpClient = WebPageSjsResolver.defaultClient
+    private val client: OkHttpClient = defaultFastClient
 ) : InstagramResolver {
 
     companion object {
         private const val TAG = "EmbedFallbackResolver"
 
+        val defaultFastClient: OkHttpClient by lazy {
+            OkHttpClient.Builder()
+                .connectTimeout(2500, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .readTimeout(3000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .followRedirects(true)
+                .build()
+        }
+
         private fun unescapeUrl(raw: String): String {
-            return raw
+            var s = raw
                 .replace("\\u0026", "&")
                 .replace("&amp;", "&")
-                .replace("\\/", "/")
                 .replace("\\u0025", "%")
                 .replace("&lt;", "<")
                 .replace("&gt;", ">")
                 .replace("&quot;", "\"")
-                .trim()
+            s = s.replace(Regex("""\\+/"""), "/")
+            s = s.replace(Regex("""\\+""""), "\"")
+            return s.trim()
         }
 
         private val EMBED_VIDEO_PATTERNS = listOf(
-            Pattern.compile("""\"video_url\"\s*:\s*\"([^\"]+)\""""),
-            Pattern.compile("""\"video_versions\"\s*:\s*\[\s*\{\s*\"url\"\s*:\s*\"([^\"]+)\""""),
-            Pattern.compile("""<video[^>]+src=[\"']([^\"']+)[\"']"""),
-            Pattern.compile("""\"playable_url\"\s*:\s*\"([^\"]+)\""""),
-            Pattern.compile("""\"playable_url_quality_hd\"\s*:\s*\"([^\"]+)\""""),
-            Pattern.compile("""\"(https?:\\\\/\\\\/[^\"]+\.mp4[^\"]*)\""""),
-            Pattern.compile("""\"(https?://[^\"'\s<>]+\.mp4[^\"'\s<>]*)\"""")
+            Pattern.compile("""\\*\"video_url\\*\"\s*:\s*\\*\"([^\"\\]*(?:\\.[^\"\\]*)*)\\*\""""),
+            Pattern.compile("""video_url[\\\"'\s]*:[\\\"'\s]*(https?:[^\s\"']+)"""),
+            Pattern.compile("""\\*\"playable_url(?:_quality_hd)?\\*\"\s*:\s*\\*\"([^\"\\]*(?:\\.[^\"\\]*)*)\\*\""""),
+            Pattern.compile("""(https?:[\\/]+[^\"'\s<>]+\.mp4[^\"'\s<>]*)"""),
+            Pattern.compile("""<video[^>]+src=[\"']([^\"']+)[\"']""", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("""<source[^>]+src=[\"']([^\"']+)[\"']""", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("""\\*\"video_versions\\*\"\s*:\s*\[\s*\{\s*\\*\"url\\*\"\s*:\s*\\*\"([^\"\\]+?)\\*\"""")
         )
 
         private val EMBED_IMAGE_PATTERNS = listOf(
-            Pattern.compile("""(?:\"display_url\"|\"thumbnail_src\")\s*:\s*\"([^\"]+)\""""),
-            Pattern.compile("""<img[^>]+class=[\"'][^\"']*EmbeddedMediaImage[^\"']*[\"'][^>]+src=[\"']([^\"']+)[\"']"""),
-            Pattern.compile("""\"image_versions2\"\s*:\s*\{\s*\"candidates\"\s*:\s*\[\s*\{\s*\"url\"\s*:\s*\"([^\"]+)\""""),
-            Pattern.compile("""<img[^>]+src=[\"'](https?://[^\"'\s<>]*(?:cdninstagram\.com|fbcdn\.net)[^\"'\s<>]*)[\"']""")
+            Pattern.compile("""<img[^>]+class=[\"'][^\"']*EmbeddedMediaImage[^\"']*[\"'][^>]+src=[\"']([^\"']+)[\"']""", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("""\\*\"(?:display_url|thumbnail_src)\\*\"\s*:\s*\\*\"([^\"\\]*(?:\\.[^\"\\]*)*)\\*\""""),
+            Pattern.compile("""(?:display_url|thumbnail_src)[\\\"'\s]*:[\\\"'\s]*(https?:[^\s\"']+)"""),
+            Pattern.compile("""(https?:[\\/]+[^\"'\s<>]*(?:cdninstagram\.com|fbcdn\.net)[^\"'\s<>]+\.jpg[^\"'\s<>]*)"""),
+            Pattern.compile("""<img[^>]+src=[\"'](https?://[^\"'\s<>]*(?:cdninstagram\.com|fbcdn\.net)[^\"'\s<>]*)[\"']""", Pattern.CASE_INSENSITIVE),
+            Pattern.compile("""\\*\"image_versions2\\*\"\s*:\s*\{\s*\\*\"candidates\\*\"\s*:\s*\[\s*\{\s*\\*\"url\\*\"\s*:\s*\\*\"([^\"\\]+?)\\*\"""")
+        )
+
+        private val EMBED_AUTHOR_PATTERNS = listOf(
+            Pattern.compile("""\\*\"username\\*\"\s*:\s*\\*\"([a-zA-Z0-9._-]+)\\*\""""),
+            Pattern.compile("""username[\\\"'\s]*:[\\\"'\s]*\\*\"([a-zA-Z0-9._-]+)\\*\"""")
+        )
+
+        private val EMBED_CAPTION_PATTERNS = listOf(
+            Pattern.compile("""\\*\"edge_media_to_caption\\*\"\s*:\s*\{\\*"edges\\*"\s*:\s*\[\{\\*"node\\*"\s*:\s*\{\\*"text\\*"\s*:\s*\\*"([^"\\]*(?:\\.[^"\\]*)*)\\*""""),
+            Pattern.compile("""class=[\"'][^\"']*Caption[^\"']*[\"'][^>]*>([^<]+)""")
         )
     }
 
@@ -75,37 +99,62 @@ class EmbedFallbackResolver(
         var finalHost: String? = null
         var html: String? = null
         var lastHttpCode = 0
+        var resolvedPathType: String? = null
 
-        for (pathType in pathTypesToTry) {
-            val embedUrl = "https://www.instagram.com/$pathType/${normalized.shortcode}/embed/captioned/"
-            var candidateBody: String? = null
-            try {
-                initialHost = URI(embedUrl).host
-                val request = Request.Builder()
-                    .url(embedUrl)
-                    .addHeader("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1")
-                    .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                    .build()
+        // Parallel dual-probe for instant response (<300ms)
+        val (winningHtml, winningPathType, httpCode) = coroutineScope {
+            val deferredList = pathTypesToTry.map { pathType ->
+                async(Dispatchers.IO) {
+                    val embedUrl = "https://www.instagram.com/$pathType/${normalized.shortcode}/embed/captioned/"
+                    var candidateBody: String? = null
+                    var code = 0
+                    val reqStartTime = System.currentTimeMillis()
+                    try {
+                        val request = Request.Builder()
+                            .url(embedUrl)
+                            .addHeader("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1")
+                            .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                            .build()
 
-                client.newCall(request).execute().use { response ->
-                    lastHttpCode = response.code
-                    val finalUrl = response.request.url.toString()
-                    finalHost = URI(finalUrl).host
-                    if (response.isSuccessful) {
-                        candidateBody = response.body?.string()
+                        client.newCall(request).execute().use { response ->
+                            code = response.code
+                            if (response.isSuccessful) {
+                                candidateBody = response.body?.string()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        AppLogger.d(TAG, "Embed probe failed for $pathType in ${System.currentTimeMillis() - reqStartTime}ms: ${e.message}")
                     }
+                    Triple(pathType, candidateBody, code)
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Embed fetch failed for $pathType: ${e.message}")
             }
 
-            if (!candidateBody.isNullOrBlank() &&
-                !candidateBody!!.contains("httpErrorPage") &&
-                !candidateBody!!.contains("Page Not Found")
-            ) {
-                html = candidateBody
-                break
+            var chosenHtml: String? = null
+            var chosenPath: String? = null
+            var finalCode = 0
+
+            for (deferred in deferredList) {
+                val (pathType, body, code) = deferred.await()
+                if (code > 0) finalCode = code
+                if (!body.isNullOrBlank() &&
+                    !body.contains("<title>Page Not Found") &&
+                    !body.contains("Page Not Found &bull; Instagram") &&
+                    !body.contains("Content Not Found")
+                ) {
+                    chosenHtml = body
+                    chosenPath = pathType
+                    break
+                }
             }
+            Triple(chosenHtml, chosenPath, finalCode)
+        }
+
+        html = winningHtml
+        resolvedPathType = winningPathType
+        lastHttpCode = httpCode
+        if (!html.isNullOrBlank()) {
+            initialHost = "www.instagram.com"
+            finalHost = "www.instagram.com"
         }
 
         if (html.isNullOrBlank()) {
@@ -129,7 +178,10 @@ class EmbedFallbackResolver(
         }
 
         // Check if embed indicates error or 404 page
-        if (html!!.contains("httpErrorPage") || html!!.contains("Page Not Found")) {
+        if (html!!.contains("<title>Page Not Found") ||
+            html!!.contains("Page Not Found &bull; Instagram") ||
+            html!!.contains("Content Not Found")
+        ) {
             return@withContext ResolveResult(
                 success = false,
                 originalInputUrl = url,
@@ -177,19 +229,40 @@ class EmbedFallbackResolver(
             }
         }
 
+        // Extract author username and caption
+        var authorUsername: String? = null
+        for (pattern in EMBED_AUTHOR_PATTERNS) {
+            val matcher = pattern.matcher(html!!)
+            if (matcher.find()) {
+                val raw = matcher.group(1)?.trim()
+                if (!raw.isNullOrBlank()) {
+                    authorUsername = raw
+                    break
+                }
+            }
+        }
+
+        var caption: String? = null
+        for (pattern in EMBED_CAPTION_PATTERNS) {
+            val matcher = pattern.matcher(html!!)
+            if (matcher.find()) {
+                val raw = matcher.group(1)?.trim()
+                if (!raw.isNullOrBlank()) {
+                    caption = unescapeUrl(raw).take(500)
+                    break
+                }
+            }
+        }
+
         val isReelSource = normalized.sourcePathType.contains("reel") || normalized.sourcePathType.contains("reels")
 
         // Carousel Detection: Check for edge_sidecar_to_children or carousel indicators in embed payload
         val isCarousel = html!!.contains("edge_sidecar_to_children") ||
-                html!!.contains("GraphSidecar") ||
+                html!!.contains("sidecar_to_children") ||
                 html!!.contains("\"is_carousel\":true") ||
                 html!!.contains("\"is_carousel\": true") ||
                 html!!.contains("carousel_media") ||
-                html!!.contains("CarouselIndicator") ||
-                html!!.contains("CarouselLoaded") ||
-                html!!.contains("EmbeddedMediaCarousel") ||
-                html!!.contains("EmbedSidecar") ||
-                html!!.contains("class=\"EmbedSidecar") ||
+                html!!.contains("class=\"EmbeddedMediaCarousel") ||
                 html!!.contains("class=\"Carousel")
 
         if (isCarousel) {
@@ -307,7 +380,9 @@ class EmbedFallbackResolver(
                 ),
                 stageB = stageB,
                 initialHost = initialHost,
-                finalHost = finalHost
+                finalHost = finalHost,
+                authorUsername = authorUsername,
+                caption = caption
             )
         } else if (imageUrl != null) {
             val candidate = MediaCandidate(
@@ -366,7 +441,9 @@ class EmbedFallbackResolver(
                 ),
                 stageB = stageB,
                 initialHost = initialHost,
-                finalHost = finalHost
+                finalHost = finalHost,
+                authorUsername = authorUsername,
+                caption = caption
             )
         }
 

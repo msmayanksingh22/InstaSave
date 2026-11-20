@@ -117,8 +117,8 @@ object UrlNormalizer {
 
     private val redirectProbeClient: okhttp3.OkHttpClient by lazy {
         okhttp3.OkHttpClient.Builder()
-            .connectTimeout(4, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(6, java.util.concurrent.TimeUnit.SECONDS)
+            .connectTimeout(1500, java.util.concurrent.TimeUnit.MILLISECONDS)
+            .readTimeout(2000, java.util.concurrent.TimeUnit.MILLISECONDS)
             .followRedirects(false)
             .followSslRedirects(false)
             .build()
@@ -146,33 +146,36 @@ object UrlNormalizer {
             return@withContext initialNormalized
         }
 
-        // Fast HTTP probe to follow redirect and discover true shortcode
+        // Fast HTTP probe to follow redirect and discover true shortcode (max 2 seconds)
         try {
-            val probeUrl = if (extracted.startsWith("http://") || extracted.startsWith("https://")) {
-                extracted
-            } else {
-                "https://$extracted"
-            }
+            kotlinx.coroutines.withTimeoutOrNull(2000L) {
+                val probeUrl = if (extracted.startsWith("http://") || extracted.startsWith("https://")) {
+                    extracted
+                } else {
+                    "https://$extracted"
+                }
 
-            val request = okhttp3.Request.Builder()
-                .url(probeUrl)
-                .head()
-                .header("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1")
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                .build()
+                val request = okhttp3.Request.Builder()
+                    .url(probeUrl)
+                    .head()
+                    .header("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1")
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    .build()
 
-            client.newCall(request).execute().use { response ->
-                if (response.code in 301..308) {
-                    val location = response.header("Location")
-                    if (!location.isNullOrBlank()) {
-                        val probedNormalized = normalize(location)
-                        if (probedNormalized != null) {
-                            com.instadown.assist.util.AppLogger.i("UrlNormalizer", "Probed share redirect: $extracted -> ${probedNormalized.canonicalUrl}")
-                            return@withContext probedNormalized
+                client.newCall(request).execute().use { response ->
+                    if (response.code in 301..308) {
+                        val location = response.header("Location")
+                        if (!location.isNullOrBlank()) {
+                            val probedNormalized = normalize(location)
+                            if (probedNormalized != null) {
+                                com.instadown.assist.util.AppLogger.i("UrlNormalizer", "Probed share redirect: $extracted -> ${probedNormalized.canonicalUrl}")
+                                return@withTimeoutOrNull probedNormalized
+                            }
                         }
                     }
+                    null
                 }
-            }
+            }?.let { return@withContext it }
         } catch (e: Exception) {
             com.instadown.assist.util.AppLogger.w("UrlNormalizer", "Redirect probe error for $extracted: ${e.message}")
         }

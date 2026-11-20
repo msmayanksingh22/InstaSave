@@ -5,6 +5,7 @@ import android.util.Log
 import com.instadown.assist.model.AutomationResult
 import com.instadown.assist.overlay.InstaSavePreferences
 import com.instadown.assist.service.InstaAccessibilityService
+import com.instadown.assist.util.AppLogger
 
 /**
  * Concurrency-safe and idempotent coordinator for Clipboard-based media acquisition.
@@ -70,7 +71,7 @@ class ClipboardDownloadCoordinator(private val context: Context? = null) {
 
         // Rule 2 & 5: If this exact URL is already in-flight, do not start a duplicate
         if (currentlyProcessingClipboardUrl == cleanUrl) {
-            Log.d(TAG, "ClipboardDecision: URL is already processing: $cleanUrl")
+            AppLogger.d(TAG, "ClipboardDecision: URL is already processing: $cleanUrl")
             return ProcessDecision.REJECT_ALREADY_PROCESSING
         }
 
@@ -78,7 +79,7 @@ class ClipboardDownloadCoordinator(private val context: Context? = null) {
         if (currentlyProcessingClipboardUrl != null) {
             pendingClipboardUrl = cleanUrl
             pendingClipboardTimestamp = clipTimestamp
-            Log.i(TAG, "ClipboardDecision: Another transaction active ($currentlyProcessingClipboardUrl). Deferring $cleanUrl")
+            AppLogger.i(TAG, "ClipboardDecision: Another transaction active ($currentlyProcessingClipboardUrl). Deferring $cleanUrl")
             return ProcessDecision.DEFER_QUEUED
         }
 
@@ -86,15 +87,16 @@ class ClipboardDownloadCoordinator(private val context: Context? = null) {
         if (cleanUrl == lastProcessedUrl) {
             // Only re-process if the clipboard timestamp indicates a newer copy action
             if (clipTimestamp > 0L && clipTimestamp <= lastProcessedTimestamp) {
-                Log.d(TAG, "ClipboardDecision: URL was already completed and clipboard timestamp has not changed ($clipTimestamp <= $lastProcessedTimestamp)")
+                AppLogger.d(TAG, "ClipboardDecision: URL was already completed and clipboard timestamp has not changed ($clipTimestamp <= $lastProcessedTimestamp)")
                 return ProcessDecision.REJECT_ALREADY_COMPLETED
             } else if (clipTimestamp == 0L) {
                 // If timestamp is unavailable and URL matches last processed, prevent repeat auto-download
-                Log.d(TAG, "ClipboardDecision: URL was already completed and no fresh timestamp present")
+                AppLogger.d(TAG, "ClipboardDecision: URL was already completed and no fresh timestamp present")
                 return ProcessDecision.REJECT_ALREADY_COMPLETED
             }
         }
 
+        AppLogger.i(TAG, "ClipboardDecision: ALLOW for $cleanUrl")
         return ProcessDecision.ALLOW
     }
 
@@ -114,7 +116,7 @@ class ClipboardDownloadCoordinator(private val context: Context? = null) {
      */
     fun startProcessing(cleanUrl: String) = synchronized(stateLock) {
         currentlyProcessingClipboardUrl = cleanUrl
-        Log.i(TAG, "ClipboardProcessing: Started for $cleanUrl")
+        AppLogger.i(TAG, "ClipboardProcessing: Started for $cleanUrl")
     }
 
     /**
@@ -131,7 +133,7 @@ class ClipboardDownloadCoordinator(private val context: Context? = null) {
         val recordedTs = if (clipTimestamp > 0L) clipTimestamp else System.currentTimeMillis()
         prefs?.lastProcessedClipboardUrl = cleanUrl
         prefs?.lastProcessedClipboardTimestamp = recordedTs
-        Log.i(TAG, "ClipboardProcessing: Success for $cleanUrl (recorded timestamp=$recordedTs)")
+        AppLogger.i(TAG, "ClipboardProcessing: Success for $cleanUrl (recorded timestamp=$recordedTs)")
     }
 
     /**
@@ -142,7 +144,7 @@ class ClipboardDownloadCoordinator(private val context: Context? = null) {
         if (currentlyProcessingClipboardUrl == cleanUrl) {
             currentlyProcessingClipboardUrl = null
         }
-        Log.w(TAG, "ClipboardProcessing: Failed for $cleanUrl (URL not permanently marked as processed)")
+        AppLogger.w(TAG, "ClipboardProcessing: Failed for $cleanUrl (URL not permanently marked as processed)")
     }
 
     /**
@@ -246,7 +248,7 @@ class ClipboardDownloadCoordinator(private val context: Context? = null) {
                 "No container-associated slide indicator found"
         }
 
-        Log.w(TAG, "resolveCurrentSlideIndex: SAFE REFUSAL - $reason")
+        AppLogger.w(TAG, "resolveCurrentSlideIndex: SAFE REFUSAL - $reason")
         return SlideEvaluationResult.Ambiguous(reason)
     }
 }

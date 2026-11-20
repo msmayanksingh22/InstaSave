@@ -104,8 +104,18 @@ class SettingsFragment : Fragment() {
                 AccessibilityHealth.ZOMBIE_UNBOUND -> R.color.status_amber
                 AccessibilityHealth.DISABLED_BY_USER -> R.color.status_red
             }
+            val colorInt = ContextCompat.getColor(appContext, colorRes)
             binding.dotWatchdogStatus.backgroundTintList =
                 ContextCompat.getColorStateList(appContext, colorRes)
+            binding.tvWatchdogStatus.setTextColor(colorInt)
+            binding.tvWatchdogDetails.text = when (health) {
+                AccessibilityHealth.HEALTHY ->
+                    "Accessibility service is bound and ready for 1-tap saving."
+                AccessibilityHealth.ZOMBIE_UNBOUND ->
+                    "Service is enabled in Settings but unbound by OEM background killer. Tap below to fix."
+                AccessibilityHealth.DISABLED_BY_USER ->
+                    "Accessibility service is disabled. Enable it to allow 1-tap auto-detection inside Instagram."
+            }
             binding.btnFixWatchdog.visibility =
                 if (health == AccessibilityHealth.HEALTHY) View.GONE else View.VISIBLE
             binding.btnFixWatchdog.text = if (health == AccessibilityHealth.ZOMBIE_UNBOUND) {

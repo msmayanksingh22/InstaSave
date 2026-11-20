@@ -551,7 +551,12 @@ class InstagramDownloadCoordinator(
                 }
             }
 
-            repo.recordDownloadResult(result, thumbnailPath = thumbPath)
+            repo.recordDownloadResult(
+                result = result,
+                thumbnailPath = thumbPath,
+                authorUsername = resolveResult.authorUsername,
+                caption = resolveResult.caption
+            )
 
             // Auto audio extraction for Reels if enabled in preferences
             val prefs = com.instadown.assist.overlay.InstaSavePreferences(context)

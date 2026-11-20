@@ -33,11 +33,14 @@ import androidx.lifecycle.lifecycleScope
 import com.instadown.assist.R
 import com.instadown.assist.data.db.DownloadRepository
 import com.instadown.assist.databinding.ActivityMainBinding
+import com.instadown.assist.download.ClipboardDownloadCoordinator
 import com.instadown.assist.overlay.ResilientHudBus
 import com.instadown.assist.overlay.ResilientHudState
 import com.instadown.assist.overlay.runHudTrackedOperation
 import com.instadown.assist.overlay.InstaSavePreferences
 import com.instadown.assist.resolver.UrlNormalizer
+import com.instadown.assist.util.AppLogger
+import com.instadown.assist.util.ClipboardReader
 import com.instadown.assist.util.DownloadNotificationManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -57,6 +60,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var prefs: InstaSavePreferences
     private val repo by lazy { DownloadRepository.getInstance(this) }
     private val coordinator by lazy { com.instadown.assist.download.InstagramDownloadCoordinator(this) }
+    private val clipboardCoordinator by lazy { ClipboardDownloadCoordinator(this) }
     private var hasCheckedUpdateThisSession = false
 
     private val mediaStoreObserver by lazy {
@@ -284,6 +288,45 @@ class MainActivity : AppCompatActivity() {
         }
         checkSilentAutoUpdate()
         com.instadown.assist.util.AppUpdateManager.resumePendingInstallIfPermitted(this)
+        checkClipboardForInstagramLink()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            checkClipboardForInstagramLink()
+        }
+    }
+
+    private fun checkClipboardForInstagramLink() {
+        if (prefs.downloadMode != com.instadown.assist.overlay.DownloadMode.CLIPBOARD) {
+            return
+        }
+
+        val clip = ClipboardReader.readCurrentClip(this)
+        AppLogger.d(TAG, "checkClipboardForInstagramLink: valid=${clip.isValidInstagramUrl}, url='${clip.cleanUrl}'")
+        if (!clip.isValidInstagramUrl) return
+
+        val decision = clipboardCoordinator.evaluateProcessDecision(
+            cleanUrl = clip.cleanUrl,
+            clipTimestamp = clip.timestamp,
+            prefs = prefs
+        )
+
+        AppLogger.i(TAG, "Clipboard evaluation decision: $decision for '${clip.cleanUrl}'")
+        when (decision) {
+            ClipboardDownloadCoordinator.ProcessDecision.ALLOW -> {
+                clipboardCoordinator.startProcessing(clip.cleanUrl)
+                Toast.makeText(this, "Auto-downloading copied link...", Toast.LENGTH_SHORT).show()
+                executeManualDownload(clip.cleanUrl)
+            }
+            ClipboardDownloadCoordinator.ProcessDecision.DEFER_QUEUED -> {
+                Toast.makeText(this, "Queued copied link for download", Toast.LENGTH_SHORT).show()
+            }
+            else -> {
+                // Already processing or completed
+            }
+        }
     }
 
     fun executeManualDownload(cleanUrl: String) {
@@ -298,7 +341,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (!resolveResult.success || resolveResult.items.isEmpty()) {
-                    val errMsg = resolveResult.error?.message ?: "Could not resolve media"
+                    val errMsg = resolveResult.formattedTrace
                     throw IllegalStateException(errMsg)
                 }
 
@@ -361,6 +404,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             operationResult.onSuccess { dlResult ->
+                clipboardCoordinator.onProcessingSuccess(cleanUrl, System.currentTimeMillis(), prefs)
                 if (dlResult != null) {
                     val count = dlResult.completedCount
                     Toast.makeText(
@@ -370,6 +414,7 @@ class MainActivity : AppCompatActivity() {
                     ).show()
                 }
             }.onFailure { err ->
+                clipboardCoordinator.onProcessingFailed(cleanUrl)
                 val errMsg = err.message ?: "Unknown error"
                 val (userTitle, userSub) = when {
                     errMsg.contains("timeout", ignoreCase = true) ->
