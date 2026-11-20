@@ -18,6 +18,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.DialogFragment
+import androidx.fragment.app.setFragmentResult
 import androidx.lifecycle.lifecycleScope
 import com.instadown.assist.R
 import com.instadown.assist.data.StorageAccountant
@@ -177,6 +178,13 @@ class HistoryItemOptionsBottomSheet : DialogFragment() {
                 tvStorageActionPill.setBackgroundColor(Color.parseColor("#3A1726"))
 
                 cardStorageAction.setOnClickListener {
+                    setFragmentResult(
+                        REQUEST_KEY_OPTIONS,
+                        Bundle().apply {
+                            putString(ACTION_TYPE, ACTION_REDOWNLOAD)
+                            putLong(EXTRA_RECORD_ID, loadedRecord.id)
+                        }
+                    )
                     dismiss()
                     listener?.onReDownloadRequested(loadedRecord)
                 }
@@ -198,10 +206,25 @@ class HistoryItemOptionsBottomSheet : DialogFragment() {
                                     "✓ Freed storage (${result.deletedCount} files deleted). Post preserved in History!",
                                     Toast.LENGTH_LONG
                                 ).show()
+                                setFragmentResult(
+                                    REQUEST_KEY_OPTIONS,
+                                    Bundle().apply {
+                                        putString(ACTION_TYPE, ACTION_HISTORY_CHANGED)
+                                    }
+                                )
                                 listener?.onHistoryChanged()
                                 dismiss()
                             }
                             is com.instadown.assist.data.db.DeleteStorageResult.RequiresUserConsent -> {
+                                setFragmentResult(
+                                    REQUEST_KEY_OPTIONS,
+                                    Bundle().apply {
+                                        putString(ACTION_TYPE, ACTION_CONSENT_REQUIRED)
+                                        putLong(EXTRA_RECORD_ID, result.downloadId)
+                                        putParcelable(EXTRA_INTENT_SENDER, result.intentSender)
+                                        putLongArray(EXTRA_ITEM_IDS, result.pendingItemIds.toLongArray())
+                                    }
+                                )
                                 listener?.onConsentRequired(result.downloadId, result.intentSender, result.pendingItemIds)
                                 dismiss()
                             }
@@ -257,6 +280,12 @@ class HistoryItemOptionsBottomSheet : DialogFragment() {
                     }
                     StorageAccountant.invalidateCache()
                     Toast.makeText(requireContext(), "Post permanently removed from History", Toast.LENGTH_SHORT).show()
+                    setFragmentResult(
+                        REQUEST_KEY_OPTIONS,
+                        Bundle().apply {
+                            putString(ACTION_TYPE, ACTION_HISTORY_CHANGED)
+                        }
+                    )
                     listener?.onHistoryChanged()
                     dismiss()
                 }
@@ -277,6 +306,14 @@ class HistoryItemOptionsBottomSheet : DialogFragment() {
 
     companion object {
         const val TAG = "HistoryItemOptionsBottomSheet"
+        const val REQUEST_KEY_OPTIONS = "request_key_history_options"
+        const val ACTION_TYPE = "action_type"
+        const val ACTION_HISTORY_CHANGED = "action_history_changed"
+        const val ACTION_REDOWNLOAD = "action_redownload"
+        const val ACTION_CONSENT_REQUIRED = "action_consent_required"
+        const val EXTRA_RECORD_ID = "extra_record_id"
+        const val EXTRA_INTENT_SENDER = "extra_intent_sender"
+        const val EXTRA_ITEM_IDS = "extra_item_ids"
         private const val ARG_RECORD_ID = "arg_record_id"
 
         fun newInstance(recordId: Long): HistoryItemOptionsBottomSheet {

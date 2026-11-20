@@ -17,6 +17,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.DialogFragment
+import androidx.fragment.app.setFragmentResult
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -67,6 +68,9 @@ class ReDownloadSelectionBottomSheet : DialogFragment() {
     private lateinit var adapter: ItemsAdapter
 
     companion object {
+        const val REQUEST_KEY_RESTORE = "request_key_restore"
+        const val EXTRA_DOWNLOAD_ID = "extra_download_id"
+        const val EXTRA_INDICES = "extra_indices"
         private const val ARG_DOWNLOAD_ID = "arg_download_id"
 
         fun newInstance(downloadId: Long): ReDownloadSelectionBottomSheet {
@@ -149,6 +153,13 @@ class ReDownloadSelectionBottomSheet : DialogFragment() {
                 Toast.makeText(requireContext(), "Please select at least 1 item", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
+            setFragmentResult(
+                REQUEST_KEY_RESTORE,
+                Bundle().apply {
+                    putLong(EXTRA_DOWNLOAD_ID, record.id)
+                    putIntArray(EXTRA_INDICES, selectedIndices.toIntArray())
+                }
+            )
             dismiss()
             onConfirmRestore?.invoke(record, selectedIndices.toSet())
         }

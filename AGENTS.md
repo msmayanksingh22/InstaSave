@@ -88,7 +88,7 @@ You are an expert principal Android systems engineer and architect working on In
   - `androidx.viewpager2:viewpager2:1.1.0`
   - `org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1`
   - `com.squareup.okhttp3:okhttp:4.12.0`
-- **Current Version**: `versionCode = 17`, `versionName = "1.2.5"`
+- **Current Version**: `versionCode = 18`, `versionName = "1.3.0"`
 
 ---
 
@@ -137,12 +137,12 @@ All release builds must be signed with the dedicated production keystore:
 ### 5. Universal Persistent Thumbnail Cache
 - **Files**:
   - `app/src/main/java/com/instadown/assist/util/MediaThumbnailLoader.kt`
-  - `app/src/main/java/com/instadown/assist/ui/DownloadHistoryActivity.kt`
+  - `app/src/main/java/com/instadown/assist/ui/HistoryFragment.kt`
   - `app/src/main/java/com/instadown/assist/data/db/DownloadRepository.kt`
 - Thumbnails saved to: `context.filesDir/thumbnails/${shortcode}.jpg`.
 - Two-tier cache: Memory `LruCache<String, Bitmap>` + Disk file cache.
 - Decodes using `Bitmap.Config.RGB_565` for 2x faster decode speed and 50% RAM savings.
-- `DownloadHistoryActivity.backfillThumbnailsInBackground` runs parallel bounded coroutines (`Semaphore(3)`) to backfill missing thumbnails in 2–3 seconds.
+- `HistoryFragment.startUnifiedBackgroundEnrichment` runs parallel bounded coroutines (`Semaphore(3)`) to backfill missing thumbnails in 2–3 seconds.
 
 ### 6. In-App Software Update Subsystem
 - **Files**:
@@ -155,7 +155,7 @@ All release builds must be signed with the dedicated production keystore:
 ### 7. In-App Diagnostic Logs
 - **Files**:
   - `app/src/main/java/com/instadown/assist/util/AppLogger.kt`
-  - `app/src/main/java/com/instadown/assist/ui/SettingsActivity.kt`
+  - `app/src/main/java/com/instadown/assist/ui/SettingsFragment.kt`
   - `app/src/main/res/layout/dialog_diagnostic_logs.xml`
 - Rolling in-memory ring buffer (up to 1,000 log events).
 - One-tap clipboard copy and file share.
@@ -223,9 +223,9 @@ All release builds must be signed with the dedicated production keystore:
 
 ### 16. Modern Material 3 Settings UI with Hero Storage & Watchdog
 - **Files**:
-  - `app/src/main/res/layout/activity_settings.xml`
-  - `app/src/main/java/com/instadown/assist/ui/SettingsActivity.kt`
-- Edge-to-edge layout with Hero Storage Card calculating dynamic storage footprint and offering 1-tap MediaStore re-indexing and cache cleaning.
+  - `app/src/main/res/layout/fragment_settings.xml`
+  - `app/src/main/java/com/instadown/assist/ui/SettingsFragment.kt`
+- Flat, zero-scroll edge-to-edge layout with Hero Storage Card calculating dynamic storage footprint and offering 1-tap MediaStore re-indexing and cache cleaning.
 - Real-time Accessibility Binder Watchdog telemetry card reflecting active service health, OEM kills (`ZOMBIE_UNBOUND`), and direct settings resolution.
 - Modern categorized preference cards for Floating Assistant & Island HUD, Downloads & Audio Extraction, and OTA Updates.
 
@@ -318,7 +318,7 @@ All release builds must be signed with the dedicated production keystore:
 - **Files**:
   - `app/src/main/java/com/instadown/assist/ui/GalleryBatchOptionsBottomSheet.kt`
   - `app/src/main/res/layout/bottom_sheet_gallery_batch_options.xml`
-  - `app/src/main/java/com/instadown/assist/ui/GalleryActivity.kt`
+  - `app/src/main/java/com/instadown/assist/ui/GalleryFragment.kt`
 - Replaces legacy black-and-white `AlertDialog` dialogs with a Material 3 dark glassmorphic bottom sheet (`#161422`).
 - Defaults to "Free Up Phone Storage" (deleting physical `MediaStore` media while preserving History records, post author, and 20 KB cover thumbnails in `filesDir/thumbnails/${shortcode}.jpg`).
 - Supports Android 11–16 `MediaStore.createDeleteRequest` user consent via `ActivityResultContracts.StartIntentSenderForResult`.
@@ -335,6 +335,23 @@ All release builds must be signed with the dedicated production keystore:
 - Implements two-stage canonicalization: performs fast HTTP redirect probes on opaque `/share/r/`, `/share/p/`, `/share/`, and `/s/` tokens to discover true canonical post and reel shortcodes.
 - Multi-endpoint embed resolution tries both `/reel/` and `/p/` captioned embeds with unescaping of `&amp;`, `\u0026`, `\/`, `&lt;`, `&gt;`, and `&quot;`.
 - Eradicates blocking white modal dialogs in `MainActivity.kt` in favor of non-blocking background operations, real-time Dynamic Island HUD tracking, and `DownloadErrorBottomSheet` with 1-tap Retry, Open in Instagram, and Copy Debug Info.
+
+### 28. Single-Activity 4-Fragment Architecture (Zero-Scroll Redesign)
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/ui/MainActivity.kt`
+  - `app/src/main/java/com/instadown/assist/ui/HomeFragment.kt` (`res/layout/fragment_home.xml`)
+  - `app/src/main/java/com/instadown/assist/ui/GalleryFragment.kt` (`res/layout/fragment_gallery.xml`)
+  - `app/src/main/java/com/instadown/assist/ui/HistoryFragment.kt` (`res/layout/fragment_history.xml`)
+  - `app/src/main/java/com/instadown/assist/ui/SettingsFragment.kt` (`res/layout/fragment_settings.xml`)
+  - `app/src/main/java/com/instadown/assist/download/RedownloadQueueManager.kt`
+- Completely eliminates monolithic 11-card vertical scrolling in favor of 4 specialized, zero-scroll tabs hosted in `MainActivity`:
+  - **Tab 1 (Home)**: URL input with inline paste end-icon, live service toggle pill, storage chip, and horizontal recent downloads.
+  - **Tab 2 (Gallery)**: High-speed 120Hz 2-column media grid with type filters (All, Photos, Reels, Carousels), multi-selection action bar, bidirectional shared element transitions, and batch scoped storage deletion.
+  - **Tab 3 (History & Archive)**: Instant SQLite load with live header summary, filter chips, unified non-overlapping IO thumbnail & metadata backfilling, and flattened ConstraintLayout cards with ViewStub for progress.
+  - **Tab 4 (Settings)**: Download Mode & Carousel segment toggles, Floating Assistant & Dynamic Island HUD sliders, lossless audio extraction toggle, and 1-tap storage re-indexing/cache cleaner.
+- 120Hz instant switching (<8ms) via `FragmentTransaction.show()` / `hide()` and `setMaxLifecycle(RESUMED/STARTED)` preserving list scroll states and view bindings.
+- Fully decoupled sequential re-download queue via `RedownloadQueueManager` on `InstaSaveApp.applicationScope` with reactive `StateFlow` progress broadcast.
+- Rotation-proof dialog communication via `childFragmentManager.setFragmentResultListener`.
 
 ---
 

@@ -2,54 +2,46 @@ package com.instadown.assist.ui
 
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
-import android.app.Dialog
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
 import android.util.Log
-import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
-import android.view.Window
 import android.view.animation.DecelerateInterpolator
 import android.widget.Button
-import android.widget.ImageButton
-import android.widget.LinearLayout
 import android.widget.ProgressBar
-import android.widget.RadioButton
-import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.animation.doOnEnd
+import androidx.core.os.bundleOf
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.isVisible
+import androidx.core.view.updatePadding
+import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import com.instadown.assist.R
-import com.instadown.assist.data.StorageAccountant
 import com.instadown.assist.data.db.DownloadRepository
+import com.instadown.assist.databinding.ActivityMainBinding
 import com.instadown.assist.overlay.ResilientHudBus
 import com.instadown.assist.overlay.ResilientHudState
 import com.instadown.assist.overlay.runHudTrackedOperation
 import com.instadown.assist.overlay.InstaSavePreferences
-import com.instadown.assist.service.FloatingTriggerService
-import com.instadown.assist.service.InstaAccessibilityService
-import com.instadown.assist.util.ClipboardReader
+import com.instadown.assist.resolver.UrlNormalizer
 import com.instadown.assist.util.DownloadNotificationManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 
 object UpdatePromptTracker {
@@ -59,63 +51,44 @@ object UpdatePromptTracker {
 class MainActivity : AppCompatActivity() {
 
     private val isBootReady = AtomicBoolean(false)
-
-    private lateinit var dotService: View
-    private lateinit var tvServiceTitle: TextView
-    private lateinit var tvServiceSubtitle: TextView
-    private lateinit var btnToggleService: Button
-
-    private lateinit var dotA11y: View
-    private lateinit var tvA11ySubtitle: TextView
-    private lateinit var btnToggleA11y: Button
-
-    private lateinit var dotOverlay: View
-    private lateinit var tvOverlaySubtitle: TextView
-    private lateinit var btnToggleOverlay: Button
-    private lateinit var tvPrereqWarning: TextView
-
-    private lateinit var tvStorageTotalSize: TextView
-    private lateinit var tvStorageBreakdown: TextView
-
-    private lateinit var rvRecentDownloads: RecyclerView
-    private lateinit var tvNoRecent: TextView
-    private lateinit var recentAdapter: RecentDownloadsAdapter
-
-    private lateinit var layoutClipboardBanner: LinearLayout
-    private lateinit var tvClipBannerTitle: TextView
-    private lateinit var tvClipBannerUrl: TextView
-    private lateinit var btnClipBannerDownload: Button
-    private lateinit var btnClipBannerDismiss: ImageButton
-
-    private lateinit var layoutUpdateBanner: LinearLayout
-    private lateinit var tvUpdateBannerTitle: TextView
-    private lateinit var tvUpdateBannerSubtitle: TextView
-    private lateinit var btnUpdateBannerAction: Button
-    private lateinit var btnUpdateBannerDismiss: ImageButton
+    private lateinit var binding: ActivityMainBinding
+    private var activeTabId: Int = R.id.nav_home
 
     private lateinit var prefs: InstaSavePreferences
     private val repo by lazy { DownloadRepository.getInstance(this) }
     private val coordinator by lazy { com.instadown.assist.download.InstagramDownloadCoordinator(this) }
-    private val clipboardCoordinator by lazy { com.instadown.assist.download.ClipboardDownloadCoordinator(this) }
-    private val mainHandler = Handler(Looper.getMainLooper())
-
-    private var lastDismissedClipUrl: String? = null
     private var hasCheckedUpdateThisSession = false
+
+    private val mediaStoreObserver by lazy {
+        com.instadown.assist.data.MediaStoreSyncObserver(this, lifecycleScope)
+    }
+
+    private val backToHomeCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            navigateToTab(R.id.nav_home)
+        }
+    }
 
     companion object {
         private const val TAG = "MainActivity"
+        private const val KEY_ACTIVE_TAB = "active_tab_id"
+        const val REQUEST_SHARED_URL = "request_shared_url"
+        const val KEY_SHARED_URL = "shared_url"
+        const val EXTRA_TARGET_TAB = "extra_target_tab"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
+        )
         super.onCreate(savedInstanceState)
 
         val isDirectShareIntent =
             intent?.action == Intent.ACTION_SEND || intent?.action == Intent.ACTION_VIEW
 
-        // Hold splash screen only until views are inflated; 0 ms bypass for Share intents
         splashScreen.setKeepOnScreenCondition { !isDirectShareIntent && !isBootReady.get() }
-
         splashScreen.setOnExitAnimationListener { splashViewProvider ->
             if (isDirectShareIntent) {
                 splashViewProvider.remove()
@@ -144,81 +117,28 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
         isBootReady.set(true)
 
         prefs = InstaSavePreferences(this)
         DownloadNotificationManager.createNotificationChannels(this)
 
-        // Handle edge-to-edge window insets for status bar & gesture navigation bar
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootScrollView)) { v, windowInsets ->
-            val statusBar = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars())
-            val navBar = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars())
-            v.setPadding(v.paddingLeft, statusBar.top, v.paddingRight, navBar.bottom)
-            windowInsets
+        setupWindowInsets()
+        onBackPressedDispatcher.addCallback(this, backToHomeCallback)
+
+        if (savedInstanceState == null) {
+            switchTab(R.id.nav_home)
+        } else {
+            activeTabId = savedInstanceState.getInt(KEY_ACTIVE_TAB, R.id.nav_home)
+            backToHomeCallback.isEnabled = (activeTabId != R.id.nav_home)
         }
 
-        layoutClipboardBanner = findViewById(R.id.layoutClipboardBanner)
-        tvClipBannerTitle = findViewById(R.id.tvClipBannerTitle)
-        tvClipBannerUrl = findViewById(R.id.tvClipBannerUrl)
-        btnClipBannerDownload = findViewById(R.id.btnClipBannerDownload)
-        btnClipBannerDismiss = findViewById(R.id.btnClipBannerDismiss)
-
-        layoutUpdateBanner = findViewById(R.id.layoutUpdateAvailableBanner)
-        tvUpdateBannerTitle = findViewById(R.id.tvUpdateBannerTitle)
-        tvUpdateBannerSubtitle = findViewById(R.id.tvUpdateBannerSubtitle)
-        btnUpdateBannerAction = findViewById(R.id.btnUpdateBannerAction)
-        btnUpdateBannerDismiss = findViewById(R.id.btnUpdateBannerDismiss)
-
-        dotService = findViewById(R.id.dotServiceStatus)
-        tvServiceTitle = findViewById(R.id.tvServiceStatusTitle)
-        tvServiceSubtitle = findViewById(R.id.tvServiceStatusSubtitle)
-        btnToggleService = findViewById(R.id.btnToggleService)
-
-        dotA11y = findViewById(R.id.dotA11yStatus)
-        tvA11ySubtitle = findViewById(R.id.tvA11ySubtitle)
-        btnToggleA11y = findViewById(R.id.btnToggleA11y)
-
-        dotOverlay = findViewById(R.id.dotOverlayStatus)
-        tvOverlaySubtitle = findViewById(R.id.tvOverlaySubtitle)
-        btnToggleOverlay = findViewById(R.id.btnToggleOverlay)
-        tvPrereqWarning = findViewById(R.id.tvPrereqWarning)
-
-        tvStorageTotalSize = findViewById(R.id.tvStorageTotalSize)
-        tvStorageBreakdown = findViewById(R.id.tvStorageBreakdown)
-
-        rvRecentDownloads = findViewById(R.id.rvRecentDownloads)
-        tvNoRecent = findViewById(R.id.tvNoRecent)
-
-        rvRecentDownloads.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
-        recentAdapter = RecentDownloadsAdapter(lifecycleScope) { record ->
-            MediaViewerActivity.start(this, record.id, 0)
-        }
-        rvRecentDownloads.adapter = recentAdapter
-
-        findViewById<ImageButton>(R.id.btnHeaderSettings).setOnClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
-        }
-
-        findViewById<View>(R.id.cardNavSettings).setOnClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
-        }
-
-        findViewById<View>(R.id.cardNavGallery).setOnClickListener {
-            startActivity(Intent(this, GalleryActivity::class.java))
-        }
-
-        findViewById<View>(R.id.cardNavHistory).setOnClickListener {
-            startActivity(Intent(this, DownloadHistoryActivity::class.java))
-        }
-
-        findViewById<TextView>(R.id.btnViewAllRecent).setOnClickListener {
-            startActivity(Intent(this, GalleryActivity::class.java))
-        }
-
-        // Manual URL Download Card
-        findViewById<View>(R.id.cardPasteLink).setOnClickListener {
-            DialogManualDownload.show(this)
+        binding.bottomNavigation.setOnItemSelectedListener { item ->
+            if (item.itemId != activeTabId) {
+                switchTab(item.itemId)
+            }
+            true
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -227,76 +147,124 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        btnToggleA11y.setOnClickListener {
-            openAccessibilitySettings()
-        }
-
-        btnToggleOverlay.setOnClickListener {
-            requestOverlayPermission()
-        }
-
-        btnToggleService.setOnClickListener {
-            val isRunning = FloatingTriggerService.isRunning
-            if (isRunning) {
-                stopInstaSaveService()
-            } else {
-                startInstaSaveService()
-            }
-        }
-
-        // Reactive synchronization: re-query SQLite state whenever a transaction occurs
-        lifecycleScope.launch {
-            repo.transactionEvents.collect {
-                loadRecentDownloads()
-                loadStorageSummary()
-            }
-        }
-
-        // Initialize Home Control Center (Download Mode, Carousel Behavior, Save Location)
-        setupControlCenter()
-
-        handleIntent(intent)
+        handleShareIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleIntent(intent)
+        handleShareIntent(intent)
     }
 
-    private fun handleIntent(intent: Intent?) {
-        if (intent == null) return
+    override fun onActivityReenter(resultCode: Int, data: Intent?) {
+        super.onActivityReenter(resultCode, data)
+        val returnPos = data?.getIntExtra(SharedMediaTransition.EXTRA_RETURN_POSITION, -1) ?: -1
+        if (returnPos >= 0) {
+            (supportFragmentManager.findFragmentByTag("tab_gallery") as? GalleryFragment)?.onActivityReenter(returnPos)
+        }
+    }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt(KEY_ACTIVE_TAB, activeTabId)
+    }
+
+    private fun setupWindowInsets() {
+        ViewCompat.setOnApplyWindowInsetsListener(binding.rootMainContainer) { _, insets ->
+            val sysBars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            val isKeyboardOpen = insets.isVisible(WindowInsetsCompat.Type.ime())
+
+            // Hide BottomNav while typing so URL box and button stay visible
+            binding.bottomNavigation.isVisible = !isKeyboardOpen
+            binding.bottomNavigation.updatePadding(bottom = sysBars.bottom)
+
+            // Apply insets to fragment container
+            binding.mainFragmentContainer.updatePadding(
+                left = sysBars.left,
+                top = sysBars.top,
+                right = sysBars.right,
+                bottom = if (isKeyboardOpen) ime.bottom else 0
+            )
+
+            WindowInsetsCompat.CONSUMED
+        }
+    }
+
+    fun navigateToTab(tabId: Int) {
+        binding.bottomNavigation.selectedItemId = tabId
+    }
+
+    private fun switchTab(targetTabId: Int) {
+        val currentTag = tagForTab(activeTabId)
+        val targetTag = tagForTab(targetTabId)
+
+        val currentFragment = supportFragmentManager.findFragmentByTag(currentTag)
+        val targetFragment = supportFragmentManager.findFragmentByTag(targetTag)
+
+        supportFragmentManager.beginTransaction().apply {
+            if (currentFragment != null && currentFragment != targetFragment) {
+                hide(currentFragment)
+                setMaxLifecycle(currentFragment, Lifecycle.State.STARTED)
+            }
+
+            if (targetFragment == null) {
+                val created = createFragmentForTab(targetTabId)
+                add(R.id.mainFragmentContainer, created, targetTag)
+                setMaxLifecycle(created, Lifecycle.State.RESUMED)
+            } else {
+                show(targetFragment)
+                setMaxLifecycle(targetFragment, Lifecycle.State.RESUMED)
+            }
+        }.commit()
+
+        activeTabId = targetTabId
+        backToHomeCallback.isEnabled = (targetTabId != R.id.nav_home)
+    }
+
+    private fun tagForTab(tabId: Int) = when (tabId) {
+        R.id.nav_home -> "tab_home"
+        R.id.nav_gallery -> "tab_gallery"
+        R.id.nav_history -> "tab_history"
+        R.id.nav_settings -> "tab_settings"
+        else -> "tab_home"
+    }
+
+    private fun createFragmentForTab(tabId: Int): Fragment = when (tabId) {
+        R.id.nav_home -> HomeFragment()
+        R.id.nav_gallery -> GalleryFragment()
+        R.id.nav_history -> HistoryFragment()
+        R.id.nav_settings -> SettingsFragment()
+        else -> HomeFragment()
+    }
+
+    private fun handleShareIntent(intent: Intent?) {
+        if (intent == null) return
+        val targetTab = intent.getIntExtra(EXTRA_TARGET_TAB, -1)
+        if (targetTab != -1) {
+            navigateToTab(targetTab)
+            intent.removeExtra(EXTRA_TARGET_TAB)
+        }
         if (intent.action == Intent.ACTION_SEND && intent.type?.startsWith("text/") == true) {
             val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
                 ?: intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
                 ?: ""
-            val normalized = com.instadown.assist.resolver.UrlNormalizer.normalize(sharedText)
+            val normalized = UrlNormalizer.normalize(sharedText)
             if (normalized != null) {
-                Toast.makeText(this, "InstaSave: Downloading shared media...", Toast.LENGTH_SHORT).show()
-                executeManualDownload(normalized.originalUrl)
+                if (activeTabId != R.id.nav_home) {
+                    navigateToTab(R.id.nav_home)
+                }
+                supportFragmentManager.setFragmentResult(
+                    REQUEST_SHARED_URL,
+                    bundleOf(KEY_SHARED_URL to normalized.originalUrl)
+                )
             } else if (sharedText.isNotBlank()) {
                 Toast.makeText(this, "Shared text does not contain a valid Instagram link", Toast.LENGTH_LONG).show()
             }
-            return
+            intent.action = Intent.ACTION_MAIN
         }
-
-        intent.getStringExtra("SET_CLIPBOARD")?.let { text ->
-            try {
-                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                cm.setPrimaryClip(ClipData.newPlainText("instagram_test", text))
-                Log.i(TAG, "handleIntent: updated primary clip to $text")
-                mainHandler.postDelayed({
-                    checkClipboardForInstagramLink()
-                }, 100)
-            } catch (e: Exception) {
-                Log.e(TAG, "handleIntent: failed to set clipboard", e)
-            }
-        }
-    }
-
-    private val mediaStoreObserver by lazy {
-        com.instadown.assist.data.MediaStoreSyncObserver(this, lifecycleScope)
     }
 
     override fun onStart() {
@@ -311,58 +279,135 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-
-        // 1. Fast UI query first
-        loadRecentDownloads()
-        loadStorageSummary()
-
-        // 2. Background MediaStore reconciliation upon app resume
-        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        lifecycleScope.launch(Dispatchers.IO) {
             repo.reconcileWithMediaStore()
         }
-
-        // 3. User-initiated clipboard detection on focus
-        checkClipboardForInstagramLink()
-
-        // 4. Always re-read actual hardware/OS state on resume; never infer
-        updateServiceState()
-
-        // 5. Silent background auto-update check (once per app session)
         checkSilentAutoUpdate()
-
-        // 6. Resume pending update install if user just granted Unknown Sources permission
         com.instadown.assist.util.AppUpdateManager.resumePendingInstallIfPermitted(this)
+    }
+
+    fun executeManualDownload(cleanUrl: String) {
+        Toast.makeText(this, "Resolving Instagram link...", Toast.LENGTH_SHORT).show()
+
+        lifecycleScope.launch {
+            val operationResult = runHudTrackedOperation(initialLinkLabel = "Resolving Link...") { opId ->
+                ResilientHudBus.emit(ResilientHudState.Resolving(opId, "Resolving Instagram media..."))
+
+                val resolveResult = withContext(Dispatchers.IO) {
+                    coordinator.resolver.resolve(cleanUrl, validateCdn = false)
+                }
+
+                if (!resolveResult.success || resolveResult.items.isEmpty()) {
+                    val errMsg = resolveResult.error?.message ?: "Could not resolve media"
+                    throw IllegalStateException(errMsg)
+                }
+
+                val behavior = prefs.carouselDownloadBehavior
+                val totalItems = resolveResult.items.size
+
+                if (totalItems > 1 && behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.ASK) {
+                    ResilientHudBus.dismiss(opId)
+                    MediaSelectionActivity.start(this@MainActivity, cleanUrl, resolveResult)
+                    return@runHudTrackedOperation null
+                }
+
+                var targetIndices: Set<Int>? = null
+                if (totalItems > 1 && behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.CURRENT_ITEM) {
+                    val observedSlide = com.instadown.assist.service.InstaAccessibilityService.lastObservedSlide
+                    val slideEval = com.instadown.assist.download.ClipboardDownloadCoordinator(this@MainActivity).resolveCurrentSlideIndex(
+                        autoResult = null, totalMediaItems = totalItems, observedSlide = observedSlide
+                    )
+                    when (slideEval) {
+                        is com.instadown.assist.download.ClipboardDownloadCoordinator.SlideEvaluationResult.Valid ->
+                            targetIndices = setOf(slideEval.targetIndex)
+                        is com.instadown.assist.download.ClipboardDownloadCoordinator.SlideEvaluationResult.Ambiguous -> {
+                            ResilientHudBus.dismiss(opId)
+                            Toast.makeText(this@MainActivity, "Could not identify current slide.", Toast.LENGTH_LONG).show()
+                            return@runHudTrackedOperation null
+                        }
+                    }
+                }
+
+                ResilientHudBus.emit(
+                    ResilientHudState.Downloading(
+                        operationId = opId,
+                        currentIndex = 1,
+                        totalCount = targetIndices?.size ?: totalItems,
+                        downloadedBytes = 0L,
+                        totalBytes = 0L,
+                        percent = 15
+                    )
+                )
+
+                val downloadResult = withContext(Dispatchers.IO) {
+                    coordinator.executeDirectDownload(
+                        url = cleanUrl, selectedIndices = targetIndices, preResolvedResult = resolveResult
+                    )
+                }
+
+                if (downloadResult.success || downloadResult.completedCount > 0) {
+                    val count = downloadResult.completedCount
+                    ResilientHudBus.emit(
+                        ResilientHudState.Success(
+                            operationId = opId,
+                            message = if (count > 1) "Saved $count items to gallery!" else "Saved to gallery!",
+                            totalItems = count
+                        )
+                    )
+                    downloadResult
+                } else {
+                    throw IllegalStateException(downloadResult.error ?: "Download write failed")
+                }
+            }
+
+            operationResult.onSuccess { dlResult ->
+                if (dlResult != null) {
+                    val count = dlResult.completedCount
+                    Toast.makeText(
+                        this@MainActivity,
+                        if (count > 1) "✔ $count items saved" else "✔ Saved to gallery",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }.onFailure { err ->
+                val errMsg = err.message ?: "Unknown error"
+                val (userTitle, userSub) = when {
+                    errMsg.contains("timeout", ignoreCase = true) ->
+                        "Request Timed Out" to "The Instagram request took too long. Tap retry to try again."
+                    errMsg.contains("network", ignoreCase = true) || errMsg.contains("connect", ignoreCase = true) ->
+                        "No Internet Connection" to "Could not connect to the network. Please check your Wi-Fi or data connection."
+                    errMsg.contains("private", ignoreCase = true) ->
+                        "Private Account Post" to "This post is from a private account and cannot be downloaded anonymously."
+                    errMsg.contains("not found", ignoreCase = true) || errMsg.contains("404") ->
+                        "Post Not Found" to "This Instagram post was deleted or the link is invalid."
+                    else ->
+                        "Could Not Resolve Media" to "Could not load media streams from Instagram. Tap retry to attempt alternate resolution tiers."
+                }
+                val sheet = DownloadErrorBottomSheet.newInstance(
+                    title = userTitle,
+                    subtitle = userSub,
+                    diagnostic = errMsg,
+                    url = cleanUrl
+                )
+                sheet.setOnRetryListener { executeManualDownload(cleanUrl) }
+                sheet.show(supportFragmentManager, DownloadErrorBottomSheet.TAG)
+            }
+        }
     }
 
     private fun checkSilentAutoUpdate() {
         if (hasCheckedUpdateThisSession) return
         hasCheckedUpdateThisSession = true
 
-        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val info = com.instadown.assist.util.AppUpdateManager.checkForUpdates(this@MainActivity)
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
                     if (info != null && info.isAvailable) {
-                        layoutUpdateBanner.visibility = View.VISIBLE
-                        tvUpdateBannerTitle.text = "🎉 New Version Ready! (v${info.versionName})"
-                        tvUpdateBannerSubtitle.text = "InstaSave v${info.versionName} is ready with major upgrades"
-                        btnUpdateBannerAction.setOnClickListener {
-                            showUpdateAvailablePrompt(info)
-                        }
-                        layoutUpdateBanner.setOnClickListener {
-                            showUpdateAvailablePrompt(info)
-                        }
-                        btnUpdateBannerDismiss.setOnClickListener {
-                            layoutUpdateBanner.visibility = View.GONE
-                        }
-
-                        // Automatically ask the user to update when detected on home screen
                         if (!UpdatePromptTracker.hasPromptedThisSession && !isFinishing && !isDestroyed) {
                             UpdatePromptTracker.hasPromptedThisSession = true
                             showUpdateAvailablePrompt(info)
                         }
-                    } else {
-                        layoutUpdateBanner.visibility = View.GONE
                     }
                 }
             } catch (e: Exception) {
@@ -400,7 +445,7 @@ class MainActivity : AppCompatActivity() {
             .setCancelable(true)
             .create()
 
-        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
         dialog.show()
 
         val existingApk = com.instadown.assist.util.AppUpdateManager.getDownloadedUpdateApk(this@MainActivity, info.versionName)
@@ -412,11 +457,7 @@ class MainActivity : AppCompatActivity() {
 
             btnPositive.setOnClickListener {
                 com.instadown.assist.util.AppUpdateManager.promptInstall(
-                    this@MainActivity,
-                    existingApk,
-                    info.apkUrl,
-                    info.versionCode,
-                    info.sha256
+                    this@MainActivity, existingApk, info.apkUrl, info.versionCode, info.sha256
                 )
             }
             btnNegative.setOnClickListener {
@@ -490,20 +531,12 @@ class MainActivity : AppCompatActivity() {
                 dialog.setCancelable(true)
 
                 com.instadown.assist.util.AppUpdateManager.promptInstall(
-                    this@MainActivity,
-                    apk,
-                    info.apkUrl,
-                    info.versionCode,
-                    info.sha256
+                    this@MainActivity, apk, info.apkUrl, info.versionCode, info.sha256
                 )
 
                 btnPositive.setOnClickListener {
                     com.instadown.assist.util.AppUpdateManager.promptInstall(
-                        this@MainActivity,
-                        apk,
-                        info.apkUrl,
-                        info.versionCode,
-                        info.sha256
+                        this@MainActivity, apk, info.apkUrl, info.versionCode, info.sha256
                     )
                 }
             } else {
@@ -514,622 +547,6 @@ class MainActivity : AppCompatActivity() {
                 btnNegative.isEnabled = true
                 btnNegative.text = "Cancel"
                 dialog.setCancelable(true)
-            }
-        }
-    }
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            checkClipboardForInstagramLink()
-        }
-    }
-
-    private fun setupControlCenter() {
-        val btnModeAuto = findViewById<Button>(R.id.btnModeAuto)
-        val btnModeClipboard = findViewById<Button>(R.id.btnModeClipboard)
-        val tvModeDescription = findViewById<TextView>(R.id.tvModeDescription)
-
-        fun updateModeUI(mode: com.instadown.assist.overlay.DownloadMode) {
-            if (mode == com.instadown.assist.overlay.DownloadMode.AUTOMATIC) {
-                btnModeAuto.setBackgroundResource(R.drawable.btn_segment_active)
-                btnModeAuto.setTextColor(getColor(R.color.white))
-                btnModeClipboard.setBackgroundResource(R.drawable.btn_segment_inactive)
-                btnModeClipboard.setTextColor(getColor(R.color.text_secondary))
-                tvModeDescription.text = "Automatic: Tap the floating button in Instagram to save"
-            } else {
-                btnModeClipboard.setBackgroundResource(R.drawable.btn_segment_active)
-                btnModeClipboard.setTextColor(getColor(R.color.white))
-                btnModeAuto.setBackgroundResource(R.drawable.btn_segment_inactive)
-                btnModeAuto.setTextColor(getColor(R.color.text_secondary))
-                tvModeDescription.text = "Clipboard: Auto-downloads copied links when you open InstaSave"
-            }
-        }
-
-        btnModeAuto.setOnClickListener {
-            prefs.downloadMode = com.instadown.assist.overlay.DownloadMode.AUTOMATIC
-            updateModeUI(com.instadown.assist.overlay.DownloadMode.AUTOMATIC)
-            if (com.instadown.assist.service.FloatingTriggerService.isRunning) {
-                com.instadown.assist.service.FloatingTriggerService.updatePreferences(this)
-            }
-            updateServiceState()
-        }
-        btnModeClipboard.setOnClickListener {
-            prefs.downloadMode = com.instadown.assist.overlay.DownloadMode.CLIPBOARD
-            updateModeUI(com.instadown.assist.overlay.DownloadMode.CLIPBOARD)
-            if (com.instadown.assist.service.FloatingTriggerService.isRunning) {
-                com.instadown.assist.service.FloatingTriggerService.updatePreferences(this)
-            }
-            updateServiceState()
-        }
-        updateModeUI(prefs.downloadMode)
-
-        // Carousel Behavior
-        val btnEntire = findViewById<Button>(R.id.btnCarouselEntire)
-        val btnCurrent = findViewById<Button>(R.id.btnCarouselCurrent)
-        val btnAsk = findViewById<Button>(R.id.btnCarouselAsk)
-        val tvCarouselDesc = findViewById<TextView>(R.id.tvCarouselDescription)
-
-        fun updateCarouselUI(behavior: com.instadown.assist.overlay.CarouselDownloadBehavior) {
-            btnEntire.setBackgroundResource(if (behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.ENTIRE_CAROUSEL) R.drawable.btn_segment_active else R.drawable.btn_segment_inactive)
-            btnEntire.setTextColor(getColor(if (behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.ENTIRE_CAROUSEL) R.color.white else R.color.text_secondary))
-
-            btnCurrent.setBackgroundResource(if (behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.CURRENT_ITEM) R.drawable.btn_segment_active else R.drawable.btn_segment_inactive)
-            btnCurrent.setTextColor(getColor(if (behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.CURRENT_ITEM) R.color.white else R.color.text_secondary))
-
-            btnAsk.setBackgroundResource(if (behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.ASK) R.drawable.btn_segment_active else R.drawable.btn_segment_inactive)
-            btnAsk.setTextColor(getColor(if (behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.ASK) R.color.white else R.color.text_secondary))
-
-            tvCarouselDesc.text = when (behavior) {
-                com.instadown.assist.overlay.CarouselDownloadBehavior.ENTIRE_CAROUSEL -> "Entire: Downloads all slides in the carousel at once"
-                com.instadown.assist.overlay.CarouselDownloadBehavior.CURRENT_ITEM -> "Current: Downloads only the currently visible slide"
-                com.instadown.assist.overlay.CarouselDownloadBehavior.ASK -> "Ask: Opens review sheet to choose specific slides"
-            }
-        }
-
-        btnEntire.setOnClickListener {
-            prefs.carouselDownloadBehavior = com.instadown.assist.overlay.CarouselDownloadBehavior.ENTIRE_CAROUSEL
-            updateCarouselUI(com.instadown.assist.overlay.CarouselDownloadBehavior.ENTIRE_CAROUSEL)
-        }
-        btnCurrent.setOnClickListener {
-            prefs.carouselDownloadBehavior = com.instadown.assist.overlay.CarouselDownloadBehavior.CURRENT_ITEM
-            updateCarouselUI(com.instadown.assist.overlay.CarouselDownloadBehavior.CURRENT_ITEM)
-        }
-        btnAsk.setOnClickListener {
-            prefs.carouselDownloadBehavior = com.instadown.assist.overlay.CarouselDownloadBehavior.ASK
-            updateCarouselUI(com.instadown.assist.overlay.CarouselDownloadBehavior.ASK)
-        }
-        updateCarouselUI(prefs.carouselDownloadBehavior)
-
-        // Save Location
-        val tvSaveLocation = findViewById<TextView>(R.id.tvSaveLocationPath)
-        val btnChangeLocation = findViewById<Button>(R.id.btnChangeSaveLocation)
-
-        fun updateLocationUI() {
-            tvSaveLocation.text = prefs.saveLocationRelativePath
-        }
-        updateLocationUI()
-
-        btnChangeLocation.setOnClickListener {
-            showSaveLocationDialog {
-                updateLocationUI()
-                StorageAccountant.invalidateCache()
-                loadStorageSummary()
-            }
-        }
-    }
-
-    private fun showSaveLocationDialog(onUpdated: () -> Unit) {
-        val options = com.instadown.assist.overlay.InstaSavePreferences.SUPPORTED_SAVE_LOCATIONS.toTypedArray()
-        val current = prefs.saveLocationRelativePath
-        val selectedIdx = options.indexOfFirst { it.equals(current, ignoreCase = true) }.coerceAtLeast(0)
-
-        val dialog = Dialog(this)
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundResource(R.drawable.card_background)
-            setPadding(48, 48, 48, 36)
-        }
-
-        val titleTv = TextView(this).apply {
-            text = "Select Save Location"
-            setTextColor(Color.WHITE)
-            textSize = 17f
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setPadding(0, 0, 0, 24)
-        }
-        container.addView(titleTv)
-
-        val radioGroup = RadioGroup(this)
-        options.forEachIndexed { index, path ->
-            val rb = RadioButton(this).apply {
-                text = path
-                setTextColor(Color.WHITE)
-                textSize = 14f
-                id = View.generateViewId()
-                isChecked = (index == selectedIdx)
-                buttonTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.insta_pink))
-                setPadding(16, 16, 16, 16)
-            }
-            radioGroup.addView(rb)
-        }
-        container.addView(radioGroup)
-
-        val btnLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.END
-            setPadding(0, 24, 0, 0)
-        }
-
-        val btnCancel = Button(this, null, androidx.appcompat.R.attr.borderlessButtonStyle).apply {
-            text = "Cancel"
-            setTextColor(getColor(R.color.text_secondary))
-            setOnClickListener { dialog.dismiss() }
-        }
-
-        val btnSave = Button(this, null, androidx.appcompat.R.attr.borderlessButtonStyle).apply {
-            text = "Apply"
-            setTextColor(getColor(R.color.insta_pink))
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            setOnClickListener {
-                val checkedId = radioGroup.checkedRadioButtonId
-                val checkedIndex = (0 until radioGroup.childCount).indexOfFirst { radioGroup.getChildAt(it).id == checkedId }
-                if (checkedIndex >= 0 && checkedIndex < options.size) {
-                    prefs.saveLocationRelativePath = options[checkedIndex]
-                    onUpdated()
-                }
-                dialog.dismiss()
-            }
-        }
-
-        btnLayout.addView(btnCancel)
-        btnLayout.addView(btnSave)
-        container.addView(btnLayout)
-
-        dialog.setContentView(container)
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        dialog.window?.setLayout((resources.displayMetrics.widthPixels * 0.90).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
-        dialog.show()
-    }
-
-    private fun checkClipboardForInstagramLink() {
-        val currentClip = com.instadown.assist.util.ClipboardReader.readCurrentClip(this)
-        android.util.Log.d("MainActivityClip", "checkClipboard: hasFocus=${hasWindowFocus()}, mode=${prefs.downloadMode}, clipValid=${currentClip.isValidInstagramUrl}, url=${currentClip.cleanUrl}")
-
-        if (prefs.downloadMode == com.instadown.assist.overlay.DownloadMode.CLIPBOARD) {
-            if (!currentClip.isValidInstagramUrl) {
-                if (!clipboardCoordinator.isProcessing) {
-                    layoutClipboardBanner.visibility = View.GONE
-                }
-                return
-            }
-
-            val decision = clipboardCoordinator.evaluateProcessDecision(
-                cleanUrl = currentClip.cleanUrl,
-                clipTimestamp = currentClip.timestamp,
-                prefs = prefs
-            )
-
-            when (decision) {
-                com.instadown.assist.download.ClipboardDownloadCoordinator.ProcessDecision.ALLOW -> {
-                    clipboardCoordinator.startProcessing(currentClip.cleanUrl)
-                    layoutClipboardBanner.visibility = View.VISIBLE
-                    tvClipBannerTitle.text = "Downloading copied link..."
-                    tvClipBannerUrl.text = currentClip.cleanUrl
-                    btnClipBannerDownload.visibility = View.GONE
-                    btnClipBannerDismiss.visibility = View.GONE
-                    executeClipboardDownload(currentClip.cleanUrl, currentClip.timestamp)
-                }
-                com.instadown.assist.download.ClipboardDownloadCoordinator.ProcessDecision.REJECT_ALREADY_PROCESSING -> {
-                    layoutClipboardBanner.visibility = View.VISIBLE
-                    tvClipBannerTitle.text = "Downloading copied link..."
-                    tvClipBannerUrl.text = currentClip.cleanUrl
-                    btnClipBannerDownload.visibility = View.GONE
-                    btnClipBannerDismiss.visibility = View.GONE
-                }
-                com.instadown.assist.download.ClipboardDownloadCoordinator.ProcessDecision.DEFER_QUEUED -> {
-                    layoutClipboardBanner.visibility = View.VISIBLE
-                    tvClipBannerTitle.text = "Queued for download"
-                    tvClipBannerUrl.text = currentClip.cleanUrl
-                    btnClipBannerDownload.visibility = View.GONE
-                    btnClipBannerDismiss.visibility = View.GONE
-                }
-                com.instadown.assist.download.ClipboardDownloadCoordinator.ProcessDecision.REJECT_ALREADY_COMPLETED,
-                com.instadown.assist.download.ClipboardDownloadCoordinator.ProcessDecision.REJECT_INVALID -> {
-                    if (!clipboardCoordinator.isProcessing) {
-                        layoutClipboardBanner.visibility = View.GONE
-                    }
-                }
-            }
-        } else {
-            // AUTOMATIC mode: Show manual review banner if a fresh Instagram link is copied
-            if (currentClip.isValidInstagramUrl && currentClip.cleanUrl != lastDismissedClipUrl) {
-                layoutClipboardBanner.visibility = View.VISIBLE
-                tvClipBannerTitle.text = "Instagram Link Copied"
-                tvClipBannerUrl.text = currentClip.cleanUrl
-                btnClipBannerDownload.visibility = View.VISIBLE
-                btnClipBannerDownload.text = "Download"
-                btnClipBannerDismiss.visibility = View.VISIBLE
-
-                btnClipBannerDownload.setOnClickListener {
-                    layoutClipboardBanner.visibility = View.GONE
-                    executeManualDownload(currentClip.cleanUrl)
-                }
-
-                btnClipBannerDismiss.setOnClickListener {
-                    lastDismissedClipUrl = currentClip.cleanUrl
-                    layoutClipboardBanner.visibility = View.GONE
-                }
-            } else {
-                if (!clipboardCoordinator.isProcessing) {
-                    layoutClipboardBanner.visibility = View.GONE
-                }
-            }
-        }
-    }
-
-    private fun executeClipboardDownload(cleanUrl: String, clipTimestamp: Long) {
-        lifecycleScope.launch {
-            val resolveResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                coordinator.resolver.resolve(cleanUrl, validateCdn = false)
-            }
-
-            if (!resolveResult.success) {
-                clipboardCoordinator.onProcessingFailed(cleanUrl)
-                layoutClipboardBanner.visibility = View.VISIBLE
-                tvClipBannerTitle.text = "Failed to resolve link"
-                tvClipBannerUrl.text = resolveResult.error?.message ?: "Network error"
-                mainHandler.postDelayed({
-                    if (!clipboardCoordinator.isProcessing) layoutClipboardBanner.visibility = View.GONE
-                }, 3000)
-                checkPendingClipboard()
-                return@launch
-            }
-
-            val behavior = prefs.carouselDownloadBehavior
-            val totalItems = resolveResult.items.size
-
-            if (totalItems > 1 && behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.ASK) {
-                clipboardCoordinator.onProcessingSuccess(cleanUrl, clipTimestamp, prefs)
-                layoutClipboardBanner.visibility = View.GONE
-                com.instadown.assist.ui.MediaSelectionActivity.start(this@MainActivity, cleanUrl, resolveResult)
-                checkPendingClipboard()
-                return@launch
-            }
-
-            var targetIndices: Set<Int>? = null
-            if (totalItems > 1 && behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.CURRENT_ITEM) {
-                val observedSlide = com.instadown.assist.service.InstaAccessibilityService.lastObservedSlide
-                val slideEval = clipboardCoordinator.resolveCurrentSlideIndex(
-                    autoResult = null,
-                    totalMediaItems = totalItems,
-                    observedSlide = observedSlide
-                )
-
-                when (slideEval) {
-                    is com.instadown.assist.download.ClipboardDownloadCoordinator.SlideEvaluationResult.Valid -> {
-                        targetIndices = setOf(slideEval.targetIndex)
-                    }
-                    is com.instadown.assist.download.ClipboardDownloadCoordinator.SlideEvaluationResult.Ambiguous -> {
-                        clipboardCoordinator.onProcessingFailed(cleanUrl)
-                        layoutClipboardBanner.visibility = View.VISIBLE
-                        tvClipBannerTitle.text = "Safe Refusal"
-                        tvClipBannerUrl.text = "Couldn't identify current slide (0 saved)"
-                        Toast.makeText(this@MainActivity, "Couldn't identify current slide. 0 items downloaded.", Toast.LENGTH_LONG).show()
-                        mainHandler.postDelayed({
-                            if (!clipboardCoordinator.isProcessing) layoutClipboardBanner.visibility = View.GONE
-                        }, 3500)
-                        checkPendingClipboard()
-                        return@launch
-                    }
-                }
-            }
-
-            tvClipBannerTitle.text = if (targetIndices != null) {
-                "Downloading slide ${targetIndices.first() + 1}/$totalItems..."
-            } else if (totalItems > 1) {
-                "Downloading $totalItems items..."
-            } else {
-                "Downloading..."
-            }
-
-            val downloadResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                coordinator.executeDirectDownload(
-                    url = cleanUrl,
-                    selectedIndices = targetIndices,
-                    preResolvedResult = resolveResult,
-                    onStatusUpdate = { status ->
-                        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                            tvClipBannerTitle.text = status
-                        }
-                    }
-                )
-            }
-
-            if (downloadResult.success || (downloadResult.skippedCount > 0 && downloadResult.failedCount == 0)) {
-                clipboardCoordinator.onProcessingSuccess(cleanUrl, clipTimestamp, prefs)
-                val count = downloadResult.completedCount
-                tvClipBannerTitle.text = when {
-                    count > 1 -> "✓ $count saved"
-                    count == 1 -> "✓ Saved"
-                    else -> "✓ Already saved"
-                }
-                tvClipBannerUrl.text = if (count > 0) "Saved to ${prefs.saveLocationRelativePath}" else "Already in Gallery"
-                loadRecentDownloads()
-                loadStorageSummary()
-                mainHandler.postDelayed({
-                    if (!clipboardCoordinator.isProcessing) layoutClipboardBanner.visibility = View.GONE
-                }, 2500)
-            } else {
-                clipboardCoordinator.onProcessingFailed(cleanUrl)
-                tvClipBannerTitle.text = "Download failed"
-                tvClipBannerUrl.text = downloadResult.error ?: "Failed to save"
-                mainHandler.postDelayed({
-                    if (!clipboardCoordinator.isProcessing) layoutClipboardBanner.visibility = View.GONE
-                }, 3000)
-            }
-
-            checkPendingClipboard()
-        }
-    }
-
-    private fun checkPendingClipboard() {
-        val pending = clipboardCoordinator.pollPending() ?: return
-        executeClipboardDownload(pending.first, pending.second)
-    }
-
-    fun executeManualDownload(cleanUrl: String) {
-        Toast.makeText(this, "Resolving Instagram link...", Toast.LENGTH_SHORT).show()
-
-        lifecycleScope.launch {
-            val operationResult = runHudTrackedOperation(initialLinkLabel = "Resolving Link...") { opId ->
-                ResilientHudBus.emit(ResilientHudState.Resolving(opId, "Resolving Instagram media..."))
-
-                val resolveResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    coordinator.resolver.resolve(cleanUrl, validateCdn = false)
-                }
-
-                if (!resolveResult.success || resolveResult.items.isEmpty()) {
-                    val errMsg = resolveResult.error?.message ?: "Could not resolve media"
-                    throw IllegalStateException(errMsg)
-                }
-
-                val behavior = prefs.carouselDownloadBehavior
-                val totalItems = resolveResult.items.size
-
-                if (totalItems > 1 && behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.ASK) {
-                    ResilientHudBus.dismiss(opId)
-                    com.instadown.assist.ui.MediaSelectionActivity.start(this@MainActivity, cleanUrl, resolveResult)
-                    return@runHudTrackedOperation null
-                }
-
-                var targetIndices: Set<Int>? = null
-                if (totalItems > 1 && behavior == com.instadown.assist.overlay.CarouselDownloadBehavior.CURRENT_ITEM) {
-                    val observedSlide = com.instadown.assist.service.InstaAccessibilityService.lastObservedSlide
-                    val slideEval = clipboardCoordinator.resolveCurrentSlideIndex(
-                        autoResult = null, totalMediaItems = totalItems, observedSlide = observedSlide
-                    )
-                    when (slideEval) {
-                        is com.instadown.assist.download.ClipboardDownloadCoordinator.SlideEvaluationResult.Valid ->
-                            targetIndices = setOf(slideEval.targetIndex)
-                        is com.instadown.assist.download.ClipboardDownloadCoordinator.SlideEvaluationResult.Ambiguous -> {
-                            ResilientHudBus.dismiss(opId)
-                            Toast.makeText(this@MainActivity, "Could not identify current slide.", Toast.LENGTH_LONG).show()
-                            return@runHudTrackedOperation null
-                        }
-                    }
-                }
-
-                ResilientHudBus.emit(
-                    ResilientHudState.Downloading(
-                        operationId = opId,
-                        currentIndex = 1,
-                        totalCount = targetIndices?.size ?: totalItems,
-                        downloadedBytes = 0L,
-                        totalBytes = 0L,
-                        percent = 15
-                    )
-                )
-
-                val downloadResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    coordinator.executeDirectDownload(
-                        url = cleanUrl, selectedIndices = targetIndices, preResolvedResult = resolveResult
-                    )
-                }
-
-                if (downloadResult.success || downloadResult.completedCount > 0) {
-                    val count = downloadResult.completedCount
-                    ResilientHudBus.emit(
-                        ResilientHudState.Success(
-                            operationId = opId,
-                            message = if (count > 1) "Saved $count items to gallery!" else "Saved to gallery!",
-                            totalItems = count
-                        )
-                    )
-                    downloadResult
-                } else {
-                    throw IllegalStateException(downloadResult.error ?: "Download write failed")
-                }
-            }
-
-            operationResult.onSuccess { dlResult ->
-                if (dlResult != null) {
-                    val count = dlResult.completedCount
-                    Toast.makeText(this@MainActivity, if (count > 1) "✔ $count items saved" else "✔ Saved to gallery", Toast.LENGTH_SHORT).show()
-                    loadRecentDownloads()
-                    loadStorageSummary()
-                }
-            }.onFailure { err ->
-                val errMsg = err.message ?: "Unknown error"
-                val (userTitle, userSub) = when {
-                    errMsg.contains("timeout", ignoreCase = true) ->
-                        "Request Timed Out" to "The Instagram request took too long. Tap retry to try again."
-                    errMsg.contains("network", ignoreCase = true) || errMsg.contains("connect", ignoreCase = true) ->
-                        "No Internet Connection" to "Could not connect to the network. Please check your Wi-Fi or data connection."
-                    errMsg.contains("private", ignoreCase = true) ->
-                        "Private Account Post" to "This post is from a private account and cannot be downloaded anonymously."
-                    errMsg.contains("not found", ignoreCase = true) || errMsg.contains("404") ->
-                        "Post Not Found" to "This Instagram post was deleted or the link is invalid."
-                    else ->
-                        "Could Not Resolve Media" to "Could not load media streams from Instagram. Tap retry to attempt alternate resolution tiers."
-                }
-                val sheet = DownloadErrorBottomSheet.newInstance(
-                    title = userTitle,
-                    subtitle = userSub,
-                    diagnostic = errMsg,
-                    url = cleanUrl
-                )
-                sheet.setOnRetryListener { executeManualDownload(cleanUrl) }
-                sheet.show(supportFragmentManager, DownloadErrorBottomSheet.TAG)
-            }
-        }
-    }
-    private fun startInstaSaveService() {
-        if (prefs.downloadMode == com.instadown.assist.overlay.DownloadMode.AUTOMATIC) {
-            val isA11yEnabled = InstaAccessibilityService.isServiceEnabled(this)
-            val canOverlay = Settings.canDrawOverlays(this)
-
-            if (!isA11yEnabled) {
-                tvPrereqWarning.text = "⚠️ Please enable InstaSave Accessibility Assistant before starting."
-                tvPrereqWarning.visibility = View.VISIBLE
-                openAccessibilitySettings()
-                return
-            }
-
-            if (!canOverlay) {
-                tvPrereqWarning.text = "⚠️ Please grant 'Display over other apps' permission before starting."
-                tvPrereqWarning.visibility = View.VISIBLE
-                requestOverlayPermission()
-                return
-            }
-        }
-
-        tvPrereqWarning.visibility = View.GONE
-
-        try {
-            prefs.isButtonEnabled = true
-            prefs.isServiceRunningDesired = true
-            FloatingTriggerService.start(this)
-            mainHandler.postDelayed({ updateServiceState() }, 200)
-        } catch (e: Exception) {
-            prefs.isButtonEnabled = false
-            prefs.isServiceRunningDesired = false
-            Log.e(TAG, "Failed to start service: ${e.message}", e)
-            Toast.makeText(this, "Could not start service: ${e.message}", Toast.LENGTH_LONG).show()
-            updateServiceState()
-        }
-    }
-
-    private fun stopInstaSaveService() {
-        prefs.isButtonEnabled = false
-        prefs.isServiceRunningDesired = false
-        FloatingTriggerService.stop(this)
-        mainHandler.postDelayed({ updateServiceState() }, 100)
-    }
-
-    private fun updateServiceState() {
-        val isA11yEnabled = InstaAccessibilityService.isServiceEnabled(this)
-        val canOverlay = Settings.canDrawOverlays(this)
-        val isOverlayRunning = FloatingTriggerService.isRunning
-
-        // 1. Accessibility Status
-        if (isA11yEnabled) {
-            dotA11y.setBackgroundColor(getColor(R.color.status_green))
-            tvA11ySubtitle.text = "Service is active and ready"
-            btnToggleA11y.text = "Active"
-            btnToggleA11y.setTextColor(getColor(R.color.status_green))
-            btnToggleA11y.isEnabled = false
-        } else {
-            dotA11y.setBackgroundColor(getColor(R.color.status_amber))
-            tvA11ySubtitle.text = "Required for automated Copy Link"
-            btnToggleA11y.text = "Enable"
-            btnToggleA11y.setTextColor(getColor(R.color.insta_pink))
-            btnToggleA11y.isEnabled = true
-        }
-
-        // 2. Overlay Permission Status
-        if (canOverlay) {
-            dotOverlay.setBackgroundColor(getColor(R.color.status_green))
-            tvOverlaySubtitle.text = "Permission granted"
-            btnToggleOverlay.text = "Granted"
-            btnToggleOverlay.setTextColor(getColor(R.color.status_green))
-            btnToggleOverlay.isEnabled = false
-        } else {
-            dotOverlay.setBackgroundColor(getColor(R.color.status_red))
-            tvOverlaySubtitle.text = "Required for floating button overlay"
-            btnToggleOverlay.text = "Grant"
-            btnToggleOverlay.setTextColor(getColor(R.color.insta_pink))
-            btnToggleOverlay.isEnabled = true
-        }
-
-        // 3. InstaSave Overlay Service Status
-        if (isOverlayRunning) {
-            dotService.setBackgroundColor(getColor(R.color.status_green))
-            tvServiceTitle.text = "InstaSave is running"
-            tvServiceSubtitle.text = if (prefs.downloadMode == com.instadown.assist.overlay.DownloadMode.CLIPBOARD) {
-                "Clipboard mode active (floating button hidden)"
-            } else {
-                "Overlay button is active on screen"
-            }
-            btnToggleService.text = "Stop InstaSave"
-            btnToggleService.setTextColor(getColor(R.color.status_red))
-            btnToggleService.setBackgroundColor(getColor(R.color.card_bg))
-        } else {
-            dotService.setBackgroundColor(getColor(R.color.text_muted))
-            tvServiceTitle.text = "InstaSave is stopped"
-            tvServiceSubtitle.text = if (!isA11yEnabled || !canOverlay) "Prerequisites required to start" else "Ready to start"
-            btnToggleService.text = "Start InstaSave"
-            btnToggleService.setTextColor(getColor(R.color.white))
-            btnToggleService.setBackgroundColor(getColor(R.color.insta_pink))
-        }
-
-        if (isA11yEnabled && canOverlay) {
-            tvPrereqWarning.visibility = View.GONE
-        }
-    }
-
-    private fun requestOverlayPermission() {
-        Toast.makeText(this, "Please grant 'Display over other apps' to use InstaSave", Toast.LENGTH_LONG).show()
-        val intent = Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:$packageName")
-        )
-        startActivity(intent)
-    }
-
-    private fun openAccessibilitySettings() {
-        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-        startActivity(intent)
-        Toast.makeText(this, "Find 'InstaSave Accessibility Assistant' and enable it", Toast.LENGTH_LONG).show()
-    }
-
-    private fun loadStorageSummary() {
-        lifecycleScope.launch {
-            val summary = StorageAccountant.getStorageSummary(this@MainActivity)
-            tvStorageTotalSize.text = summary.formattedSize
-            tvStorageBreakdown.text = "${summary.totalItems} items saved (${summary.photosCount} photos, ${summary.videosCount} reels)"
-        }
-    }
-
-    private fun loadRecentDownloads() {
-        lifecycleScope.launch {
-            val successfulRecent = repo.getRecentTransactions(limit = 10)
-            if (successfulRecent.isEmpty()) {
-                rvRecentDownloads.visibility = View.GONE
-                tvNoRecent.visibility = View.VISIBLE
-            } else {
-                tvNoRecent.visibility = View.GONE
-                rvRecentDownloads.visibility = View.VISIBLE
-                recentAdapter.submitList(successfulRecent)
-            }
-
-            val all = repo.getFullHistory()
-            val deleted = all.count { it.isDeletedFromDevice }
-            findViewById<TextView>(R.id.tvNavHistorySubtitle)?.text = if (deleted > 0) {
-                "${all.size} saves • $deleted deleted (Tap to re-download)"
-            } else {
-                "${all.size} saves in archive • All on device"
             }
         }
     }

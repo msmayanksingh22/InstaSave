@@ -1,9 +1,9 @@
 {
-  "versionCode": 17,
-  "versionName": "1.2.5",
-  "releaseNotes": "• Zero-Delay Dual-Source OTA Updates: Bypassed 300s Fastly CDN edge caching via 302 redirect tag probing on /releases/latest, instantly discovering new releases with zero API quota consumption.\n• Modern Gallery Batch Storage Management: Replaced legacy black-and-white deletion dialogs with a dark glassmorphic GalleryBatchOptionsBottomSheet (#161422) that defaults to freeing device storage while preserving posts and private cover thumbnails in History & Archive, complete with Android 11–16 MediaStore delete consent handling and a safely accordioned Danger Zone.\n• Two-Stage Instagram Share Link Normalization: Probes HTTP redirects on opaque /share/r/, /share/p/, and /share/ URLs to discover canonical Reel/Post shortcodes, preventing 404 errors on 2026 app links.\n• Hardened Embed Fallback: Multi-endpoint probe (/reel/ and /p/) with strict HTML/Unicode unescaping (&amp;, \\u0026, \\/, &lt;, &gt;, &quot;) for robust sub-300ms media resolution.\n• Eradicated System Alert Dialogs: Replaced blocking modal dialogs in MainActivity with smooth background HUD tracking and a dark glassmorphic DownloadErrorBottomSheet offering 1-tap Retry, Open in Instagram, and Copy Debug Info.",
+  "versionCode": 18,
+  "versionName": "1.3.0",
+  "releaseNotes": "• Material 3 Single-Activity 4-Fragment Architecture: Replaced legacy scrolling monolith with 4 instant zero-scroll tabs (Home, Gallery, History, Settings) powered by BottomNavigationView and 120Hz show()/hide() tab switching.\n• High-Speed 120Hz Gallery: 2-column media grid with real-time category filtering (Photos, Reels, Carousels), multi-item batch selection, and smooth bidirectional shared-element transitions.\n• Revamped History & Archive: Instant SQLite load with live header summary, filter chips, unified non-overlapping IO thumbnail and metadata backfill, and flattened cards with ViewStub progress.\n• Application-Scoped Re-download Queue: Moved sequential queue to RedownloadQueueManager on InstaSaveApp.applicationScope with reactive StateFlow progress tracking that survives screen rotations and tab changes.\n• Deep-Linked Notifications & Floating HUD: Tapping download notifications or the Dynamic Island HUD pill routes directly into the Gallery tab.\n• Android 16 Scoped Storage & Predictive Back: Full edge-to-edge support with adjustNothing keyboard handling and rotation-safe deletion consent.",
   "apkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
-  "fallbackApkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.2.5/app-release.apk",
-  "fileSizeBytes": 4031388,
-  "sha256": "d8ad1336ef2ab2992a387cf714d1436ae1dcf35f93b82f580b081059cca6967c"
+  "fallbackApkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.3.0/app-release.apk",
+  "fileSizeBytes": 6196382,
+  "sha256": "444c2223786d1398ca32284f5733e45928976675049c4076cff2003e3e08fd22"
 }

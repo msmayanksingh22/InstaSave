@@ -1,19 +1,26 @@
 package com.instadown.assist.ui
 
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewStub
 import android.widget.Button
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
-import androidx.lifecycle.LifecycleCoroutineScope
 import androidx.recyclerview.widget.RecyclerView
 import com.instadown.assist.R
 import com.instadown.assist.data.db.DownloadRecord
+import com.instadown.assist.download.RedownloadProgressState
 import com.instadown.assist.util.MediaThumbnailLoader
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import java.io.File
+import java.util.Locale
 
 sealed class CardProgressState {
     object Idle : CardProgressState()
@@ -22,12 +29,16 @@ sealed class CardProgressState {
 }
 
 class DownloadHistoryAdapter(
-    private val scope: LifecycleCoroutineScope,
+    private val scope: CoroutineScope,
     private val onViewClick: (DownloadRecord) -> Unit,
     private val onRedownloadClick: (DownloadRecord) -> Unit,
     private val onOpenInstagramClick: (DownloadRecord) -> Unit,
     private val onItemLongClick: (DownloadRecord) -> Unit
 ) : RecyclerView.Adapter<DownloadHistoryAdapter.HistoryViewHolder>() {
+
+    companion object {
+        private const val PAYLOAD_PROGRESS = "payload_progress"
+    }
 
     private val items = mutableListOf<DownloadRecord>()
     private val progressStates = mutableMapOf<Long, CardProgressState>()
@@ -36,6 +47,23 @@ class DownloadHistoryAdapter(
         items.clear()
         items.addAll(newItems)
         notifyDataSetChanged()
+    }
+
+    fun updateProgressStates(newStates: Map<Long, RedownloadProgressState>) {
+        val affectedIds = (progressStates.keys + newStates.keys).toSet()
+        progressStates.clear()
+        for ((id, s) in newStates) {
+            progressStates[id] = when {
+                s.isQueued -> CardProgressState.Queued(s.queuePosition)
+                else -> CardProgressState.InProgress(s.percent, s.message)
+            }
+        }
+        for (id in affectedIds) {
+            val index = items.indexOfFirst { it.id == id }
+            if (index != -1) {
+                notifyItemChanged(index, PAYLOAD_PROGRESS)
+            }
+        }
     }
 
     fun setDownloadQueued(downloadId: Long, queuePosition: Int) {
@@ -56,7 +84,7 @@ class DownloadHistoryAdapter(
     private fun notifyItemChangedById(downloadId: Long) {
         val index = items.indexOfFirst { it.id == downloadId }
         if (index != -1) {
-            notifyItemChanged(index)
+            notifyItemChanged(index, PAYLOAD_PROGRESS)
         }
     }
 
@@ -65,13 +93,24 @@ class DownloadHistoryAdapter(
         return HistoryViewHolder(view)
     }
 
+    override fun onBindViewHolder(holder: HistoryViewHolder, position: Int, payloads: MutableList<Any>) {
+        if (payloads.contains(PAYLOAD_PROGRESS)) {
+            val record = items[position]
+            val isDeleted = record.isDeletedFromDevice
+            val state = progressStates[record.id] ?: CardProgressState.Idle
+            bindProgressAndStatus(holder, record, isDeleted, state)
+            return
+        }
+        super.onBindViewHolder(holder, position, payloads)
+    }
+
     override fun onBindViewHolder(holder: HistoryViewHolder, position: Int) {
         val record = items[position]
         val isVideo = record.items.firstOrNull()?.mediaType == "VIDEO" || record.postType.equals("REEL", ignoreCase = true)
         val isDeleted = record.isDeletedFromDevice
         val state = progressStates[record.id] ?: CardProgressState.Idle
 
-        // Title: Prioritize @username creator handle for clear instant recognition
+        // Title: Prioritize @username creator handle
         val pathType = if (isVideo) "reel" else "p"
         val displayShortcode = if (record.shortcode.isNotBlank()) record.shortcode else "post"
         if (!record.authorUsername.isNullOrBlank()) {
@@ -104,96 +143,39 @@ class DownloadHistoryAdapter(
             holder.ivTypeIcon.setImageResource(R.drawable.ic_image)
         }
 
-        // Status badge & progress styling
-        when (state) {
-            is CardProgressState.InProgress -> {
-                holder.layoutProgress.visibility = View.VISIBLE
-                holder.tvProgressMessage.text = state.message
-                holder.tvProgressPercent.text = "${state.percent}%"
-                holder.pbHistoryHorizontal.isIndeterminate = false
-                holder.pbHistoryHorizontal.progress = state.percent
-
-                holder.pbRedownload.visibility = View.VISIBLE
-                holder.btnRedownload.visibility = View.GONE
-                holder.btnViewMedia.visibility = View.GONE
-
-                holder.tvStatusText.text = "Re-downloading (${state.percent}%)..."
-                holder.tvStatusText.setTextColor(Color.parseColor("#E1306C"))
-                holder.dotStatus.setBackgroundColor(Color.parseColor("#E1306C"))
-                holder.layoutStatusBadge.setBackgroundColor(Color.parseColor("#2E1220"))
-                holder.ivDeletedBadge.visibility = View.GONE
-            }
-            is CardProgressState.Queued -> {
-                holder.layoutProgress.visibility = View.VISIBLE
-                val qMsg = if (state.queuePosition > 1) "In queue (#${state.queuePosition})..." else "Waiting in queue..."
-                holder.tvProgressMessage.text = qMsg
-                holder.tvProgressPercent.text = "Queued"
-                holder.pbHistoryHorizontal.isIndeterminate = true
-
-                holder.pbRedownload.visibility = View.VISIBLE
-                holder.btnRedownload.visibility = View.GONE
-                holder.btnViewMedia.visibility = View.GONE
-
-                holder.tvStatusText.text = "In Download Queue"
-                holder.tvStatusText.setTextColor(Color.parseColor("#38BDF8"))
-                holder.dotStatus.setBackgroundColor(Color.parseColor("#38BDF8"))
-                holder.layoutStatusBadge.setBackgroundColor(Color.parseColor("#0C2A40"))
-                holder.ivDeletedBadge.visibility = View.VISIBLE
-            }
-            is CardProgressState.Idle -> {
-                holder.layoutProgress.visibility = View.GONE
-                holder.pbRedownload.visibility = View.GONE
-
-                if (isDeleted) {
-                    holder.btnRedownload.visibility = View.VISIBLE
-                    holder.btnViewMedia.visibility = View.GONE
-                    holder.ivDeletedBadge.visibility = View.VISIBLE
-
-                    holder.dotStatus.setBackgroundColor(Color.parseColor("#F59E0B")) // Amber
-                    holder.layoutStatusBadge.setBackgroundColor(Color.parseColor("#2E2010"))
-                    holder.tvStatusText.setTextColor(Color.parseColor("#F59E0B"))
-                    holder.tvStatusText.text = "Deleted from Device • Tap Re-download"
-                } else {
-                    holder.btnRedownload.visibility = View.GONE
-                    holder.btnViewMedia.visibility = View.VISIBLE
-                    holder.ivDeletedBadge.visibility = View.GONE
-
-                    holder.dotStatus.setBackgroundColor(Color.parseColor("#10B981")) // Green
-                    holder.layoutStatusBadge.setBackgroundColor(Color.parseColor("#1B2B20"))
-                    holder.tvStatusText.setTextColor(Color.parseColor("#10B981"))
-                    holder.tvStatusText.text = "On Device • Ready in Gallery"
-                }
-            }
-        }
+        // Bind status and progress
+        bindProgressAndStatus(holder, record, isDeleted, state)
 
         // Thumbnail Loader: Load persistent internal thumbnail, DB thumbnail, or valid local media
         val context = holder.itemView.context
         val shortcode = record.shortcode
-        val localThumbFile = if (shortcode.isNotBlank()) java.io.File(context.filesDir, "thumbnails/$shortcode.jpg") else null
-        val legacyThumbFile = if (shortcode.isNotBlank()) java.io.File(context.cacheDir, "thumbnails/$shortcode.jpg") else null
+        val localThumbFile = if (shortcode.isNotBlank()) File(context.filesDir, "thumbnails/$shortcode.jpg") else null
+        val legacyThumbFile = if (shortcode.isNotBlank()) File(context.cacheDir, "thumbnails/$shortcode.jpg") else null
 
         val uri = when {
-            // 1. Persistent internal disk thumbnail (takes precedence for instant offline load even for deleted items)
             localThumbFile != null && localThumbFile.exists() -> localThumbFile.absolutePath
             legacyThumbFile != null && legacyThumbFile.exists() -> legacyThumbFile.absolutePath
-            // 2. Stored DB thumbnailPath (e.g. cached path or CDN preview)
             !record.thumbnailPath.isNullOrBlank() -> record.thumbnailPath
-            // 3. Local media file if item is still present on device
             !isDeleted && !record.representativeUri.isNullOrBlank() -> record.representativeUri
-            // Do NOT fall back to dead https://www.instagram.com/p/$shortcode/media/?size=m which redirects to login!
             else -> null
         }
 
         if (uri != null) {
-            MediaThumbnailLoader.loadInto(
-                context = context,
-                uriString = uri,
-                imageView = holder.ivThumbnail,
-                isVideo = isVideo,
-                targetWidth = 240,
-                targetHeight = 240,
-                scope = scope
-            )
+            try {
+                MediaThumbnailLoader.loadInto(
+                    context = context,
+                    uriString = uri,
+                    imageView = holder.ivThumbnail,
+                    isVideo = isVideo,
+                    targetWidth = 240,
+                    targetHeight = 240,
+                    scope = scope
+                )
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (_: Exception) {
+                holder.ivThumbnail.setImageResource(if (isVideo) R.drawable.ic_video else R.drawable.ic_image)
+            }
         } else {
             holder.ivThumbnail.setImageResource(if (isVideo) R.drawable.ic_video else R.drawable.ic_image)
         }
@@ -215,6 +197,76 @@ class DownloadHistoryAdapter(
         }
     }
 
+    private fun bindProgressAndStatus(
+        holder: HistoryViewHolder,
+        record: DownloadRecord,
+        isDeleted: Boolean,
+        state: CardProgressState
+    ) {
+        when (state) {
+            is CardProgressState.InProgress -> {
+                val progressView = holder.ensureProgressInflated()
+                progressView?.visibility = View.VISIBLE
+                holder.tvProgressMessage?.text = state.message
+                holder.tvProgressPercent?.text = "${state.percent}%"
+                holder.pbHistoryHorizontal?.isIndeterminate = false
+                holder.pbHistoryHorizontal?.progress = state.percent
+
+                holder.pbRedownload.visibility = View.VISIBLE
+                holder.btnRedownload.visibility = View.GONE
+                holder.btnViewMedia.visibility = View.GONE
+
+                holder.tvStatusText.text = "Re-downloading (${state.percent}%)..."
+                holder.tvStatusText.setTextColor(Color.parseColor("#E1306C"))
+                holder.dotStatus.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#E1306C"))
+                holder.layoutStatusBadge.setBackgroundColor(Color.parseColor("#2E1220"))
+                holder.ivDeletedBadge.visibility = View.GONE
+            }
+            is CardProgressState.Queued -> {
+                val progressView = holder.ensureProgressInflated()
+                progressView?.visibility = View.VISIBLE
+                val qMsg = if (state.queuePosition > 1) "In queue (#${state.queuePosition})..." else "Waiting in queue..."
+                holder.tvProgressMessage?.text = qMsg
+                holder.tvProgressPercent?.text = "Queued"
+                holder.pbHistoryHorizontal?.isIndeterminate = true
+
+                holder.pbRedownload.visibility = View.VISIBLE
+                holder.btnRedownload.visibility = View.GONE
+                holder.btnViewMedia.visibility = View.GONE
+
+                holder.tvStatusText.text = "In Download Queue"
+                holder.tvStatusText.setTextColor(Color.parseColor("#38BDF8"))
+                holder.dotStatus.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#38BDF8"))
+                holder.layoutStatusBadge.setBackgroundColor(Color.parseColor("#0C2A40"))
+                holder.ivDeletedBadge.visibility = View.VISIBLE
+            }
+            is CardProgressState.Idle -> {
+                holder.layoutProgress?.visibility = View.GONE
+                holder.pbRedownload.visibility = View.GONE
+
+                if (isDeleted) {
+                    holder.btnRedownload.visibility = View.VISIBLE
+                    holder.btnViewMedia.visibility = View.GONE
+                    holder.ivDeletedBadge.visibility = View.VISIBLE
+
+                    holder.dotStatus.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#F59E0B"))
+                    holder.layoutStatusBadge.setBackgroundColor(Color.parseColor("#2E2010"))
+                    holder.tvStatusText.setTextColor(Color.parseColor("#F59E0B"))
+                    holder.tvStatusText.text = "Deleted from Device • Tap Re-download"
+                } else {
+                    holder.btnRedownload.visibility = View.GONE
+                    holder.btnViewMedia.visibility = View.VISIBLE
+                    holder.ivDeletedBadge.visibility = View.GONE
+
+                    holder.dotStatus.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#10B981"))
+                    holder.layoutStatusBadge.setBackgroundColor(Color.parseColor("#1B2B20"))
+                    holder.tvStatusText.setTextColor(Color.parseColor("#10B981"))
+                    holder.tvStatusText.text = "On Device • Ready in Gallery"
+                }
+            }
+        }
+    }
+
     override fun getItemCount(): Int = items.size
 
     private fun formatBytes(bytes: Long): String {
@@ -222,9 +274,9 @@ class DownloadHistoryAdapter(
         val kb = bytes / 1024.0
         val mb = kb / 1024.0
         return if (mb >= 1.0) {
-            String.format(java.util.Locale.US, "%.1f MB", mb)
+            String.format(Locale.US, "%.1f MB", mb)
         } else {
-            String.format(java.util.Locale.US, "%.0f KB", kb)
+            String.format(Locale.US, "%.0f KB", kb)
         }
     }
 
@@ -241,13 +293,24 @@ class DownloadHistoryAdapter(
         val btnOpenInstagram: Button = view.findViewById(R.id.btnOpenInstagram)
         val btnRedownload: Button = view.findViewById(R.id.btnRedownload)
         val btnViewMedia: Button = view.findViewById(R.id.btnViewMedia)
-        val btnMoreOptions: android.widget.ImageButton = view.findViewById(R.id.btnMoreOptions)
+        val btnMoreOptions: ImageButton = view.findViewById(R.id.btnMoreOptions)
         val pbRedownload: ProgressBar = view.findViewById(R.id.pbRedownload)
 
-        // Progress section
-        val layoutProgress: LinearLayout = view.findViewById(R.id.layoutDownloadProgress)
-        val tvProgressMessage: TextView = view.findViewById(R.id.tvProgressMessage)
-        val tvProgressPercent: TextView = view.findViewById(R.id.tvProgressPercent)
-        val pbHistoryHorizontal: ProgressBar = view.findViewById(R.id.pbHistoryHorizontal)
+        // ViewStub for progress
+        val stubProgress: ViewStub? = view.findViewById(R.id.stubDownloadProgress)
+        var layoutProgress: View? = view.findViewById(R.id.layoutDownloadProgress)
+        var tvProgressMessage: TextView? = layoutProgress?.findViewById(R.id.tvProgressMessage)
+        var tvProgressPercent: TextView? = layoutProgress?.findViewById(R.id.tvProgressPercent)
+        var pbHistoryHorizontal: ProgressBar? = layoutProgress?.findViewById(R.id.pbHistoryHorizontal)
+
+        fun ensureProgressInflated(): View? {
+            if (layoutProgress == null && stubProgress != null && stubProgress.parent != null) {
+                layoutProgress = stubProgress.inflate()
+                tvProgressMessage = layoutProgress?.findViewById(R.id.tvProgressMessage)
+                tvProgressPercent = layoutProgress?.findViewById(R.id.tvProgressPercent)
+                pbHistoryHorizontal = layoutProgress?.findViewById(R.id.pbHistoryHorizontal)
+            }
+            return layoutProgress
+        }
     }
 }

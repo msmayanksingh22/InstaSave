@@ -131,11 +131,23 @@ object DownloadNotificationManager {
 
         try {
             createNotificationChannels(context)
+            val contentIntent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(MainActivity.EXTRA_TARGET_TAB, R.id.nav_gallery)
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                notificationId,
+                contentIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
             val builder = NotificationCompat.Builder(context, CHANNEL_ID_DOWNLOADS)
                 .setSmallIcon(R.drawable.ic_download_arrow)
                 .setContentTitle(title)
                 .setContentText(message)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
 
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

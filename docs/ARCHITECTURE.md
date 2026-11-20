@@ -48,10 +48,10 @@ Every component, state machine, and background routine is governed by three stri
 │                                                                                                  │
 │   ┌──────────────────────────────┐                         ┌─────────────────────────────────┐   │
 │   │ FloatingTriggerService       │                         │ MainActivity (Control Center)   │   │
-│   │ • Stationary Circular Overlay│                         │ • Download Mode: AUTO/CLIPBOARD │   │
-│   │ • specialUse Foreground FGS  │                         │ • Carousel: ENTIRE/CURRENT/ASK  │   │
-│   │ • 0px Anchor Drift Geometry  │                         │ • Unified Save Location Picker  │   │
-│   │ • Edge Docking Persistence   │                         │ • + Paste Instagram Link Action │   │
+│   │ • Stationary Circular Overlay│                         │ • Single-Activity (4-Fragment)  │   │
+│   │ • specialUse Foreground FGS  │                         │ • BottomNav: Home/Gal/Hist/Set  │   │
+│   │ • 0px Anchor Drift Geometry  │                         │ • 120Hz Instant Switching       │   │
+│   │ • Edge Docking Persistence   │                         │ • Zero-Scroll Tab Architecture  │   │
 │   └──────────────┬───────────────┘                         └────────────────┬────────────────┘   │
 └──────────────────┼──────────────────────────────────────────────────────────┼────────────────────┘
                    │ Triggers Automation Gesture                              │ User Action / Focus Flow

@@ -1,12 +1,35 @@
 <resources>
     <!-- Base Application Theme -->
-    <style name="Theme.InstaSave" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <style name="Theme.InstaSave" parent="Theme.Material3.Dark.NoActionBar">
+        <!-- Brand & Accent -->
         <item name="colorPrimary">@color/insta_pink</item>
-        <item name="colorPrimaryDark">#101016</item>
+        <item name="colorOnPrimary">@color/white</item>
         <item name="colorAccent">@color/insta_coral</item>
-        <item name="android:windowBackground">@color/bg_dark</item>
-        <item name="android:statusBarColor">#101016</item>
-        <item name="android:navigationBarColor">#101016</item>
+
+        <!-- BottomNavigationView Active Pill Color -->
+        <item name="colorSecondaryContainer">#2E1E38</item>
+        <item name="colorOnSecondaryContainer">@color/insta_pink</item>
+
+        <!-- Dark Surfaces -->
+        <item name="android:colorBackground">@color/bg_dark</item>
+        <item name="colorSurface">@color/bg_dark</item>
+        <item name="colorSurfaceContainer">@color/card_bg</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/text_secondary</item>
+        <item name="colorOutline">@color/card_stroke</item>
+
+        <!-- Custom M3 Bottom Nav Active Indicator -->
+        <item name="bottomNavigationStyle">@style/Widget.InstaSave.BottomNav</item>
+    </style>
+
+    <style name="Widget.InstaSave.BottomNav" parent="Widget.Material3.BottomNavigationView">
+        <item name="itemActiveIndicatorStyle">@style/Widget.InstaSave.BottomNav.Indicator</item>
+    </style>
+
+    <style name="Widget.InstaSave.BottomNav.Indicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
+        <item name="android:color">#2E1E38</item>
+        <item name="android:width">56dp</item>
+        <item name="android:height">32dp</item>
     </style>
 
     <!-- Official Android 12-16 Splash Screen Theme -->

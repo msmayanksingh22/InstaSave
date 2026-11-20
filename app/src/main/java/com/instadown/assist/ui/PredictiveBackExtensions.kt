@@ -7,7 +7,7 @@ import androidx.appcompat.app.AppCompatActivity
 import kotlin.math.min
 
 /**
- * Reusable Predictive Back binder for MediaSelectionActivity & GalleryActivity.
+ * Reusable Predictive Back binder for MediaSelectionActivity & GalleryFragment.
  * Animates live edge-swipe progress on Android 14-16 while staying 100% compatible with API 26+.
  */
 fun AppCompatActivity.registerPredictiveBackMotion(

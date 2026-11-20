@@ -18,7 +18,7 @@ object SharedMediaTransition {
 
     fun transitionNameFor(mediaId: Long): String = "instasave_media_$mediaId"
 
-    /** Call from GalleryActivity RecyclerView item click */
+    /** Call from GalleryFragment RecyclerView item click */
     fun launchViewer(
         activity: AppCompatActivity,
         clickedThumbnail: ImageView,
@@ -40,7 +40,7 @@ object SharedMediaTransition {
         activity.startActivity(intent, options.toBundle())
     }
 
-    /** Call in GalleryActivity.onCreate() to remap return target when ViewPager2 swiped */
+    /** Call in GalleryFragment to remap return target when ViewPager2 swiped */
     fun bindGalleryExitRemapper(
         activity: AppCompatActivity,
         recyclerView: RecyclerView,
@@ -95,7 +95,7 @@ object SharedMediaTransition {
         })
     }
 
-    /** Call inside MediaViewerActivity.finishAfterTransition() so GalleryActivity scrolls before return */
+    /** Call inside MediaViewerActivity.finishAfterTransition() so GalleryFragment scrolls before return */
     fun setReturnPositionResult(activity: Activity, currentPosition: Int) {
         activity.setResult(
             Activity.RESULT_OK,

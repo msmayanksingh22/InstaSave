@@ -68,6 +68,7 @@ class FloatingHudOverlayController(private val context: Context) {
                 if (currentState is ResilientHudState.Success) {
                     val intent = Intent(context, MainActivity::class.java).apply {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        putExtra(MainActivity.EXTRA_TARGET_TAB, com.instadown.assist.R.id.nav_gallery)
                     }
                     context.startActivity(intent)
                 }
