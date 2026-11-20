@@ -60,57 +60,61 @@ class StorageDeletionCoordinator(
         val resolver = context.contentResolver
         val items = queryActiveItems(db, downloadId)
 
-        val confirmedGoneIds = mutableListOf<Long>()
+        val confirmedGone = mutableListOf<Pair<Long, String?>>()
         val consentNeededUris = mutableListOf<Uri>()
         val consentNeededItemIds = mutableListOf<Long>()
+        val guardedUris = mutableSetOf<String>()
         var deletedCount = 0
         var alreadyMissingCount = 0
 
-        for ((itemId, uriStr) in items) {
-            if (uriStr.isNullOrBlank()) {
-                confirmedGoneIds.add(itemId)
-                alreadyMissingCount++
-                continue
-            }
-
-            val uri = try { Uri.parse(uriStr) } catch (_: Exception) { null }
-            if (uri == null) {
-                confirmedGoneIds.add(itemId)
-                alreadyMissingCount++
-                continue
-            }
-
-            SelfDeleteGuard.markDeleting(uriStr)
-            try {
-                val rowsRemoved = resolver.delete(uri, null, null)
-                if (rowsRemoved > 0) {
-                    confirmedGoneIds.add(itemId)
-                    deletedCount++
-                } else if (!uriStillExists(uri)) {
-                    confirmedGoneIds.add(itemId)
+        try {
+            for ((itemId, uriStr) in items) {
+                if (uriStr.isNullOrBlank()) {
+                    confirmedGone.add(itemId to null)
                     alreadyMissingCount++
-                } else if (isSupportedForBatchDelete(uri)) {
-                    // File exists, but OS denied silent delete (e.g. post-reinstall ownership loss on Android 11-16)
-                    consentNeededUris.add(uri)
-                    consentNeededItemIds.add(itemId)
+                    continue
                 }
-            } catch (_: SecurityException) {
-                if (isSupportedForBatchDelete(uri)) {
-                    consentNeededUris.add(uri)
-                    consentNeededItemIds.add(itemId)
-                }
-            } catch (_: IllegalArgumentException) {
-                // Malformed or already purged MediaStore row
-                confirmedGoneIds.add(itemId)
-                alreadyMissingCount++
-            } finally {
-                SelfDeleteGuard.unmarkDeleting(uriStr)
-            }
-        }
 
-        // Atomically mark only confirmed deleted/missing rows
-        if (confirmedGoneIds.isNotEmpty()) {
-            markItemsExternallyDeleted(db, confirmedGoneIds, downloadId)
+                val uri = try { Uri.parse(uriStr) } catch (_: Exception) { null }
+                if (uri == null) {
+                    confirmedGone.add(itemId to uriStr)
+                    alreadyMissingCount++
+                    continue
+                }
+
+                guardedUris.add(uriStr)
+                SelfDeleteGuard.markDeleting(uriStr)
+                try {
+                    val rowsRemoved = resolver.delete(uri, null, null)
+                    if (rowsRemoved > 0) {
+                        confirmedGone.add(itemId to uriStr)
+                        deletedCount++
+                    } else if (!uriStillExists(uri)) {
+                        confirmedGone.add(itemId to uriStr)
+                        alreadyMissingCount++
+                    } else if (isSupportedForBatchDelete(uri)) {
+                        // File exists, but OS denied silent delete (e.g. post-reinstall ownership loss on Android 11-16)
+                        consentNeededUris.add(uri)
+                        consentNeededItemIds.add(itemId)
+                    }
+                } catch (_: SecurityException) {
+                    if (isSupportedForBatchDelete(uri)) {
+                        consentNeededUris.add(uri)
+                        consentNeededItemIds.add(itemId)
+                    }
+                } catch (_: IllegalArgumentException) {
+                    // Malformed or already purged MediaStore row
+                    confirmedGone.add(itemId to uriStr)
+                    alreadyMissingCount++
+                }
+            }
+
+            // Atomically mark only confirmed deleted/missing rows while guard is still active
+            if (confirmedGone.isNotEmpty()) {
+                markItemsExternallyDeleted(db, confirmedGone, downloadId)
+            }
+        } finally {
+            guardedUris.forEach { SelfDeleteGuard.unmarkDeleting(it) }
         }
 
         if (consentNeededUris.isNotEmpty() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -139,14 +143,14 @@ class StorageDeletionCoordinator(
     suspend fun finalizeConsentedDeletion(downloadId: Long, itemIds: List<Long>) = withContext(Dispatchers.IO) {
         if (itemIds.isEmpty()) return@withContext
         val db = dbHelper.writableDatabase
-        markItemsExternallyDeleted(db, itemIds, downloadId)
+        markItemsExternallyDeleted(db, itemIds.map { it to null }, downloadId)
         StorageAccountant.invalidateCache()
         notifyStorageDeleted(downloadId)
     }
 
     private fun markItemsExternallyDeleted(
         db: android.database.sqlite.SQLiteDatabase,
-        itemIds: List<Long>,
+        items: List<Pair<Long, String?>>,
         downloadId: Long
     ) {
         db.beginTransaction()
@@ -155,13 +159,22 @@ class StorageDeletionCoordinator(
                 put(InstaSaveDatabaseHelper.COL_ITEM_STATUS, ItemStatus.EXTERNAL_DELETED.name)
                 putNull(InstaSaveDatabaseHelper.COL_ITEM_MEDIA_URI)
             }
-            for (id in itemIds) {
-                db.update(
-                    InstaSaveDatabaseHelper.TABLE_DOWNLOAD_ITEMS,
-                    values,
-                    "${InstaSaveDatabaseHelper.COL_ITEM_ID} = ?",
-                    arrayOf(id.toString())
-                )
+            for ((id, uriStr) in items) {
+                if (uriStr != null) {
+                    db.update(
+                        InstaSaveDatabaseHelper.TABLE_DOWNLOAD_ITEMS,
+                        values,
+                        "${InstaSaveDatabaseHelper.COL_ITEM_ID} = ? AND (${InstaSaveDatabaseHelper.COL_ITEM_MEDIA_URI} = ? OR ${InstaSaveDatabaseHelper.COL_ITEM_MEDIA_URI} IS NULL)",
+                        arrayOf(id.toString(), uriStr)
+                    )
+                } else {
+                    db.update(
+                        InstaSaveDatabaseHelper.TABLE_DOWNLOAD_ITEMS,
+                        values,
+                        "${InstaSaveDatabaseHelper.COL_ITEM_ID} = ?",
+                        arrayOf(id.toString())
+                    )
+                }
             }
 
             // Check if any active items remain for this download

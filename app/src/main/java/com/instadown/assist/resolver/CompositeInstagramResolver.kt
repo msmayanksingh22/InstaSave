@@ -18,14 +18,13 @@ object TierCircuitBreaker {
     private val trippedMap = ConcurrentHashMap<String, Long>()
 
     fun trip(tier: String) {
-        trippedMap[tier] = System.currentTimeMillis()
+        trippedMap[tier] = android.os.SystemClock.elapsedRealtime()
     }
 
     fun isTripped(tier: String): Boolean {
         val tripTime = trippedMap[tier] ?: return false
-        if (System.currentTimeMillis() - tripTime > COOLDOWN_MS) {
-            trippedMap.remove(tier)
-            return false
+        if (android.os.SystemClock.elapsedRealtime() - tripTime > COOLDOWN_MS) {
+            return !trippedMap.remove(tier, tripTime)
         }
         return true
     }
@@ -137,7 +136,7 @@ class CompositeInstagramResolver(
         AppLogger.i(TAG, "Step 2: ${trace.last()}")
 
         // Instant return if Fast Embed resolved single photo or reel
-        if (embedSuccess && embedResult != null) {
+        if (embedResult != null && embedSuccess) {
             val finalRes = embedResult.copy(
                 totalResolutionTimeMs = System.currentTimeMillis() - startTime,
                 diagnosticTrace = trace
@@ -179,7 +178,7 @@ class CompositeInstagramResolver(
             )
             AppLogger.i(TAG, "Step 3: ${trace.last()}")
 
-            if (tier0Success && tier0Result != null) {
+            if (tier0Result != null && tier0Success) {
                 TierCircuitBreaker.reset("Tier0_GraphQL")
                 val finalRes = tier0Result.copy(
                     totalResolutionTimeMs = System.currentTimeMillis() - startTime,
@@ -227,7 +226,7 @@ class CompositeInstagramResolver(
             )
             AppLogger.i(TAG, "Step 4: ${trace.last()}")
 
-            if (bridgeSuccess && bridgeResult != null) {
+            if (bridgeResult != null && bridgeSuccess) {
                 val finalRes = bridgeResult.copy(
                     authorUsername = bridgeResult.authorUsername ?: embedResult?.authorUsername,
                     caption = bridgeResult.caption ?: embedResult?.caption,
@@ -263,7 +262,7 @@ class CompositeInstagramResolver(
         )
         AppLogger.i(TAG, "Step 5: ${trace.last()}")
 
-        if (sjsSuccess && sjsResult != null) {
+        if (sjsResult != null && sjsSuccess) {
             val finalRes = sjsResult.copy(
                 totalResolutionTimeMs = System.currentTimeMillis() - startTime,
                 diagnosticTrace = trace

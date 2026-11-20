@@ -174,7 +174,7 @@ class ReDownloadSelectionBottomSheet : DialogFragment() {
         }
 
         pbVerifying.visibility = View.VISIBLE
-        lifecycleScope.launch(Dispatchers.IO) {
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
             val repo = DownloadRepository.getInstance(requireContext())
             val record = repo.getTransactionById(downloadId)
             if (record == null) {
@@ -212,7 +212,7 @@ class ReDownloadSelectionBottomSheet : DialogFragment() {
                         selectedIndices.add(it.index)
                     }
                 } else {
-                    verified.forEach { selectedIndices.add(it.index) }
+                    selectedIndices.clear()
                 }
 
                 pbVerifying.visibility = View.GONE
@@ -326,7 +326,7 @@ class ReDownloadSelectionBottomSheet : DialogFragment() {
                 isVideo = item.record.mediaType.equals("VIDEO", ignoreCase = true),
                 targetWidth = 120,
                 targetHeight = 120,
-                scope = lifecycleScope
+                scope = viewLifecycleOwner.lifecycleScope
             )
         }
 

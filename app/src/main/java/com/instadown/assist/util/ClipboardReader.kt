@@ -75,7 +75,11 @@ object ClipboardReader {
             }
         }
 
-        AppLogger.d(TAG, "readCurrentClip: rawText='${rawText.take(60)}', isValid=$isValid, cleanUrl='$cleanUrl', clipTime=$clipTime")
+        if (isValid) {
+            AppLogger.d(TAG, "readCurrentClip: valid Instagram URL='$cleanUrl', clipTime=$clipTime")
+        } else {
+            AppLogger.d(TAG, "readCurrentClip: non-Instagram text length=${rawText.length}, mimes=$mimes, clipTime=$clipTime")
+        }
 
         return ClipResult(
             text = rawText,

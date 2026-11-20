@@ -232,7 +232,7 @@ object ShareLocator {
         }
 
         // Safety Gate: Must meet absolute confidence and margin thresholds
-        val isAmbiguous = best != null && runnerUp != null && (best.totalScore < MIN_CONFIDENCE_THRESHOLD || margin < MIN_MARGIN_THRESHOLD)
+        val isAmbiguous = best != null && (best.totalScore < MIN_CONFIDENCE_THRESHOLD || (runnerUp != null && margin < MIN_MARGIN_THRESHOLD))
 
         // Check if best candidate is clipped or below viewport
         var isClipped = false

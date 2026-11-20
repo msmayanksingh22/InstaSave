@@ -14,10 +14,13 @@ import android.webkit.WebViewClient
 import com.instadown.assist.resolver.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 
 /**
@@ -42,7 +45,10 @@ class HeadlessWebBridgeResolver(
         @Volatile
         private var isPrewarmBusy: Boolean = false
 
-        private var activeBridgeCallback: ((String?, String?) -> Unit)? = null
+        private val bridgeMutex = Mutex()
+        private val activeCallbacks = ConcurrentHashMap<String, (String?, String?) -> Unit>()
+        @Volatile
+        private var currentActiveRequestId: String? = null
 
         private fun configureWebView(webView: WebView) {
             val settings = webView.settings
@@ -74,14 +80,34 @@ class HeadlessWebBridgeResolver(
                         @JavascriptInterface
                         fun onMediaFound(jsonStr: String) {
                             Handler(Looper.getMainLooper()).post {
-                                activeBridgeCallback?.invoke(jsonStr, null)
+                                val reqId = currentActiveRequestId
+                                if (reqId != null) {
+                                    activeCallbacks.remove(reqId)?.invoke(jsonStr, null)
+                                }
+                            }
+                        }
+
+                        @JavascriptInterface
+                        fun onMediaFoundWithId(requestId: String, jsonStr: String) {
+                            Handler(Looper.getMainLooper()).post {
+                                activeCallbacks.remove(requestId)?.invoke(jsonStr, null)
                             }
                         }
 
                         @JavascriptInterface
                         fun onError(errorMsg: String) {
                             Handler(Looper.getMainLooper()).post {
-                                activeBridgeCallback?.invoke(null, errorMsg)
+                                val reqId = currentActiveRequestId
+                                if (reqId != null) {
+                                    activeCallbacks.remove(reqId)?.invoke(null, errorMsg)
+                                }
+                            }
+                        }
+
+                        @JavascriptInterface
+                        fun onErrorWithId(requestId: String, errorMsg: String) {
+                            Handler(Looper.getMainLooper()).post {
+                                activeCallbacks.remove(requestId)?.invoke(null, errorMsg)
                             }
                         }
                     }
@@ -91,16 +117,28 @@ class HeadlessWebBridgeResolver(
                         override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
                             val msg = consoleMessage?.message() ?: return false
                             if (msg.startsWith("INSTASAVE_FOUND:")) {
-                                val json = msg.removePrefix("INSTASAVE_FOUND:")
+                                val raw = msg.removePrefix("INSTASAVE_FOUND:")
+                                val (reqId, json) = if (raw.contains("::")) {
+                                    val parts = raw.split("::", limit = 2)
+                                    parts[0] to parts[1]
+                                } else {
+                                    (currentActiveRequestId ?: "") to raw
+                                }
                                 Handler(Looper.getMainLooper()).post {
-                                    activeBridgeCallback?.invoke(json, null)
+                                    activeCallbacks.remove(reqId)?.invoke(json, null)
                                 }
                                 return true
                             }
                             if (msg.startsWith("INSTASAVE_ERROR:")) {
-                                val err = msg.removePrefix("INSTASAVE_ERROR:")
+                                val raw = msg.removePrefix("INSTASAVE_ERROR:")
+                                val (reqId, err) = if (raw.contains("::")) {
+                                    val parts = raw.split("::", limit = 2)
+                                    parts[0] to parts[1]
+                                } else {
+                                    (currentActiveRequestId ?: "") to raw
+                                }
                                 Handler(Looper.getMainLooper()).post {
-                                    activeBridgeCallback?.invoke(null, err)
+                                    activeCallbacks.remove(reqId)?.invoke(null, err)
                                 }
                                 return true
                             }
@@ -132,10 +170,10 @@ class HeadlessWebBridgeResolver(
         preWarm(context)
     }
 
-    override suspend fun resolve(url: String, validateCdn: Boolean): ResolveResult {
+    override suspend fun resolve(url: String, validateCdn: Boolean): ResolveResult = bridgeMutex.withLock {
         val startTime = System.currentTimeMillis()
         val normalized = UrlNormalizer.normalize(url)
-            ?: return ResolveResult(
+            ?: return@withLock ResolveResult(
                 success = false,
                 originalInputUrl = url,
                 canonicalUrl = null,
@@ -153,7 +191,7 @@ class HeadlessWebBridgeResolver(
 
         val targetUrl = normalized.originalUrl
 
-        return try {
+        return@withLock try {
             val result = withTimeoutOrNull(TIMEOUT_MS) {
                 resolveInternal(normalized, targetUrl, startTime)
             }
@@ -203,6 +241,8 @@ class HeadlessWebBridgeResolver(
         startTime: Long
     ): ResolveResult = withContext(Dispatchers.Main) {
         suspendCancellableCoroutine { continuation ->
+            val requestId = "req_${System.currentTimeMillis()}_${(1000..9999).random()}"
+            currentActiveRequestId = requestId
             var onDemandWebView: WebView? = null
             var isFinished = false
             val usingPrewarmed = prewarmedWebView != null && isPrewarmReady && !isPrewarmBusy
@@ -210,8 +250,11 @@ class HeadlessWebBridgeResolver(
             fun finishWithSuccess(items: List<ResolvedMedia>) {
                 if (isFinished) return
                 isFinished = true
-                activeBridgeCallback = null
-                com.instadown.assist.util.AppLogger.i(TAG, "Headless web bridge finished with success: ${items.size} items")
+                activeCallbacks.remove(requestId)
+                if (currentActiveRequestId == requestId) {
+                    currentActiveRequestId = null
+                }
+                com.instadown.assist.util.AppLogger.i(TAG, "[$requestId] Headless web bridge finished with success: ${items.size} items")
 
                 if (usingPrewarmed) {
                     isPrewarmBusy = false
@@ -288,8 +331,11 @@ class HeadlessWebBridgeResolver(
             fun finishWithError(errorMsg: String) {
                 if (isFinished) return
                 isFinished = true
-                activeBridgeCallback = null
-                com.instadown.assist.util.AppLogger.w(TAG, "Headless web bridge finished with error: $errorMsg")
+                activeCallbacks.remove(requestId)
+                if (currentActiveRequestId == requestId) {
+                    currentActiveRequestId = null
+                }
+                com.instadown.assist.util.AppLogger.w(TAG, "[$requestId] Headless web bridge finished with error: $errorMsg")
 
                 if (usingPrewarmed) {
                     isPrewarmBusy = false
@@ -323,20 +369,25 @@ class HeadlessWebBridgeResolver(
             }
 
             continuation.invokeOnCancellation {
-                activeBridgeCallback = null
-                if (usingPrewarmed) {
-                    isPrewarmBusy = false
-                } else {
-                    try {
-                        onDemandWebView?.stopLoading()
-                        onDemandWebView?.destroy()
-                        onDemandWebView = null
-                    } catch (_: Exception) {}
+                Handler(Looper.getMainLooper()).post {
+                    activeCallbacks.remove(requestId)
+                    if (currentActiveRequestId == requestId) {
+                        currentActiveRequestId = null
+                    }
+                    if (usingPrewarmed) {
+                        isPrewarmBusy = false
+                    } else {
+                        try {
+                            onDemandWebView?.stopLoading()
+                            onDemandWebView?.destroy()
+                            onDemandWebView = null
+                        } catch (_: Exception) {}
+                    }
                 }
             }
 
-            // Set the active callback for this resolution
-            activeBridgeCallback = { jsonStr, errStr ->
+            // Bind the active callback for this request ID
+            activeCallbacks[requestId] = { jsonStr, errStr ->
                 if (errStr != null) {
                     finishWithError(errStr)
                 } else if (jsonStr != null) {
@@ -349,18 +400,18 @@ class HeadlessWebBridgeResolver(
                 }
             }
 
-            val injectionJs = buildInjectionScript(targetUrl)
+            val injectionJs = buildInjectionScript(targetUrl, requestId)
 
             if (usingPrewarmed && prewarmedWebView != null) {
                 isPrewarmBusy = true
-                Log.i(TAG, "Executing INSTANT resolution using pre-warmed WebView for: $targetUrl")
+                Log.i(TAG, "Executing INSTANT resolution using pre-warmed WebView for [$requestId]: $targetUrl")
                 try {
                     prewarmedWebView?.resumeTimers()
                     prewarmedWebView?.onResume()
                 } catch (_: Exception) {}
                 prewarmedWebView?.evaluateJavascript(injectionJs, null)
             } else {
-                Log.i(TAG, "Pre-warmed WebView not ready. Launching on-demand WebView for: $targetUrl")
+                Log.i(TAG, "Pre-warmed WebView not ready. Launching on-demand WebView for [$requestId]: $targetUrl")
                 try {
                     val wv = WebView(context.applicationContext)
                     onDemandWebView = wv
@@ -370,14 +421,28 @@ class HeadlessWebBridgeResolver(
                         @JavascriptInterface
                         fun onMediaFound(jsonStr: String) {
                             Handler(Looper.getMainLooper()).post {
-                                activeBridgeCallback?.invoke(jsonStr, null)
+                                activeCallbacks.remove(requestId)?.invoke(jsonStr, null)
+                            }
+                        }
+
+                        @JavascriptInterface
+                        fun onMediaFoundWithId(reqId: String, jsonStr: String) {
+                            Handler(Looper.getMainLooper()).post {
+                                activeCallbacks.remove(reqId)?.invoke(jsonStr, null)
                             }
                         }
 
                         @JavascriptInterface
                         fun onError(errorMsg: String) {
                             Handler(Looper.getMainLooper()).post {
-                                activeBridgeCallback?.invoke(null, errorMsg)
+                                activeCallbacks.remove(requestId)?.invoke(null, errorMsg)
+                            }
+                        }
+
+                        @JavascriptInterface
+                        fun onErrorWithId(reqId: String, errorMsg: String) {
+                            Handler(Looper.getMainLooper()).post {
+                                activeCallbacks.remove(reqId)?.invoke(null, errorMsg)
                             }
                         }
                     }
@@ -387,16 +452,28 @@ class HeadlessWebBridgeResolver(
                         override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
                             val msg = consoleMessage?.message() ?: return false
                             if (msg.startsWith("INSTASAVE_FOUND:")) {
-                                val json = msg.removePrefix("INSTASAVE_FOUND:")
+                                val raw = msg.removePrefix("INSTASAVE_FOUND:")
+                                val (reqId, json) = if (raw.contains("::")) {
+                                    val parts = raw.split("::", limit = 2)
+                                    parts[0] to parts[1]
+                                } else {
+                                    requestId to raw
+                                }
                                 Handler(Looper.getMainLooper()).post {
-                                    activeBridgeCallback?.invoke(json, null)
+                                    activeCallbacks.remove(reqId)?.invoke(json, null)
                                 }
                                 return true
                             }
                             if (msg.startsWith("INSTASAVE_ERROR:")) {
-                                val err = msg.removePrefix("INSTASAVE_ERROR:")
+                                val raw = msg.removePrefix("INSTASAVE_ERROR:")
+                                val (reqId, err) = if (raw.contains("::")) {
+                                    val parts = raw.split("::", limit = 2)
+                                    parts[0] to parts[1]
+                                } else {
+                                    requestId to raw
+                                }
                                 Handler(Looper.getMainLooper()).post {
-                                    activeBridgeCallback?.invoke(null, err)
+                                    activeCallbacks.remove(reqId)?.invoke(null, err)
                                 }
                                 return true
                             }
@@ -553,11 +630,12 @@ class HeadlessWebBridgeResolver(
         return items
     }
 
-    private fun buildInjectionScript(targetUrl: String): String {
+    private fun buildInjectionScript(targetUrl: String, requestId: String): String {
         val safeUrl = targetUrl.replace("'", "\\'")
         return """
             (function() {
-                console.log('InstaSave bridge execution starting for: $safeUrl');
+                var currentReqId = '$requestId';
+                console.log('InstaSave bridge execution starting for: ' + currentReqId + ' -> $safeUrl');
 
                 function dismissPopups() {
                     try {
@@ -579,22 +657,29 @@ class HeadlessWebBridgeResolver(
                 function sendResult(items) {
                     if (!items || items.length === 0) return;
                     var json = JSON.stringify(items);
-                    console.log('INSTASAVE_FOUND:' + json);
+                    console.log('INSTASAVE_FOUND:' + currentReqId + '::' + json);
                     try {
-                        if (window.AndroidBridge && typeof window.AndroidBridge.onMediaFound === 'function') {
+                        if (window.AndroidBridge && typeof window.AndroidBridge.onMediaFoundWithId === 'function') {
+                            window.AndroidBridge.onMediaFoundWithId(currentReqId, json);
+                        } else if (window.AndroidBridge && typeof window.AndroidBridge.onMediaFound === 'function') {
                             window.AndroidBridge.onMediaFound(json);
                         }
                     } catch (_) {}
                 }
 
                 function sendError(msg) {
-                    console.log('INSTASAVE_ERROR:' + msg);
+                    console.log('INSTASAVE_ERROR:' + currentReqId + '::' + msg);
                     try {
-                        if (window.AndroidBridge && typeof window.AndroidBridge.onError === 'function') {
+                        if (window.AndroidBridge && typeof window.AndroidBridge.onErrorWithId === 'function') {
+                            window.AndroidBridge.onErrorWithId(currentReqId, msg);
+                        } else if (window.AndroidBridge && typeof window.AndroidBridge.onError === 'function') {
                             window.AndroidBridge.onError(msg);
                         }
                     } catch (_) {}
                 }
+
+                window._fastDlSendResult = sendResult;
+                window._fastDlSendError = sendError;
 
                 // Monkey-patch window.fetch and XMLHttpRequest to catch raw API payload
                 if (!window._fastDlPatched) {
@@ -614,7 +699,11 @@ class HeadlessWebBridgeResolver(
                                             window._capturedFastDlApiData = json;
                                             var items = extractFromCapturedApiData();
                                             if (items && items.length > 0) {
-                                                sendResult(items);
+                                                if (window._fastDlSendResult) {
+                                                    window._fastDlSendResult(items);
+                                                } else {
+                                                    sendResult(items);
+                                                }
                                             }
                                         }).catch(function(_) {});
                                     }
@@ -639,7 +728,11 @@ class HeadlessWebBridgeResolver(
                                     window._capturedFastDlApiData = json;
                                     var items = extractFromCapturedApiData();
                                     if (items && items.length > 0) {
-                                        sendResult(items);
+                                        if (window._fastDlSendResult) {
+                                            window._fastDlSendResult(items);
+                                        } else {
+                                            sendResult(items);
+                                        }
                                     }
                                 }
                             } catch (_) {}

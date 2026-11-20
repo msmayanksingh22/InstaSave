@@ -65,7 +65,7 @@ class FloatingTriggerService : Service() {
         val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
         val clip = try { cm?.primaryClip } catch (e: Exception) { null }
         val text = clip?.getItemAt(0)?.coerceToText(this)?.toString()
-        Log.i("OPPO_CLIP_TEST", "onPrimaryClipChanged fired: hasClip=${clip != null}, itemCount=${clip?.itemCount}, preview=${text?.take(60)}")
+        Log.i("OPPO_CLIP_TEST", "onPrimaryClipChanged fired: hasClip=${clip != null}, itemCount=${clip?.itemCount}, length=${text?.length ?: 0}")
     }
 
     companion object {
@@ -79,10 +79,14 @@ class FloatingTriggerService : Service() {
 
         fun start(context: Context) {
             val intent = Intent(context, FloatingTriggerService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Cannot start foreground service: ${e.message}")
             }
         }
 
@@ -191,6 +195,7 @@ class FloatingTriggerService : Service() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start foreground service notification: ${e.message}", e)
+            stopSelf()
         }
     }
 

@@ -63,8 +63,8 @@ class GalleryFragment : Fragment() {
         pendingConsentItemIds = null
 
         if (result.resultCode == Activity.RESULT_OK && dlId != null && itemIds != null) {
-            val appCtx = requireContext().applicationContext
-            viewLifecycleOwner.lifecycleScope.launch {
+            val appCtx = context?.applicationContext ?: return@registerForActivityResult
+            lifecycleScope.launch {
                 withContext(Dispatchers.IO) {
                     DownloadRepository.getInstance(appCtx).finalizeConsentedDeletion(dlId, itemIds)
                     StorageAccountant.invalidateCache()
@@ -91,6 +91,11 @@ class GalleryFragment : Fragment() {
         if (savedInstanceState != null) {
             pendingConsentDownloadId = savedInstanceState.getLong(KEY_PENDING_DL_ID, -1L).takeIf { it != -1L }
             pendingConsentItemIds = savedInstanceState.getLongArray(KEY_PENDING_ITEM_IDS)?.toList()
+            val queueArray = savedInstanceState.getLongArray("key_pending_free_up_queue")
+            if (queueArray != null) {
+                pendingFreeUpQueue.clear()
+                queueArray.forEach { pendingFreeUpQueue.add(it) }
+            }
         }
     }
 
@@ -98,6 +103,9 @@ class GalleryFragment : Fragment() {
         super.onSaveInstanceState(outState)
         pendingConsentDownloadId?.let { outState.putLong(KEY_PENDING_DL_ID, it) }
         pendingConsentItemIds?.let { outState.putLongArray(KEY_PENDING_ITEM_IDS, it.toLongArray()) }
+        if (pendingFreeUpQueue.isNotEmpty()) {
+            outState.putLongArray("key_pending_free_up_queue", pendingFreeUpQueue.toLongArray())
+        }
     }
 
     override fun onCreateView(
@@ -370,8 +378,8 @@ class GalleryFragment : Fragment() {
             }
 
             override fun onPurgePermanently(selectedIds: List<Long>) {
-                val appCtx = requireContext().applicationContext
-                viewLifecycleOwner.lifecycleScope.launch {
+                val appCtx = context?.applicationContext ?: return
+                lifecycleScope.launch {
                     val repo = DownloadRepository.getInstance(appCtx)
                     withContext(Dispatchers.IO) {
                         for (id in selectedIds) {
@@ -382,7 +390,7 @@ class GalleryFragment : Fragment() {
                     withContext(Dispatchers.Main) {
                         if (_binding == null || !isAdded) return@withContext
                         Toast.makeText(
-                            requireContext(),
+                            context ?: return@withContext,
                             "Permanently erased from history and storage",
                             Toast.LENGTH_SHORT
                         ).show()
@@ -400,15 +408,15 @@ class GalleryFragment : Fragment() {
         if (nextId == null) {
             StorageAccountant.invalidateCache()
             if (_binding != null && isAdded) {
-                Toast.makeText(requireContext(), "✓ Freed up storage. Posts preserved in History!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context ?: return, "✓ Freed up storage. Posts preserved in History!", Toast.LENGTH_SHORT).show()
                 exitSelectionMode()
                 loadGallery()
             }
             return
         }
 
-        val appCtx = requireContext().applicationContext
-        viewLifecycleOwner.lifecycleScope.launch {
+        val appCtx = context?.applicationContext ?: return
+        lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 DownloadRepository.getInstance(appCtx).deleteDeviceStorageOnly(nextId)
             }

@@ -3,13 +3,16 @@ package com.instadown.assist.resolver
 import android.util.Log
 import com.instadown.assist.resolver.model.*
 import com.instadown.assist.util.AppLogger
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.URI
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.regex.Pattern
 
 class EmbedFallbackResolver(
@@ -68,7 +71,44 @@ class EmbedFallbackResolver(
             Pattern.compile("""\\*\"edge_media_to_caption\\*\"\s*:\s*\{\\*"edges\\*"\s*:\s*\[\{\\*"node\\*"\s*:\s*\{\\*"text\\*"\s*:\s*\\*"([^"\\]*(?:\\.[^"\\]*)*)\\*""""),
             Pattern.compile("""class=[\"'][^\"']*Caption[^\"']*[\"'][^>]*>([^<]+)""")
         )
+
+        private fun containsValidMedia(html: String): Boolean {
+            if (html.isBlank() ||
+                html.contains("<title>Page Not Found") ||
+                html.contains("Page Not Found &bull; Instagram") ||
+                html.contains("Content Not Found")
+            ) return false
+
+            for (pattern in EMBED_VIDEO_PATTERNS) {
+                val matcher = pattern.matcher(html)
+                if (matcher.find()) {
+                    val raw = matcher.group(1) ?: continue
+                    val candidate = unescapeUrl(raw)
+                    if (candidate.startsWith("http") && (candidate.contains(".mp4") || candidate.contains("fbcdn.net") || candidate.contains("cdninstagram.com"))) {
+                        return true
+                    }
+                }
+            }
+            for (pattern in EMBED_IMAGE_PATTERNS) {
+                val matcher = pattern.matcher(html)
+                if (matcher.find()) {
+                    val raw = matcher.group(1) ?: continue
+                    val candidate = unescapeUrl(raw)
+                    if (candidate.startsWith("http")) {
+                        return true
+                    }
+                }
+            }
+            return false
+        }
     }
+
+    private data class ProbeResult(
+        val pathType: String,
+        val html: String?,
+        val httpCode: Int,
+        val hasMedia: Boolean
+    )
 
     override suspend fun resolve(url: String, validateCdn: Boolean): ResolveResult = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
@@ -101,10 +141,15 @@ class EmbedFallbackResolver(
         var lastHttpCode = 0
         var resolvedPathType: String? = null
 
-        // Parallel dual-probe for instant response (<300ms)
-        val (winningHtml, winningPathType, httpCode) = coroutineScope {
-            val deferredList = pathTypesToTry.map { pathType ->
-                async(Dispatchers.IO) {
+        // Parallel non-blocking dual-probe race for instant response (<300ms)
+        val (winningHtml, winningPathType, httpCode) = run {
+            val winner = CompletableDeferred<ProbeResult>()
+            val calls = ConcurrentHashMap<String, okhttp3.Call>()
+            val completedCount = AtomicInteger(0)
+            val fallbackRef = java.util.concurrent.atomic.AtomicReference<ProbeResult?>(null)
+
+            val jobs = pathTypesToTry.map { pathType ->
+                CoroutineScope(Dispatchers.IO).launch {
                     val embedUrl = "https://www.instagram.com/$pathType/${normalized.shortcode}/embed/captioned/"
                     var candidateBody: String? = null
                     var code = 0
@@ -116,7 +161,9 @@ class EmbedFallbackResolver(
                             .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                             .build()
 
-                        client.newCall(request).execute().use { response ->
+                        val call = client.newCall(request)
+                        calls[pathType] = call
+                        call.execute().use { response ->
                             code = response.code
                             if (response.isSuccessful) {
                                 candidateBody = response.body?.string()
@@ -125,28 +172,43 @@ class EmbedFallbackResolver(
                     } catch (e: Exception) {
                         AppLogger.d(TAG, "Embed probe failed for $pathType in ${System.currentTimeMillis() - reqStartTime}ms: ${e.message}")
                     }
-                    Triple(pathType, candidateBody, code)
+
+                    val hasMedia = candidateBody != null && containsValidMedia(candidateBody!!)
+                    val probeResult = ProbeResult(pathType, candidateBody, code, hasMedia)
+
+                    if (hasMedia) {
+                        if (winner.complete(probeResult)) {
+                            // Cancel all other competing probe requests immediately to eliminate bandwidth & latency waste
+                            calls.forEach { (type, call) ->
+                                if (type != pathType) {
+                                    try { call.cancel() } catch (_: Exception) {}
+                                }
+                            }
+                        }
+                    } else {
+                        fallbackRef.updateAndGet { current ->
+                            if (current == null || (code > 0 && current.httpCode == 0)) {
+                                probeResult
+                            } else {
+                                current
+                            }
+                        }
+                    }
+
+                    if (completedCount.incrementAndGet() >= pathTypesToTry.size) {
+                        // All probes finished and no valid media found
+                        winner.complete(fallbackRef.get() ?: probeResult)
+                    }
                 }
             }
 
-            var chosenHtml: String? = null
-            var chosenPath: String? = null
-            var finalCode = 0
-
-            for (deferred in deferredList) {
-                val (pathType, body, code) = deferred.await()
-                if (code > 0) finalCode = code
-                if (!body.isNullOrBlank() &&
-                    !body.contains("<title>Page Not Found") &&
-                    !body.contains("Page Not Found &bull; Instagram") &&
-                    !body.contains("Content Not Found")
-                ) {
-                    chosenHtml = body
-                    chosenPath = pathType
-                    break
-                }
+            val finalResult = try {
+                winner.await()
+            } finally {
+                jobs.forEach { it.cancel() }
+                calls.forEach { (_, call) -> try { call.cancel() } catch (_: Exception) {} }
             }
-            Triple(chosenHtml, chosenPath, finalCode)
+            Triple(finalResult.html, finalResult.pathType, finalResult.httpCode)
         }
 
         html = winningHtml
