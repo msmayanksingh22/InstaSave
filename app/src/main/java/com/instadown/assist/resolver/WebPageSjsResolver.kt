@@ -75,7 +75,10 @@ class WebPageSjsResolver(
                 .addHeader("Upgrade-Insecure-Requests", "1")
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            client.newCall(request).apply {
+                // Coroutine timeouts alone cannot interrupt blocking socket reads.
+                timeout().timeout(2500, TimeUnit.MILLISECONDS)
+            }.execute().use { response ->
                 val finalUrl = response.request.url.toString()
                 finalHost = URI(finalUrl).host
 

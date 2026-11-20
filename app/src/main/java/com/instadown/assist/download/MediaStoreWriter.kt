@@ -221,7 +221,7 @@ object MediaStoreWriter {
                 }
                 val updated = resolver.update(uri, updateValues, null, null)
                 if (updated <= 0) {
-                    Log.w(TAG, "Warning: Setting IS_PENDING=0 returned $updated for $uri")
+                    throw java.io.IOException("Unable to publish downloaded media")
                 }
             }
 
@@ -230,8 +230,10 @@ object MediaStoreWriter {
                 resolver.openInputStream(uri)?.use { it.read() != -1 } ?: false
             } catch (e: Exception) {
                 Log.w(TAG, "Reopen check exception for committed file $uri: ${e.message}")
-                true // Still treat as success if committed and bytes written match
+                false
             }
+
+            if (!canReopen) throw java.io.IOException("Downloaded media cannot be reopened")
 
             Log.i(TAG, "Successfully written, committed, and verified $bytesWritten bytes for $uri (mediaType=$mediaType, readable=$canReopen)")
             WriteVerificationResult(
@@ -245,6 +247,7 @@ object MediaStoreWriter {
             Log.e(TAG, "Exception during media stream write to $uri", e)
             try { outputStream?.close() } catch (ignored: Exception) {}
             deleteIncompleteEntry(resolver, uri)
+            if (e is kotlinx.coroutines.CancellationException) throw e
             WriteVerificationResult(
                 success = false,
                 bytesWritten = bytesWritten,

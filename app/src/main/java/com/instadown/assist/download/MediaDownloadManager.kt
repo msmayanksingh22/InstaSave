@@ -326,6 +326,7 @@ class MediaDownloadManager(
                     .url(currentUrl)
                     .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                     .addHeader("Accept", "*/*")
+                    .addHeader("Accept-Encoding", "identity")
                     .build()
 
                 okHttpClient.newCall(request).execute().use { response ->
@@ -444,6 +445,7 @@ class MediaDownloadManager(
             } catch (e: Exception) {
                 Log.e(TAG, "Unexpected exception on attempt $attempts for ${item.fileName}", e)
                 MediaStoreWriter.deleteIncompleteEntry(context.contentResolver, pendingUri)
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 lastError = "Unexpected error: ${e.message}"
                 lastErrorCode = DownloadErrorCode.UNKNOWN
                 break

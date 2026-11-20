@@ -18,8 +18,8 @@
 
         <ImageButton
             android:id="@+id/btnBackSelection"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_arrow_back"
             android:tint="@color/text_primary"
@@ -38,7 +38,7 @@
                 android:layout_height="wrap_content"
                 android:text="Select Media"
                 android:textColor="@color/text_primary"
-                android:textSize="17sp"
+                android:textSize="22sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -47,14 +47,14 @@
                 android:layout_height="wrap_content"
                 android:text="Tap to select items to download"
                 android:textColor="@color/text_secondary"
-                android:textSize="12sp" />
+                android:textSize="14sp" />
         </LinearLayout>
 
         <Button
             android:id="@+id/btnToggleSelectAll"
             style="@style/Widget.AppCompat.Button.Borderless"
             android:layout_width="wrap_content"
-            android:layout_height="36dp"
+            android:layout_height="48dp"
             android:text="Clear All"
             android:textColor="@color/insta_pink"
             android:textSize="12sp"
@@ -67,7 +67,7 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:padding="8dp"
+        android:padding="12dp"
         android:clipToPadding="false"
         android:overScrollMode="never" />
 
@@ -102,7 +102,8 @@
         <Button
             android:id="@+id/btnDownloadSelected"
             android:layout_width="match_parent"
-            android:layout_height="50dp"
+            android:layout_height="56dp"
+            android:textAllCaps="false"
             android:text="Download Selected (0)"
             android:textColor="@color/white"
             android:background="@drawable/btn_rounded_accent"

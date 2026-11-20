@@ -50,6 +50,7 @@ object MediaThumbnailLoader {
             .connectionPool(ConnectionPool(20, 5, TimeUnit.MINUTES))
             .connectTimeout(3, TimeUnit.SECONDS)
             .readTimeout(5, TimeUnit.SECONDS)
+            .callTimeout(8, TimeUnit.SECONDS)
             .followRedirects(true)
             .build()
     }
@@ -58,6 +59,7 @@ object MediaThumbnailLoader {
     private val networkSemaphore = Semaphore(4)
     // In-flight deduplication to avoid duplicate downloads of identical thumbnails
     private val inFlightRequests = ConcurrentHashMap<String, Deferred<Bitmap?>>()
+    private val thumbnailScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
 
     suspend fun loadThumbnail(
         context: Context,
@@ -68,7 +70,7 @@ object MediaThumbnailLoader {
     ): Bitmap? = withContext(Dispatchers.IO) {
         if (uriString.isNullOrBlank()) return@withContext null
 
-        val cacheKey = "${uriString}_${targetWidth}x${targetHeight}"
+        val cacheKey = "${uriString}_${isVideo}_${targetWidth}x${targetHeight}"
         synchronized(memoryCache) {
             val cached = memoryCache.get(cacheKey)
             if (cached != null && !cached.isRecycled) {
@@ -82,14 +84,17 @@ object MediaThumbnailLoader {
             return@withContext existingDeferred.await()
         }
 
-        val deferred = async(Dispatchers.IO) {
-            try {
-                loadThumbnailInternal(context, uriString, isVideo, targetWidth, targetHeight, cacheKey)
-            } finally {
-                inFlightRequests.remove(cacheKey)
-            }
+        val appContext = context.applicationContext
+        val candidate = thumbnailScope.async(start = kotlinx.coroutines.CoroutineStart.LAZY) {
+            loadThumbnailInternal(appContext, uriString, isVideo, targetWidth, targetHeight, cacheKey)
         }
-        inFlightRequests[cacheKey] = deferred
+        val deferred = inFlightRequests.putIfAbsent(cacheKey, candidate) ?: candidate
+        if (deferred === candidate) {
+            candidate.invokeOnCompletion { inFlightRequests.remove(cacheKey, candidate) }
+            candidate.start()
+        } else {
+            candidate.cancel()
+        }
         deferred.await()
     }
 
@@ -129,12 +134,14 @@ object MediaThumbnailLoader {
                 val diskFile = getDiskCacheFile(context, uriString)
                 if (diskFile.exists() && diskFile.length() > 0) {
                     bitmap = decodeSampledBitmapFromFile(diskFile.absolutePath, targetWidth, targetHeight)
-                } else {
+                }
+                if (bitmap == null) {
                     networkSemaphore.withPermit {
                         // Re-check disk file in case parallel coroutine filled it while waiting for permit
                         if (diskFile.exists() && diskFile.length() > 0) {
                             bitmap = decodeSampledBitmapFromFile(diskFile.absolutePath, targetWidth, targetHeight)
-                        } else {
+                        }
+                        if (bitmap == null) {
                             val request = Request.Builder()
                                 .url(uriString)
                                 .header("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X)")
@@ -144,12 +151,16 @@ object MediaThumbnailLoader {
                                 if (response.isSuccessful) {
                                     val body = response.body
                                     if (body != null) {
-                                        val tempFile = File(diskFile.parentFile, "${diskFile.name}.tmp")
-                                        FileOutputStream(tempFile).use { fos ->
-                                            body.byteStream().copyTo(fos)
+                                        val tempFile = File.createTempFile(diskFile.name, ".tmp", diskFile.parentFile)
+                                        try {
+                                            FileOutputStream(tempFile).use { fos ->
+                                                body.byteStream().copyTo(fos)
+                                            }
+                                            bitmap = decodeSampledBitmapFromFile(tempFile.absolutePath, targetWidth, targetHeight)
+                                            if (bitmap != null) tempFile.renameTo(diskFile)
+                                        } finally {
+                                            tempFile.delete()
                                         }
-                                        tempFile.renameTo(diskFile)
-                                        bitmap = decodeSampledBitmapFromFile(diskFile.absolutePath, targetWidth, targetHeight)
                                     }
                                 }
                             }
@@ -157,6 +168,7 @@ object MediaThumbnailLoader {
                     }
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 Log.d(TAG, "HTTP thumbnail fetch error for $uriString: ${e.message}")
             }
 
@@ -275,7 +287,7 @@ object MediaThumbnailLoader {
             return
         }
 
-        val cacheKey = "${uriString}_${targetWidth}x${targetHeight}"
+        val cacheKey = "${uriString}_${isVideo}_${targetWidth}x${targetHeight}"
         synchronized(memoryCache) {
             val cached = memoryCache.get(cacheKey)
             if (cached != null && !cached.isRecycled) {
@@ -298,9 +310,9 @@ object MediaThumbnailLoader {
 
     fun evict(uriString: String?) {
         if (uriString.isNullOrBlank()) return
-        val cacheKey = "${uriString}_400x400"
         synchronized(memoryCache) {
-            memoryCache.remove(cacheKey)
+            memoryCache.snapshot().orEmpty().keys.filter { it.startsWith("${uriString}_") }
+                .forEach { memoryCache.remove(it) }
         }
     }
 

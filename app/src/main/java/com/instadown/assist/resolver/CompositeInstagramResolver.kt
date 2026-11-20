@@ -112,6 +112,7 @@ class CompositeInstagramResolver(
                 fallbackResolver.resolve(targetUrl, validateCdn)
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             AppLogger.w(TAG, "Fast Embed fallback exception: ${e.message}")
             null
         }
@@ -146,13 +147,14 @@ class CompositeInstagramResolver(
         }
 
         // Step 3: Tier 0 Direct OkHttp GraphQL (Zero-WebView fallback if not tripped)
-        if (!isEmbedCarousel && !TierCircuitBreaker.isTripped("Tier0_GraphQL")) {
+        if (!TierCircuitBreaker.isTripped("Tier0_GraphQL")) {
             val step3Start = System.currentTimeMillis()
             val tier0Result = try {
                 withTimeoutOrNull(1200L) {
                     directResolver.resolve(targetUrl, validateCdn)
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 AppLogger.w(TAG, "Tier 0 GraphQL exception: ${e.message}")
                 null
             }
@@ -187,7 +189,7 @@ class CompositeInstagramResolver(
                 AppLogger.i(TAG, "Resolution completed successfully via GraphQL in ${finalRes.totalResolutionTimeMs}ms:\n${finalRes.formattedTrace}")
                 return finalRes
             }
-        } else if (!isEmbedCarousel) {
+        } else {
             trace.add(
                 com.instadown.assist.resolver.model.StepTrace(
                     stepIndex = stepIndex++,
@@ -209,6 +211,7 @@ class CompositeInstagramResolver(
             bridgeResult = try {
                 webBridgeResolver.resolve(targetUrl, validateCdn)
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 AppLogger.w(TAG, "Headless Web Bridge exception: ${e.message}")
                 null
             }
@@ -245,6 +248,7 @@ class CompositeInstagramResolver(
                 primaryResolver.resolve(targetUrl, validateCdn)
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             AppLogger.w(TAG, "Tier 3 SJS resolver exception: ${e.message}")
             null
         }

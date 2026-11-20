@@ -101,6 +101,8 @@ class MediaSelectionActivity : AppCompatActivity() {
         )
 
         rvMediaTiles.layoutManager = GridLayoutManager(this, 2)
+        // Selection changes should not cross-fade or flash already loaded previews.
+        rvMediaTiles.itemAnimator = null
 
         btnToggleSelectAll.setOnClickListener {
             if (selectedIndices.size == resolvedItems.size) {
@@ -133,20 +135,24 @@ class MediaSelectionActivity : AppCompatActivity() {
         selectedIndices.clear()
         for (i in resolvedItems.indices) selectedIndices.add(i)
 
-        // Instant parallel thumbnail pre-decoding
+        // Use the loader's bounded concurrency and shared in-flight requests.
         lifecycleScope.launch(Dispatchers.IO) {
             resolvedItems.forEach { item ->
-                val thumb = if (item.mediaType == MediaType.VIDEO) item.thumbnailUrl else (item.thumbnailUrl ?: item.mediaUrl)
-                if (!thumb.isNullOrBlank() && (thumb.startsWith("http://") || thumb.startsWith("https://"))) {
-                    try {
-                        MediaThumbnailLoader.loadThumbnail(
-                            this@MediaSelectionActivity,
-                            thumb,
-                            isVideo = item.mediaType == MediaType.VIDEO,
-                            targetWidth = 240,
-                            targetHeight = 240
-                        )
-                    } catch (_: Exception) {}
+                launch {
+                    val thumb = if (item.mediaType == MediaType.VIDEO) item.thumbnailUrl else (item.thumbnailUrl ?: item.mediaUrl)
+                    if (!thumb.isNullOrBlank() && (thumb.startsWith("http://") || thumb.startsWith("https://"))) {
+                        try {
+                            MediaThumbnailLoader.loadThumbnail(
+                                applicationContext,
+                                thumb,
+                                isVideo = item.mediaType == MediaType.VIDEO,
+                                targetWidth = 240,
+                                targetHeight = 240
+                            )
+                        } catch (e: Exception) {
+                            if (e is kotlinx.coroutines.CancellationException) throw e
+                        }
+                    }
                 }
             }
         }
@@ -286,6 +292,7 @@ class MediaSelectionActivity : AppCompatActivity() {
                     scope = lifecycleScope
                 )
             } else {
+                holder.ivThumbnail.tag = null
                 holder.ivThumbnail.setImageResource(if (isVideo) R.drawable.ic_video else R.drawable.ic_image)
             }
 

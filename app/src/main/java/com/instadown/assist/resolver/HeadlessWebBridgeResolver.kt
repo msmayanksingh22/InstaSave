@@ -65,7 +65,7 @@ class HeadlessWebBridgeResolver(
 
         fun preWarm(context: Context) {
             Handler(Looper.getMainLooper()).post {
-                if (prewarmedWebView != null && isPrewarmReady) {
+                if (prewarmedWebView != null) {
                     return@post
                 }
                 try {
@@ -216,6 +216,7 @@ class HeadlessWebBridgeResolver(
                 )
             }
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e(TAG, "Headless web bridge exception", e)
             ResolveResult(
                 success = false,

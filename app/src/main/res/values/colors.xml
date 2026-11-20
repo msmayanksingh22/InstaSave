@@ -15,17 +15,17 @@
     <color name="accent">#FD1D1D</color>
 
     <!-- Surfaces & Neutrals (Dark Theme default) -->
-    <color name="bg_dark">#101016</color>
-    <color name="card_bg">#1A1A24</color>
-    <color name="card_stroke">#2A2A3A</color>
-    <color name="surface_variant">#222230</color>
-    <color name="background_dark">#101016</color>
-    <color name="surface_dark">#1A1A24</color>
+    <color name="bg_dark">#0D1017</color>
+    <color name="card_bg">#181D28</color>
+    <color name="card_stroke">#30394A</color>
+    <color name="surface_variant">#242D3C</color>
+    <color name="background_dark">#0D1017</color>
+    <color name="surface_dark">#181D28</color>
 
     <!-- Text Tokens -->
     <color name="text_primary">#F3F4F6</color>
-    <color name="text_secondary">#9CA3AF</color>
-    <color name="text_muted">#6B7280</color>
+    <color name="text_secondary">#B3BDCE</color>
+    <color name="text_muted">#929FB4</color>
 
     <!-- Semantic Indicators -->
     <color name="status_green">#10B981</color>
