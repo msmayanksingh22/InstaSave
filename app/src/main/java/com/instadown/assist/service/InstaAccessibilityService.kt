@@ -3,11 +3,11 @@ package com.instadown.assist.service
 import android.accessibilityservice.AccessibilityService
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.instadown.assist.engine.AutomationEngine
 import com.instadown.assist.model.AutomationResult
+import com.instadown.assist.util.AppLogger
 
 class InstaAccessibilityService : AccessibilityService() {
 
@@ -66,7 +66,7 @@ class InstaAccessibilityService : AccessibilityService() {
                 performGlobalAction(GLOBAL_ACTION_BACK)
             }
         )
-        Log.i(TAG, "InstaAccessibilityService connected. AutomationEngine initialized.")
+        AppLogger.i(TAG, "InstaAccessibilityService connected. AutomationEngine initialized.")
     }
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
@@ -81,7 +81,7 @@ class InstaAccessibilityService : AccessibilityService() {
             instance = null
         }
         automationEngine = null
-        Log.i(TAG, "InstaAccessibilityService destroyed.")
+        AppLogger.i(TAG, "InstaAccessibilityService destroyed.")
     }
 
     var lastInteractionNode: AccessibilityNodeInfo? = null
@@ -143,7 +143,7 @@ class InstaAccessibilityService : AccessibilityService() {
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed extracting slide info from node: ${e.message}")
+            AppLogger.w(TAG, "Failed extracting slide info from node: ${e.message}")
         }
         return null
     }
@@ -162,7 +162,7 @@ class InstaAccessibilityService : AccessibilityService() {
                             lastInteractionTimestamp = System.currentTimeMillis()
                             extractSlideInfoFromNode(it)?.let { slide ->
                                 lastObservedSlide = slide
-                                Log.i(TAG, "Observed carousel slide from event: ${slide.currentSlideIndex + 1}/${slide.totalSlides}")
+                                AppLogger.i(TAG, "Observed carousel slide from event: ${slide.currentSlideIndex + 1}/${slide.totalSlides}")
                             }
                         }
                     } catch (ignored: Exception) {}
@@ -172,7 +172,7 @@ class InstaAccessibilityService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
-        Log.w(TAG, "InstaAccessibilityService interrupted.")
+        AppLogger.w(TAG, "InstaAccessibilityService interrupted.")
     }
 
     /**
@@ -221,7 +221,7 @@ class InstaAccessibilityService : AccessibilityService() {
         try {
             rootInActiveWindow?.let { roots.add(it) }
         } catch (e: Exception) {
-            Log.w(TAG, "Error getting rootInActiveWindow: ${e.message}")
+            AppLogger.w(TAG, "Error getting rootInActiveWindow: ${e.message}")
         }
 
         // 2. All interactive windows
@@ -239,11 +239,11 @@ class InstaAccessibilityService : AccessibilityService() {
                         }
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Error accessing window root: ${e.message}")
+                    AppLogger.w(TAG, "Error accessing window root: ${e.message}")
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Error querying windows: ${e.message}")
+            AppLogger.w(TAG, "Error querying windows: ${e.message}")
         }
         return roots
     }

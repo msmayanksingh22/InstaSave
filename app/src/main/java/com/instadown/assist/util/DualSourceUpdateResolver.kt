@@ -81,33 +81,42 @@ class DualSourceUpdateResolver(
      *   3) Raw GitHub main manifest (last-resort offline/CDN fallback)
      */
     suspend fun fetchLatestRelease(): OtaReleaseInfo? = withContext(Dispatchers.IO) {
+        var bestCandidate: OtaReleaseInfo? = null
+
         // Tier 1: Zero-quota instant tag probe (302 Location header)
         val latestTag = probeLatestTagViaRedirect()
         if (!latestTag.isNullOrBlank()) {
             AppLogger.i(TAG, "Probed latest tag via 302 redirect: $latestTag")
             val assetManifestUrl =
                 "https://github.com/$REPO_OWNER/$REPO_NAME/releases/download/$latestTag/release-manifest.json"
-            fetchManifestJson(assetManifestUrl, source = "release_asset_manifest")?.let {
-                AppLogger.i(TAG, "Found release manifest at release asset URL: v${it.versionName}")
-                return@withContext it
-            }
-
-            val taggedRawUrl =
-                "https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$latestTag/release-manifest.json"
-            fetchManifestJson(taggedRawUrl, source = "tagged_raw_manifest")?.let {
-                AppLogger.i(TAG, "Found release manifest at tagged raw URL: v${it.versionName}")
-                return@withContext it
-            }
+            bestCandidate = fetchManifestJson(assetManifestUrl, source = "release_asset_manifest")
+                ?: fetchManifestJson("https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$latestTag/release-manifest.json", source = "tagged_raw_manifest")
         }
 
-        // Tier 2: GitHub REST API (/releases/latest) with ETag support
-        fetchFromGitHubReleasesApi()?.let {
-            AppLogger.i(TAG, "Resolved release from GitHub Releases API: ${it.tagName}")
-            return@withContext it
+        if (bestCandidate == null) {
+            // Tier 2: GitHub REST API (/releases/latest) with ETag support
+            bestCandidate = fetchFromGitHubReleasesApi()
         }
 
-        // Tier 3: Last-resort raw main branch manifest
-        fetchManifestJson(RAW_MANIFEST_FALLBACK, source = "raw_main_fallback")
+        // Tier 3: Raw main branch manifest (ensures immediate updates even before release tags are created)
+        val rawMainCandidate = fetchManifestJson(RAW_MANIFEST_FALLBACK, source = "raw_main_fallback")
+
+        val winner = when {
+            rawMainCandidate != null && bestCandidate != null -> {
+                val rawCode = rawMainCandidate.versionCode ?: 0L
+                val bestCode = bestCandidate.versionCode ?: 0L
+                if (rawCode > bestCode) {
+                    AppLogger.i(TAG, "Raw main branch manifest has higher versionCode ($rawCode > $bestCode); prioritizing main.")
+                    rawMainCandidate
+                } else {
+                    bestCandidate
+                }
+            }
+            rawMainCandidate != null -> rawMainCandidate
+            else -> bestCandidate
+        }
+
+        winner
     }
 
     /**

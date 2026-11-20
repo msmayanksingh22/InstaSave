@@ -1,9 +1,9 @@
 {
   "versionCode": 19,
   "versionName": "1.3.1",
-  "releaseNotes": "• Lightning Fast <500ms Link Resolution: Fixed the polaris httpErrorPage false-flagging bug and updated regex extraction for escaped JSON video_url and EmbeddedMediaImage, eliminating 10-second Headless WebView stalls.\n• Step-by-Step Diagnostic Telemetry: All resolution tiers now produce a structured StepTrace with exact millisecond timings and status logs, viewable directly in Settings -> View Diagnostic Logs.\n• Auto-Capture vs. Manual Paste Fix: Expanded ClipboardReader to support 2026 Instagram share tokens (/share/r/, /share/p/, /share/, /s/, /tv/, instagr.am) and restored clipboard auto-download in MainActivity.\n• Instant Author & Caption Metadata: Extracts creator username and captions directly from embed payloads with 0ms delay.\n• Dynamic Accessibility Watchdog: Real-time status subtitles and visual indicators for HEALTHY, ZOMBIE_UNBOUND, and DISABLED_BY_USER states.",
+  "releaseNotes": "• Lightning Fast <500ms Link Resolution: Resolved the polaris telemetry false-flagging bug and updated regex extraction for escaped JSON video_url and EmbeddedMediaImage, eliminating 10-second Headless WebView stalls.\n• Deep Diagnostic Observability: Full step-by-step diagnostic telemetry across all resolution tiers, locator stages, post scoring, and candidate evaluations now stream directly into the in-app Diagnostic Logs viewer.\n• Auto-Capture & Clipboard Freshness: Fixed auto-capture timeouts (increased to 4.5s), added local monotonic timestamp fallbacks for devices with 0ms clip descriptions, and auto-fills copied Instagram links upon opening the app.\n• Instant Author & Caption Metadata: Extracts creator username and captions directly from embed payloads with 0ms delay.\n• Dynamic Accessibility Watchdog: Real-time status subtitles and visual indicators for HEALTHY, ZOMBIE_UNBOUND, and DISABLED_BY_USER states.",
   "apkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
   "fallbackApkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.3.1/app-release.apk",
-  "fileSizeBytes": 6205582,
-  "sha256": "bc820ab96e1ca05c1c45046bacd7fbaad1498fbc5762b793b5a2568dc1413258"
+  "fileSizeBytes": 6206029,
+  "sha256": "41e0a441e53b395efc5972054037e37af2aefaf08e4ca6ccd956fabea7659e13"
 }

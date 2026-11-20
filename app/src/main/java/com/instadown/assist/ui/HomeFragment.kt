@@ -61,6 +61,18 @@ class HomeFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         viewModel.refreshState()
+        checkAndAutoFillClipboard()
+    }
+
+    private fun checkAndAutoFillClipboard() {
+        if (!binding.etInstagramUrl.text.isNullOrBlank()) return
+        val clip = ClipboardReader.readCurrentClip(requireContext())
+        if (clip.isValidInstagramUrl) {
+            binding.etInstagramUrl.setText(clip.cleanUrl)
+            binding.etInstagramUrl.setSelection(clip.cleanUrl.length)
+            viewModel.clearUrlError()
+            com.instadown.assist.util.AppLogger.d("HomeFragment", "Auto-filled clipboard URL: ${clip.cleanUrl}")
+        }
     }
 
     private fun setupRecentDownloadsRecyclerView() {

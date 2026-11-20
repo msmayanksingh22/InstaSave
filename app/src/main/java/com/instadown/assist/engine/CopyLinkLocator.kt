@@ -1,9 +1,9 @@
 package com.instadown.assist.engine
 
 import android.graphics.Rect
-import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 import com.instadown.assist.model.CandidateNode
+import com.instadown.assist.util.AppLogger
 import java.util.ArrayDeque
 import java.util.Locale
 
@@ -195,9 +195,9 @@ object CopyLinkLocator {
 
         allCandidates.sortByDescending { it.totalScore }
 
-        Log.i(TAG, "CopyLinkLocator: allCandidates count=${allCandidates.size}")
+        AppLogger.i(TAG, "CopyLinkLocator: allCandidates count=${allCandidates.size}")
         for ((idx, cand) in allCandidates.withIndex()) {
-            Log.i(TAG, "  [Raw Candidate #$idx]: desc='${cand.desc}', text='${cand.text}', resId='${cand.resId}', cls='${cand.className}', bounds=${cand.bounds}, score=${cand.totalScore}")
+            AppLogger.d(TAG, "  [Raw Candidate #$idx]: desc='${cand.desc}', text='${cand.text}', resId='${cand.resId}', cls='${cand.className}', bounds=${cand.bounds}, score=${cand.totalScore}")
         }
 
         // Deduplicate candidates that represent the same physical control (e.g. icon + text label in same column/parent)
@@ -218,9 +218,9 @@ object CopyLinkLocator {
             }
         }
 
-        Log.i(TAG, "CopyLinkLocator: distinctCandidates count=${distinctCandidates.size}")
+        AppLogger.i(TAG, "CopyLinkLocator: distinctCandidates count=${distinctCandidates.size}")
         for ((idx, cand) in distinctCandidates.withIndex()) {
-            Log.i(TAG, "  [Distinct Candidate #$idx]: desc='${cand.desc}', text='${cand.text}', resId='${cand.resId}', cls='${cand.className}', bounds=${cand.bounds}, score=${cand.totalScore}")
+            AppLogger.d(TAG, "  [Distinct Candidate #$idx]: desc='${cand.desc}', text='${cand.text}', resId='${cand.resId}', cls='${cand.className}', bounds=${cand.bounds}, score=${cand.totalScore}")
         }
 
         val best = distinctCandidates.firstOrNull()
@@ -252,12 +252,12 @@ object CopyLinkLocator {
                     val endX = (reshareRowBounds.left + 120).toFloat().coerceIn(50f, (viewportWidth - 150).toFloat())
                     val y = reshareRowBounds.centerY().toFloat()
                     rowRevealPlan = RowRevealPlan(startX, y, endX, y, reshareRowId)
-                    Log.i(TAG, "CopyLinkLocator: Copy link is clipped at ${candidateBounds.right}px. Dynamic row swipe derived from $reshareRowBounds: ($startX -> $endX at y=$y)")
+                    AppLogger.i(TAG, "CopyLinkLocator: Copy link is clipped at ${candidateBounds.right}px. Dynamic row swipe derived from $reshareRowBounds: ($startX -> $endX at y=$y)")
                 }
             }
         }
 
-        Log.i(TAG, "CopyLinkLocator: Candidates found: ${allCandidates.size}, Best=${best?.summary()}, Margin=$margin, Ambiguous=$isAmbiguous, Clipped=$isClipped")
+        AppLogger.i(TAG, "CopyLinkLocator: Candidates found: ${allCandidates.size}, Best=${best?.summary()}, Margin=$margin, Ambiguous=$isAmbiguous, Clipped=$isClipped")
 
         return CopyLinkEvaluationResult(
             bestCandidate = best,
@@ -289,7 +289,7 @@ object CopyLinkLocator {
                 // Tier 1 targets: Cancel button or close icon
                 val isCancelButton = text == "cancel" || desc == "cancel" || resId.contains("close") || resId.contains("cancel")
                 if (isCancelButton && (node.isClickable || node.parent?.isClickable == true) && bounds.width() > 0 && bounds.height() > 0) {
-                    Log.i(TAG, "CopyLinkLocator: Found targeted Share sheet Cancel/Close control: text='$text', desc='$desc', id=$resId, bounds=$bounds")
+                    AppLogger.i(TAG, "CopyLinkLocator: Found targeted Share sheet Cancel/Close control: text='$text', desc='$desc', id=$resId, bounds=$bounds")
                     return DismissalTarget(node, bounds, "CANCEL_BUTTON")
                 }
 

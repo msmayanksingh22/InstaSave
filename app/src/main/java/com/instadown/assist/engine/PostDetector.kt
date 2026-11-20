@@ -2,9 +2,9 @@ package com.instadown.assist.engine
 
 import android.graphics.PointF
 import android.graphics.Rect
-import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 import com.instadown.assist.model.PostContainer
+import com.instadown.assist.util.AppLogger
 import java.util.ArrayDeque
 import java.util.Locale
 
@@ -136,7 +136,7 @@ object PostDetector {
         }
 
         if (rawCandidates.isEmpty()) {
-            Log.w(TAG, "PostDetector: No valid post container detected.")
+            AppLogger.w(TAG, "PostDetector: No valid post container detected.")
             return TargetResolutionResult(null, null, emptyList(), 0f, true, "No candidate post detected on screen")
         }
 
@@ -221,14 +221,14 @@ object PostDetector {
             targetMargin = margin
         )
 
-        Log.i(TAG, "PostDetector: Evaluated ${evaluatedCandidates.size} post(s). Best='${best?.username}' (TargetScore=%.1f, Margin=%.1f, Ambiguous=$isAmbiguous, Dominance=%.0f%%)"
+        AppLogger.i(TAG, "PostDetector: Evaluated ${evaluatedCandidates.size} post(s). Best='${best?.username}' (TargetScore=%.1f, Margin=%.1f, Ambiguous=$isAmbiguous, Dominance=%.0f%%)"
             .format(best?.targetConfidenceScore ?: 0f, margin, (best?.dominanceRatio ?: 0f) * 100f))
         if (runnerUp != null) {
-            Log.i(TAG, "PostDetector: RunnerUp='${runnerUp.username}' (TargetScore=%.1f, Dominance=%.0f%%)"
+            AppLogger.i(TAG, "PostDetector: RunnerUp='${runnerUp.username}' (TargetScore=%.1f, Dominance=%.0f%%)"
                 .format(runnerUp.targetConfidenceScore, runnerUp.dominanceRatio * 100f))
         }
         if (isAmbiguous) {
-            Log.w(TAG, "PostDetector: AMBIGUOUS_TARGET detected: $ambiguityReason")
+            AppLogger.w(TAG, "PostDetector: AMBIGUOUS_TARGET detected: $ambiguityReason")
         }
 
         return TargetResolutionResult(
@@ -340,7 +340,7 @@ object PostDetector {
         targetScore += domPoints
         signals.add("Viewport dominance fallback (%.0f%%)".format(candidate.dominanceRatio * 100f) to domPoints)
 
-        Log.i(TAG, "PostCandidate: user='${candidate.username}' bounds=${candidate.bounds} score=$targetScore signals=$signals")
+        AppLogger.i(TAG, "PostCandidate: user='${candidate.username}' bounds=${candidate.bounds} score=$targetScore signals=$signals")
 
         return candidate.copy(
             targetConfidenceScore = targetScore,
@@ -551,7 +551,7 @@ object PostDetector {
                 }
             }
         }
-        Log.i(TAG, "inspectPostContainer: inspected $inspectedCount nodes for bounds=$containerBounds -> user='$username', hasShare=$hasShare, hasLike=$hasLike, hasMedia=$hasMedia, actionRow=$actionRowBounds")
+        AppLogger.i(TAG, "inspectPostContainer: inspected $inspectedCount nodes for bounds=$containerBounds -> user='$username', hasShare=$hasShare, hasLike=$hasLike, hasMedia=$hasMedia, actionRow=$actionRowBounds")
 
         // Must have at least 1 strong media or post signature element
         var featureScore = 0f

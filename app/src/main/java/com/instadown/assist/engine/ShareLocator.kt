@@ -2,10 +2,10 @@ package com.instadown.assist.engine
 
 import android.graphics.Path
 import android.graphics.Rect
-import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 import com.instadown.assist.model.CandidateNode
 import com.instadown.assist.model.PostContainer
+import com.instadown.assist.util.AppLogger
 import java.util.ArrayDeque
 import java.util.Locale
 
@@ -256,11 +256,11 @@ object ShareLocator {
                     endY = endY,
                     deltaY = deltaY
                 )
-                Log.i(TAG, "ShareLocator: Share button is clipped at $candidateBounds. Calculated dynamic reveal: dy=$deltaY ($startY -> $endY)")
+                AppLogger.i(TAG, "ShareLocator: Share button is clipped at $candidateBounds. Calculated dynamic reveal: dy=$deltaY ($startY -> $endY)")
             }
         }
 
-        Log.i(TAG, "ShareLocator: Candidates found: ${allCandidates.size}, Best=${best?.summary()}, Margin=$margin, Ambiguous=$isAmbiguous, Clipped=$isClipped")
+        AppLogger.i(TAG, "ShareLocator: Candidates found: ${allCandidates.size}, Best=${best?.summary()}, Margin=$margin, Ambiguous=$isAmbiguous, Clipped=$isClipped")
 
         return ShareEvaluationResult(
             bestCandidate = best,

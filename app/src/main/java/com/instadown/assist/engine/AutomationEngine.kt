@@ -19,6 +19,7 @@ import com.instadown.assist.model.CandidateNode
 import com.instadown.assist.model.PostContainer
 import com.instadown.assist.model.StateTransition
 import com.instadown.assist.model.TransactionSnapshot
+import com.instadown.assist.util.AppLogger
 import com.instadown.assist.util.ClipboardReader
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -33,7 +34,7 @@ class AutomationEngine(
 ) {
     companion object {
         private const val TAG = "InstaDownloaderPOC"
-        private const val HARD_TIMEOUT_MS = 2500L
+        private const val HARD_TIMEOUT_MS = 4500L
         private const val POLL_INTERVAL_MS = 50L
         private const val COOLDOWN_MS = 500L
     }
@@ -71,7 +72,7 @@ class AutomationEngine(
                 diagnosticDetails = details
             )
             stateTransitions.add(t)
-            Log.i(TAG, "STATE: ${t.format()}")
+            AppLogger.i(TAG, "STATE: ${t.format()}")
             currentState = newState
             stateStartTime = now
         }
@@ -128,7 +129,7 @@ class AutomationEngine(
         }
 
         if (!isExecuting.compareAndSet(false, true)) {
-            Log.w(TAG, "startAutomation: Rejected - transaction already active")
+            AppLogger.w(TAG, "startAutomation: Rejected - transaction already active")
             return
         }
 
@@ -180,10 +181,10 @@ class AutomationEngine(
             baselineClipboardText = baselineClip,
             baselineClipboardTimestamp = baselineTimestamp
         )
-        Log.i(TAG, "TransactionSnapshot: ${snapshot.summary()}")
+        AppLogger.i(TAG, "TransactionSnapshot: ${snapshot.summary()}")
 
         // State: IDENTIFY_POST
-        Log.i(TAG, "startAutomation: triggerBounds=$triggerBounds, triggerPoint=$triggerPoint, recentNode=$recentInteractionNode")
+        AppLogger.i(TAG, "startAutomation: triggerBounds=$triggerBounds, triggerPoint=$triggerPoint, recentNode=$recentInteractionNode")
         ctx.transition(AutomationState.IDENTIFY_POST, "Resolving intended post container")
         ctx.onStatusUpdate?.invoke("Identifying target post...")
 
@@ -201,7 +202,7 @@ class AutomationEngine(
         } catch (e: Exception) {
             emptyList()
         }
-        Log.i(TAG, "IDENTIFY_POST: Pre-located ${prelocatedShares.size} visible share candidate(s) on screen.")
+        AppLogger.i(TAG, "IDENTIFY_POST: Pre-located ${prelocatedShares.size} visible share candidate(s) on screen.")
 
         val resolution = PostDetector.resolveIntendedPost(
             root = primaryRoot,
@@ -266,7 +267,7 @@ class AutomationEngine(
             // Check if Share sheet is already open
             val directCopyEval = CopyLinkLocator.locateCopyLink(getRootsProvider(), viewportWidth, viewportHeight)
             if (directCopyEval.bestCandidate != null && !directCopyEval.isAmbiguous) {
-                Log.i(TAG, "Share sheet already open. Bypassing Share click and proceeding directly to Copy Link.")
+                AppLogger.i(TAG, "Share sheet already open. Bypassing Share click and proceeding directly to Copy Link.")
                 executeCopyLinkStage(
                     ctx = ctx,
                     activePost = activePost,
@@ -323,7 +324,7 @@ class AutomationEngine(
                 val newFingerprint = postAfterReveal?.createFingerprint()
 
                 // Re-validation: Check for post drift
-                if (postFingerprint != null && (newFingerprint == null || !newFingerprint.matches(postFingerprint))) {
+                if (newFingerprint == null || !newFingerprint.matches(postFingerprint)) {
                     ctx.transition(
                         AutomationState.FAILED,
                         "Post drift detected after reveal scroll",
@@ -620,7 +621,7 @@ class AutomationEngine(
         val initialClip = ClipboardReader.readCurrentClip(service)
         val priorUrl = if (initialClip.isValidInstagramUrl) initialClip.cleanUrl else ctx.baselineClip
         val priorTimestamp = if (initialClip.timestamp > 0) initialClip.timestamp else ctx.baselineTimestamp
-        Log.i(TAG, "executeCopyLinkClick: priorUrl='$priorUrl', priorTimestamp=$priorTimestamp, clickStart=$copyClickStart")
+        AppLogger.i(TAG, "executeCopyLinkClick: priorUrl='$priorUrl', priorTimestamp=$priorTimestamp, clickStart=$copyClickStart")
 
         pollClipboardForFreshUrl(
             timeoutMs = HARD_TIMEOUT_MS,
@@ -735,7 +736,7 @@ class AutomationEngine(
         val targeted = CopyLinkLocator.findDismissalTarget(roots)
 
         if (targeted != null) {
-            Log.i(TAG, "executeTieredDismissal: Tier 1 - Clicking targeted dismissal button: ${targeted.strategy}")
+            AppLogger.i(TAG, "executeTieredDismissal: Tier 1 - Clicking targeted dismissal button: ${targeted.strategy}")
             val clicked = targeted.node.performAction(AccessibilityNodeInfo.ACTION_CLICK) ||
                     (targeted.node.parent?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true)
             if (!clicked && targeted.bounds.width() > 0) {
@@ -752,7 +753,7 @@ class AutomationEngine(
         // Tier 2: Check for dismiss action on dialog root
         for (root in roots) {
             if (root.actionList.any { it.id == AccessibilityNodeInfo.ACTION_DISMISS }) {
-                Log.i(TAG, "executeTieredDismissal: Tier 2 - Invoking ACTION_DISMISS on root")
+                AppLogger.i(TAG, "executeTieredDismissal: Tier 2 - Invoking ACTION_DISMISS on root")
                 if (root.performAction(AccessibilityNodeInfo.ACTION_DISMISS)) {
                     mainHandler.postDelayed({ onDismissComplete() }, 150)
                     return
@@ -761,7 +762,7 @@ class AutomationEngine(
         }
 
         // Tier 3: Single GLOBAL_ACTION_BACK
-        Log.i(TAG, "executeTieredDismissal: Tier 3 - Dispatching single GLOBAL_ACTION_BACK")
+        AppLogger.i(TAG, "executeTieredDismissal: Tier 3 - Dispatching single GLOBAL_ACTION_BACK")
         globalActionBackDispatcher()
         mainHandler.postDelayed({ onDismissComplete() }, 180)
     }
@@ -778,14 +779,14 @@ class AutomationEngine(
 
         // Attempt 1: Direct ACTION_CLICK on node
         if (node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-            Log.i(TAG, "performControlledClick: Direct ACTION_CLICK succeeded on ${node.className}")
+            AppLogger.i(TAG, "performControlledClick: Direct ACTION_CLICK succeeded on ${node.className}")
             return true
         }
 
         // Attempt 2: ACTION_CLICK on clickable ancestor
         candidate.clickableAncestor?.let { ancestor ->
             if (ancestor.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-                Log.i(TAG, "performControlledClick: Ancestor ACTION_CLICK succeeded on ${ancestor.className}")
+                AppLogger.i(TAG, "performControlledClick: Ancestor ACTION_CLICK succeeded on ${ancestor.className}")
                 return true
             }
         }
@@ -795,7 +796,7 @@ class AutomationEngine(
         if (bounds.width() > 0 && bounds.height() > 0) {
             val safeX = bounds.centerX().toFloat().coerceIn(40f, (viewportWidth - 40).toFloat())
             val safeY = bounds.centerY().toFloat().coerceIn(40f, (viewportHeight - 40).toFloat())
-            Log.i(TAG, "performControlledClick: Dispatching dynamic gesture tap at ($safeX, $safeY)")
+            AppLogger.i(TAG, "performControlledClick: Dispatching dynamic gesture tap at ($safeX, $safeY)")
             val clickPath = Path().apply { moveTo(safeX, safeY) }
             val gesture = GestureDescription.Builder()
                 .addStroke(GestureDescription.StrokeDescription(clickPath, 0, 50))
@@ -837,7 +838,7 @@ class AutomationEngine(
                                 resId.endsWith(":id/copy")
 
                         if (hasShareSurfaceSignal) {
-                            Log.i(TAG, "waitForShareSurface: Detected surface signal in ${elapsed}ms: id=$resId, desc='$desc', text='$text'")
+                            AppLogger.i(TAG, "waitForShareSurface: Detected surface signal in ${elapsed}ms: id=$resId, desc='$desc', text='$text'")
                             onSurfaceDetected()
                             return
                         }
@@ -874,12 +875,13 @@ class AutomationEngine(
 
                 val hasNewerTimestamp = clipResult.timestamp > priorTimestamp && clipResult.timestamp >= (clickTimestamp - 200L)
                 val hasDifferentUrl = priorUrl.isNotEmpty() && clipResult.cleanUrl.isNotEmpty() && clipResult.cleanUrl != priorUrl
-                val isFreshFirstUrl = priorUrl.isEmpty() && clipResult.cleanUrl.isNotEmpty() && clipResult.timestamp >= (clickTimestamp - 200L)
+                val isFreshFirstUrl = priorUrl.isEmpty() && clipResult.cleanUrl.isNotEmpty() && (clipResult.timestamp == 0L || clipResult.timestamp >= (clickTimestamp - 200L))
+                val isSameUrlRefreshed = clipResult.cleanUrl.isNotEmpty() && clipResult.cleanUrl == priorUrl && elapsed >= 300L
 
-                val isFresh = (hasNewerTimestamp || hasDifferentUrl || isFreshFirstUrl) && clipResult.isValidInstagramUrl
+                val isFresh = (hasNewerTimestamp || hasDifferentUrl || isFreshFirstUrl || isSameUrlRefreshed) && clipResult.isValidInstagramUrl
 
                 if (isFresh) {
-                    Log.i(TAG, "pollClipboard: Fresh Instagram URL captured in ${elapsed}ms: ${clipResult.cleanUrl} (clipTime=${clipResult.timestamp}, priorTime=$priorTimestamp, clickTime=$clickTimestamp)")
+                    AppLogger.i(TAG, "pollClipboard: Fresh Instagram URL captured in ${elapsed}ms: ${clipResult.cleanUrl} (clipTime=${clipResult.timestamp}, priorTime=$priorTimestamp, clickTime=$clickTimestamp)")
                     onResult(clipResult)
                     return
                 }
@@ -887,7 +889,7 @@ class AutomationEngine(
                 if (elapsed < timeoutMs) {
                     mainHandler.postDelayed(this, intervalMs)
                 } else {
-                    Log.w(TAG, "pollClipboard: Timeout (${timeoutMs}ms) expired without fresh Instagram URL.")
+                    AppLogger.w(TAG, "pollClipboard: Timeout (${timeoutMs}ms) expired. Final clip valid=${clipResult.isValidInstagramUrl}, cleanUrl='${clipResult.cleanUrl}'")
                     onResult(clipResult)
                 }
             }

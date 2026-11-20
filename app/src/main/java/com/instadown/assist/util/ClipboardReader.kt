@@ -4,12 +4,16 @@ import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
-import android.util.Log
 import com.instadown.assist.resolver.UrlNormalizer
 import java.util.regex.Pattern
 
 object ClipboardReader {
     private const val TAG = "ClipboardReader"
+
+    @Volatile
+    private var lastSeenClipText: String? = null
+    @Volatile
+    private var lastSeenClipWallClock: Long = 0L
 
     // Legacy fallback regex matching https://www.instagram.com/p/... or /reel/...
     val INSTAGRAM_URL_REGEX: Pattern = Pattern.compile(
@@ -30,10 +34,10 @@ object ClipboardReader {
         val clip: ClipData? = try {
             clipboard.primaryClip
         } catch (e: SecurityException) {
-            Log.w(TAG, "SecurityException reading primaryClip: ${e.message}")
+            AppLogger.w(TAG, "SecurityException reading primaryClip: ${e.message}")
             null
         } catch (e: Exception) {
-            Log.w(TAG, "Exception reading primaryClip: ${e.message}")
+            AppLogger.w(TAG, "Exception reading primaryClip: ${e.message}")
             null
         }
 
@@ -57,7 +61,19 @@ object ClipboardReader {
 
         val rawText = clip.getItemAt(0)?.coerceToText(context)?.toString()?.trim() ?: ""
         val (isValid, cleanUrl) = validateInstagramUrl(rawText)
-        val clipTime = description?.timestamp ?: 0L
+        var clipTime = description?.timestamp ?: 0L
+
+        // Monotonic fallback for OEMs/devices where ClipDescription.timestamp is 0L
+        if (clipTime == 0L && rawText.isNotBlank()) {
+            val now = System.currentTimeMillis()
+            synchronized(this) {
+                if (rawText != lastSeenClipText) {
+                    lastSeenClipText = rawText
+                    lastSeenClipWallClock = now
+                }
+                clipTime = lastSeenClipWallClock
+            }
+        }
 
         AppLogger.d(TAG, "readCurrentClip: rawText='${rawText.take(60)}', isValid=$isValid, cleanUrl='$cleanUrl', clipTime=$clipTime")
 
@@ -80,7 +96,7 @@ object ClipboardReader {
         // 1. Primary: Use 2026 UrlNormalizer (handles share tokens, embedded text, shortcodes)
         val normalized = UrlNormalizer.normalize(text)
         if (normalized != null && normalized.shortcode.isNotBlank()) {
-            return true to normalized.originalUrl
+            return true to normalized.canonicalUrl
         }
 
         // 2. Secondary fallback: Regex match
