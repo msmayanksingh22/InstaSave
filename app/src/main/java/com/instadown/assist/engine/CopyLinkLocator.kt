@@ -20,7 +20,8 @@ object CopyLinkLocator {
         val scoreMargin: Int,
         val isAmbiguous: Boolean,
         val isClippedAtEdge: Boolean,
-        val dynamicRowRevealPlan: RowRevealPlan?
+        val dynamicRowRevealPlan: RowRevealPlan?,
+        val shareRowBounds: Rect? = null
     )
 
     data class RowRevealPlan(
@@ -60,15 +61,20 @@ object CopyLinkLocator {
                 val bounds = Rect()
                 node.getBoundsInScreen(bounds)
 
-                // Check for horizontal reshare row container
+                // Check for horizontal reshare row container (adaptive for any screen aspect ratio)
                 val isHorizontalRow = resId.contains("reshare_row") ||
                         resId.contains("external_share") ||
                         resId.contains("direct_external") ||
-                        (bounds.top > 1200 && bounds.bottom < viewportHeight && bounds.width() >= viewportWidth * 0.8 && bounds.height() in 80..450)
+                        resId.contains("share_target") ||
+                        resId.contains("action_row") ||
+                        ((className.contains("RecyclerView") || className.contains("HorizontalScrollView") || className.contains("ViewGroup")) &&
+                         bounds.top > (viewportHeight * 0.45f) && bounds.bottom <= viewportHeight &&
+                         bounds.width() >= viewportWidth * 0.70f && bounds.height() in 60..550)
 
                 if (isHorizontalRow && reshareRowBounds == null && bounds.width() > 0 && bounds.height() > 0) {
                     reshareRowBounds = Rect(bounds)
                     reshareRowId = resId
+                    AppLogger.d(TAG, "CopyLinkLocator: Identified horizontal action row: $bounds (id=$resId, cls=$className)")
                 }
 
                 // Exclude system status bar area
@@ -244,20 +250,30 @@ object CopyLinkLocator {
 
         if (best != null && !isAmbiguous) {
             val candidateBounds = best.bounds
-            // If Copy Link is near the right screen boundary
-            if (candidateBounds.right >= viewportWidth - 30 || candidateBounds.left >= viewportWidth - 100) {
+            // If Copy Link is near the right screen boundary or partially cut off
+            if (candidateBounds.right >= viewportWidth - 80 || candidateBounds.left >= viewportWidth - 180) {
                 isClipped = true
-                if (reshareRowBounds != null) {
-                    val startX = (reshareRowBounds.right - 120).toFloat().coerceIn(150f, (viewportWidth - 50).toFloat())
-                    val endX = (reshareRowBounds.left + 120).toFloat().coerceIn(50f, (viewportWidth - 150).toFloat())
-                    val y = reshareRowBounds.centerY().toFloat()
-                    rowRevealPlan = RowRevealPlan(startX, y, endX, y, reshareRowId)
-                    AppLogger.i(TAG, "CopyLinkLocator: Copy link is clipped at ${candidateBounds.right}px. Dynamic row swipe derived from $reshareRowBounds: ($startX -> $endX at y=$y)")
+                val startX = if (reshareRowBounds != null) {
+                    (reshareRowBounds.right - 100).toFloat().coerceIn(150f, (viewportWidth - 50).toFloat())
+                } else {
+                    (viewportWidth * 0.85f)
                 }
+                val endX = if (reshareRowBounds != null) {
+                    (reshareRowBounds.left + 100).toFloat().coerceIn(50f, (viewportWidth - 150).toFloat())
+                } else {
+                    (viewportWidth * 0.15f)
+                }
+                val y = if (reshareRowBounds != null) {
+                    reshareRowBounds.centerY().toFloat()
+                } else {
+                    candidateBounds.centerY().toFloat().coerceIn(100f, (viewportHeight - 100).toFloat())
+                }
+                rowRevealPlan = RowRevealPlan(startX, y, endX, y, reshareRowId)
+                AppLogger.i(TAG, "CopyLinkLocator: Copy link is clipped at ${candidateBounds.right}px. Dynamic row swipe derived from ${reshareRowBounds ?: "fallback"}: ($startX -> $endX at y=$y)")
             }
         }
 
-        AppLogger.i(TAG, "CopyLinkLocator: Candidates found: ${allCandidates.size}, Best=${best?.summary()}, Margin=$margin, Ambiguous=$isAmbiguous, Clipped=$isClipped")
+        AppLogger.i(TAG, "CopyLinkLocator: Candidates found: ${allCandidates.size}, Best=${best?.summary()}, Margin=$margin, Ambiguous=$isAmbiguous, Clipped=$isClipped, RowBounds=$reshareRowBounds")
 
         return CopyLinkEvaluationResult(
             bestCandidate = best,
@@ -266,7 +282,8 @@ object CopyLinkLocator {
             scoreMargin = margin,
             isAmbiguous = isAmbiguous,
             isClippedAtEdge = isClipped,
-            dynamicRowRevealPlan = rowRevealPlan
+            dynamicRowRevealPlan = rowRevealPlan,
+            shareRowBounds = reshareRowBounds
         )
     }
 

@@ -48,6 +48,7 @@ class MediaSelectionActivity : AppCompatActivity() {
     private lateinit var btnToggleSelectAll: Button
     private lateinit var rvMediaTiles: RecyclerView
     private lateinit var btnDownloadSelected: Button
+    private lateinit var btnCopySelectedImage: Button
     private lateinit var pbDownloadProgress: ProgressBar
     private lateinit var tvDownloadStatus: TextView
 
@@ -92,6 +93,7 @@ class MediaSelectionActivity : AppCompatActivity() {
         btnToggleSelectAll = findViewById(R.id.btnToggleSelectAll)
         rvMediaTiles = findViewById(R.id.rvMediaTiles)
         btnDownloadSelected = findViewById(R.id.btnDownloadSelected)
+        btnCopySelectedImage = findViewById(R.id.btnCopySelectedImage)
         pbDownloadProgress = findViewById(R.id.pbDownloadProgress)
         tvDownloadStatus = findViewById(R.id.tvDownloadStatus)
 
@@ -137,6 +139,10 @@ class MediaSelectionActivity : AppCompatActivity() {
 
         btnDownloadSelected.setOnClickListener {
             if (currentResolveResult == null) loadMediaMetadata() else startDownload()
+        }
+
+        btnCopySelectedImage.setOnClickListener {
+            copySelectedToClipboard()
         }
 
         restoredSelection = savedInstanceState?.getIntArray("selection")
@@ -237,6 +243,9 @@ class MediaSelectionActivity : AppCompatActivity() {
         btnDownloadSelected.isEnabled = selected > 0 && !isDownloading
         btnDownloadSelected.text = "Download Selected ($selected)"
 
+        btnCopySelectedImage.isEnabled = selected > 0 && !isDownloading
+        btnCopySelectedImage.visibility = if (selected > 0) View.VISIBLE else View.GONE
+
         if (selected == total && total > 0) {
             btnToggleSelectAll.text = "Clear All"
         } else {
@@ -247,6 +256,37 @@ class MediaSelectionActivity : AppCompatActivity() {
             "$selected of $total items selected"
         } else {
             "Tap to toggle selection"
+        }
+    }
+
+    private fun copySelectedToClipboard() {
+        if (selectedIndices.isEmpty() || isDownloading) return
+        val targetIndex = selectedIndices.firstOrNull() ?: return
+        val item = resolvedItems.getOrNull(targetIndex) ?: return
+        copyItemToClipboard(item)
+    }
+
+    private fun copyItemToClipboard(item: ResolvedMedia) {
+        val targetUrl = if (item.mediaType == MediaType.VIDEO) {
+            item.thumbnailUrl ?: item.mediaUrl
+        } else {
+            item.mediaUrl
+        }
+        if (targetUrl.isNullOrBlank()) {
+            Toast.makeText(this, "Image URL not available", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        Toast.makeText(this, "Copying image to clipboard...", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val success = com.instadown.assist.util.ImageClipboardHelper.copyImageToClipboard(
+                context = this@MediaSelectionActivity,
+                remoteUrl = targetUrl,
+                label = currentResolveResult?.caption
+            )
+            if (success) {
+                // Done!
+            }
         }
     }
 
@@ -343,6 +383,12 @@ class MediaSelectionActivity : AppCompatActivity() {
                 }
                 notifyItemChanged(position)
                 updateUiState()
+            }
+
+            holder.itemView.setOnLongClickListener {
+                if (isDownloading) return@setOnLongClickListener false
+                copyItemToClipboard(item)
+                true
             }
         }
 

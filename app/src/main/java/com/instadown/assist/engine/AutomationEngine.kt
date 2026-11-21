@@ -503,12 +503,12 @@ class AutomationEngine(
                 lineTo(plan.endX, plan.endY)
             }
             val gesture = GestureDescription.Builder()
-                .addStroke(GestureDescription.StrokeDescription(path, 0, 160))
+                .addStroke(GestureDescription.StrokeDescription(path, 0, 180))
                 .build()
 
             gestureDispatcher(gesture, null, null)
 
-            // State-based wait: 200ms for row animation to settle, then re-locate
+            // State-based wait: 220ms for row animation to settle, then re-locate
             mainHandler.postDelayed({
                 val reCopyEval = CopyLinkLocator.locateCopyLink(getRootsProvider(), viewportWidth, viewportHeight)
                 if (reCopyEval.bestCandidate == null || reCopyEval.isAmbiguous) {
@@ -539,20 +539,105 @@ class AutomationEngine(
                     revealCount = revealCount,
                     finalizeTransaction = finalizeTransaction
                 )
-            }, 200)
+            }, 220)
             return
         }
 
+        // Adaptive row scrolling: If Copy Link is not in initial frame, scroll horizontal action row to reveal it
         if (selectedCopy == null) {
-            ctx.transition(AutomationState.FAILED, "Copy Link not found in Share surface")
-            val fail = buildFailure(
-                ctx = ctx,
-                reason = "Copy Link control could not be detected in the Share surface.",
-                postContainer = activePost,
-                shareEval = shareEval,
-                copyEval = copyEval
-            )
-            finalizeTransaction(fail)
+            ctx.transition(AutomationState.REVEAL_COPY_LINK, "Copy Link not in initial frame; scrolling horizontal action row to reveal")
+            ctx.onStatusUpdate?.invoke("Searching for Copy Link...")
+            revealCount++
+
+            val rowBounds = copyEval.shareRowBounds
+            val startX = if (rowBounds != null) {
+                (rowBounds.right - 80).toFloat().coerceIn(150f, (viewportWidth - 50).toFloat())
+            } else {
+                viewportWidth * 0.85f
+            }
+            val endX = if (rowBounds != null) {
+                (rowBounds.left + 80).toFloat().coerceIn(50f, (viewportWidth - 150).toFloat())
+            } else {
+                viewportWidth * 0.15f
+            }
+            val swipeY = if (rowBounds != null) {
+                rowBounds.centerY().toFloat()
+            } else {
+                viewportHeight * 0.80f
+            }
+
+            val path = Path().apply {
+                moveTo(startX, swipeY)
+                lineTo(endX, swipeY)
+            }
+            val gesture = GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(path, 0, 180))
+                .build()
+
+            gestureDispatcher(gesture, null, null)
+
+            mainHandler.postDelayed({
+                val reCopyEval = CopyLinkLocator.locateCopyLink(getRootsProvider(), viewportWidth, viewportHeight)
+                if (reCopyEval.bestCandidate != null && !reCopyEval.isAmbiguous) {
+                    AppLogger.i(TAG, "executeCopyLinkStage: Copy Link revealed after exploratory swipe: ${reCopyEval.bestCandidate.summary()}")
+                    executeCopyLinkClick(
+                        ctx = ctx,
+                        selectedCopy = reCopyEval.bestCandidate,
+                        activePost = activePost,
+                        shareCandidateDesc = shareCandidateDesc,
+                        shareNodeDetails = shareNodeDetails,
+                        shareCandidateScore = shareCandidateScore,
+                        shareRunnerUpScore = shareRunnerUpScore,
+                        shareMargin = shareMargin,
+                        shareEval = shareEval,
+                        copyEval = reCopyEval,
+                        revealCount = revealCount,
+                        finalizeTransaction = finalizeTransaction
+                    )
+                } else {
+                    // Try second swipe in case Copy Link was positioned further to the right
+                    val secondPath = Path().apply {
+                        moveTo(startX, swipeY)
+                        lineTo(endX, swipeY)
+                    }
+                    val secondGesture = GestureDescription.Builder()
+                        .addStroke(GestureDescription.StrokeDescription(secondPath, 0, 180))
+                        .build()
+
+                    gestureDispatcher(secondGesture, null, null)
+
+                    mainHandler.postDelayed({
+                        val finalCopyEval = CopyLinkLocator.locateCopyLink(getRootsProvider(), viewportWidth, viewportHeight)
+                        if (finalCopyEval.bestCandidate != null && !finalCopyEval.isAmbiguous) {
+                            AppLogger.i(TAG, "executeCopyLinkStage: Copy Link revealed after second swipe: ${finalCopyEval.bestCandidate.summary()}")
+                            executeCopyLinkClick(
+                                ctx = ctx,
+                                selectedCopy = finalCopyEval.bestCandidate,
+                                activePost = activePost,
+                                shareCandidateDesc = shareCandidateDesc,
+                                shareNodeDetails = shareNodeDetails,
+                                shareCandidateScore = shareCandidateScore,
+                                shareRunnerUpScore = shareRunnerUpScore,
+                                shareMargin = shareMargin,
+                                shareEval = shareEval,
+                                copyEval = finalCopyEval,
+                                revealCount = revealCount + 1,
+                                finalizeTransaction = finalizeTransaction
+                            )
+                        } else {
+                            ctx.transition(AutomationState.FAILED, "Copy Link not found in Share surface after exploratory scrolls")
+                            val fail = buildFailure(
+                                ctx = ctx,
+                                reason = "Copy Link control could not be detected in the Share surface after scrolling action row.",
+                                postContainer = activePost,
+                                shareEval = shareEval,
+                                copyEval = finalCopyEval
+                            )
+                            finalizeTransaction(fail)
+                        }
+                    }, 240)
+                }
+            }, 240)
             return
         }
 
@@ -818,6 +903,7 @@ class AutomationEngine(
             override fun run() {
                 val elapsed = System.currentTimeMillis() - startWait
                 val roots = getRootsProvider()
+                val viewportHeight = service.resources.displayMetrics.heightPixels
 
                 // Check for evidence of Share surface
                 for (root in roots) {
@@ -829,13 +915,28 @@ class AutomationEngine(
                         val resId = (node.viewIdResourceName ?: "").lowercase(Locale.ROOT)
                         val desc = (node.contentDescription ?: "").toString().lowercase(Locale.ROOT)
                         val text = (node.text ?: "").toString().lowercase(Locale.ROOT)
+                        val bounds = Rect()
+                        node.getBoundsInScreen(bounds)
 
                         val hasShareSurfaceSignal = resId.contains("reshare_row") ||
                                 resId.contains("direct_external") ||
+                                resId.contains("external_share") ||
+                                resId.contains("action_sheet") ||
+                                resId.contains("bottom_sheet") ||
+                                resId.contains("share_sheet") ||
+                                resId.contains("direct_share") ||
+                                resId.contains("drag_handle") ||
                                 desc.contains("copy link") ||
                                 text.contains("copy link") ||
                                 resId.contains("copy_link") ||
-                                resId.endsWith(":id/copy")
+                                resId.endsWith(":id/copy") ||
+                                desc.contains("add to story") ||
+                                text.contains("add to story") ||
+                                desc.contains("share to") ||
+                                text.contains("share to") ||
+                                (desc.contains("search") && bounds.top > viewportHeight * 0.2) ||
+                                (text.contains("search") && bounds.top > viewportHeight * 0.2) ||
+                                (desc.contains("send") && bounds.bottom > viewportHeight * 0.4)
 
                         if (hasShareSurfaceSignal) {
                             AppLogger.i(TAG, "waitForShareSurface: Detected surface signal in ${elapsed}ms: id=$resId, desc='$desc', text='$text'")

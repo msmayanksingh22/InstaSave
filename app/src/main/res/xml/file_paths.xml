@@ -5,5 +5,7 @@
     <cache-path name="cached_logs" path="logs/" />
     <cache-path name="cached_thumbnails" path="thumbnails/" />
     <files-path name="internal_thumbnails" path="thumbnails/" />
+    <cache-path name="copied_images" path="copied_images/" />
+    <files-path name="internal_copied_images" path="copied_images/" />
     <external-cache-path name="external_cached_updates" path="updates/" />
 </paths>

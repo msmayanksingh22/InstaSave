@@ -88,7 +88,7 @@ You are an expert principal Android systems engineer and architect working on In
   - `androidx.viewpager2:viewpager2:1.1.0`
   - `org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1`
   - `com.squareup.okhttp3:okhttp:4.12.0`
-- **Current Version**: `versionCode = 26`, `versionName = "1.3.8"`
+- **Current Version**: `versionCode = 27`, `versionName = "1.3.9"`
 
 ---
 
@@ -398,6 +398,26 @@ All release builds must be signed with the dedicated production keystore:
   - Integrated `SwipeRefreshLayout` with Instagram brand color scheme (`insta_pink`, `insta_purple`, `insta_amber`), triggering non-blocking MediaStore reconciliation.
 - **Swipe-Up to Dismiss on Island HUD**:
   - Natural upward swipe gesture on `FloatingHudPillView` flings and dismisses the pill immediately.
+
+### 31. Zero-Download Image Clipboard & Adaptive Share Sheet Sliding Engine
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/util/ImageClipboardHelper.kt`
+  - `app/src/main/java/com/instadown/assist/engine/AutomationEngine.kt`
+  - `app/src/main/java/com/instadown/assist/engine/CopyLinkLocator.kt`
+  - `app/src/main/java/com/instadown/assist/ui/HomeFragment.kt` (`res/layout/fragment_home.xml`)
+  - `app/src/main/java/com/instadown/assist/ui/MediaViewerActivity.kt` (`res/layout/activity_media_viewer.xml`)
+  - `app/src/main/java/com/instadown/assist/ui/MediaSelectionActivity.kt` (`res/layout/activity_media_selection.xml`)
+  - `app/src/main/res/xml/file_paths.xml`
+- **Root Cause & Fix for Automatic Mode "Share Click -> Download Failed"**:
+  - When tapping the floating button in Instagram, the accessibility engine clicked Share, but modern Instagram places "Copy link" further right in the horizontal action row. Because the node was not yet attached to the accessibility tree, `bestCandidate` returned null. `AutomationEngine` previously failed immediately instead of scrolling the row.
+  - Enhanced `CopyLinkLocator` with screen-proportional horizontal action row detection and derived dynamic row reveal plans.
+  - Enhanced `AutomationEngine` with adaptive row scrolling: whenever "Copy Link" is not in the initial frame, it executes an exploratory swipe across the action row, allows 220–240ms for new nodes to attach, relocates "Copy Link", and clicks it smoothly.
+- **Zero-Download Image Copy to Clipboard**:
+  - Allows users to copy high-resolution photos directly to the Android system clipboard as a rich `image/*` clip via `FileProvider` without saving to MediaStore or polluting device storage.
+  - Provides 1-tap "Copy image" in the Obsidian Hero card in `HomeFragment`.
+  - Added 1-tap `btnCopyImage` in `MediaViewerActivity` top bar.
+  - Added "Copy" button and tile long-press copy in `MediaSelectionActivity` for carousels.
+  - Fully compatible with Gboard image suggestions, WhatsApp, Telegram, Slack, Notes, etc.
 
 ---
 

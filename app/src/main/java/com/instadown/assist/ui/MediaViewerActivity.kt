@@ -60,6 +60,7 @@ class MediaViewerActivity : AppCompatActivity() {
     private lateinit var tvSubtitle: TextView
     private lateinit var btnBack: ImageButton
     private lateinit var btnExtractAudio: ImageButton
+    private lateinit var btnCopyImage: ImageButton
     private lateinit var btnShare: ImageButton
     private lateinit var btnDelete: ImageButton
     private lateinit var viewerRoot: View
@@ -119,6 +120,7 @@ class MediaViewerActivity : AppCompatActivity() {
         tvSubtitle = findViewById(R.id.tvViewerSubtitle)
         btnBack = findViewById(R.id.btnBack)
         btnExtractAudio = findViewById(R.id.btnExtractAudio)
+        btnCopyImage = findViewById(R.id.btnCopyImage)
         btnShare = findViewById(R.id.btnShare)
         btnDelete = findViewById(R.id.btnDelete)
         layoutCarouselBottomBar = findViewById(R.id.layoutCarouselBottomBar)
@@ -169,6 +171,7 @@ class MediaViewerActivity : AppCompatActivity() {
 
         btnBack.setOnClickListener { handleExit() }
         btnExtractAudio.setOnClickListener { extractAudioForCurrentItem() }
+        btnCopyImage.setOnClickListener { copyCurrentImageToClipboard() }
         btnShare.setOnClickListener { shareCurrentMedia() }
         btnDelete.setOnClickListener { confirmDeleteCurrentDownload() }
 
@@ -488,6 +491,39 @@ class MediaViewerActivity : AppCompatActivity() {
             startActivity(Intent.createChooser(intent, "Share Media"))
         } catch (e: Exception) {
             Toast.makeText(this, "Failed to share media", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun copyCurrentImageToClipboard() {
+        val currentIndex = viewPager.currentItem
+        val currentItem = mediaItems.getOrNull(currentIndex) ?: return
+        val uriStr = currentItem.mediaUri ?: return
+        val uri = Uri.parse(uriStr)
+        val isVideo = currentItem.mediaType == "VIDEO"
+
+        lifecycleScope.launch {
+            if (isVideo) {
+                val thumbFile = java.io.File(filesDir, "thumbnails/${currentRecord?.shortcode}.jpg")
+                if (thumbFile.exists()) {
+                    com.instadown.assist.util.ImageClipboardHelper.copyImageToClipboard(
+                        context = this@MediaViewerActivity,
+                        localUri = Uri.fromFile(thumbFile),
+                        label = currentRecord?.shortcode
+                    )
+                } else {
+                    com.instadown.assist.util.ImageClipboardHelper.copyImageToClipboard(
+                        context = this@MediaViewerActivity,
+                        localUri = uri,
+                        label = currentRecord?.shortcode
+                    )
+                }
+            } else {
+                com.instadown.assist.util.ImageClipboardHelper.copyImageToClipboard(
+                    context = this@MediaViewerActivity,
+                    localUri = uri,
+                    label = currentRecord?.shortcode
+                )
+            }
         }
     }
 

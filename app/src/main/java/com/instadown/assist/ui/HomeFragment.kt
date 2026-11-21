@@ -161,6 +161,22 @@ class HomeFragment : Fragment() {
                 viewModel.setUrlError("Please enter a valid Instagram post or reel link")
             }
         }
+
+        // Copy Image to Clipboard Button (Zero-Download direct clip)
+        binding.btnCopyImage.setOnClickListener {
+            val raw = binding.etInstagramUrl.text?.toString()?.trim() ?: ""
+            if (raw.isBlank()) {
+                viewModel.setUrlError("Please paste an Instagram link")
+                return@setOnClickListener
+            }
+            val (isValid, cleanUrl) = ClipboardReader.validateInstagramUrl(raw)
+            if (isValid) {
+                viewModel.clearUrlError()
+                (activity as? MainActivity)?.executeCopyImage(cleanUrl)
+            } else {
+                viewModel.setUrlError("Please enter a valid Instagram post or reel link")
+            }
+        }
     }
 
     private fun setupShareIntentListener() {
@@ -192,6 +208,7 @@ class HomeFragment : Fragment() {
                         progress.isIndeterminate = state !is ResilientHudState.Downloading || state.totalBytes <= 0
                         if (state is ResilientHudState.Downloading) progress.progress = state.percent.coerceIn(0, 100)
                         binding.btnQuickDownload.isEnabled = !busy
+                        binding.btnCopyImage.isEnabled = !busy
                         binding.btnQuickDownload.text = when (state) {
                             is ResilientHudState.Resolving -> "Finding media…"
                             is ResilientHudState.Downloading -> if (state.totalBytes > 0) "Saving · ${progress.progress}%" else "Saving media…"

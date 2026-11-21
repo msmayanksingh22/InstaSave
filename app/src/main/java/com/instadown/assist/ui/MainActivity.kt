@@ -446,6 +446,79 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    fun executeCopyImage(cleanUrl: String) {
+        Toast.makeText(this, "Resolving image for clipboard...", Toast.LENGTH_SHORT).show()
+
+        lifecycleScope.launch {
+            val operationResult = runHudTrackedOperation(initialLinkLabel = "Copying Image...") { opId ->
+                ResilientHudBus.emit(ResilientHudState.Resolving(opId, "Resolving image..."))
+
+                val resolveResult = withContext(Dispatchers.IO) {
+                    coordinator.resolver.resolve(cleanUrl, validateCdn = false)
+                }
+
+                if (!resolveResult.success || resolveResult.items.isEmpty()) {
+                    val errMsg = resolveResult.formattedTrace
+                    throw IllegalStateException(errMsg)
+                }
+
+                val totalItems = resolveResult.items.size
+                if (totalItems > 1 && prefs.carouselDownloadBehavior == com.instadown.assist.overlay.CarouselDownloadBehavior.ASK) {
+                    ResilientHudBus.dismiss(opId)
+                    MediaSelectionActivity.start(this@MainActivity, cleanUrl, resolveResult)
+                    return@runHudTrackedOperation null
+                }
+
+                val targetItem = resolveResult.items.firstOrNull { it.mediaType == com.instadown.assist.resolver.model.MediaType.IMAGE }
+                    ?: resolveResult.items.firstOrNull()
+
+                if (targetItem == null) {
+                    throw IllegalStateException("No image media found in post")
+                }
+
+                ResilientHudBus.emit(
+                    ResilientHudState.Downloading(
+                        operationId = opId,
+                        currentIndex = 1,
+                        totalCount = 1,
+                        downloadedBytes = 0L,
+                        totalBytes = 0L,
+                        percent = 50
+                    )
+                )
+
+                val targetUrl = targetItem.mediaUrl
+                val copied = com.instadown.assist.util.ImageClipboardHelper.copyImageToClipboard(
+                    context = this@MainActivity,
+                    remoteUrl = targetUrl,
+                    label = resolveResult.caption
+                )
+
+                if (copied) {
+                    ResilientHudBus.emit(
+                        ResilientHudState.Success(
+                            operationId = opId,
+                            message = "✓ Image copied to clipboard!",
+                            totalItems = 1
+                        )
+                    )
+                    true
+                } else {
+                    throw IllegalStateException("Failed to load image into clipboard")
+                }
+            }
+
+            operationResult.onSuccess { success ->
+                if (success == true) {
+                    Toast.makeText(this@MainActivity, "✓ Image copied to clipboard! Ready to paste in any app", Toast.LENGTH_SHORT).show()
+                }
+            }.onFailure { err ->
+                val errMsg = err.message ?: "Unknown error"
+                Toast.makeText(this@MainActivity, "Could not copy image: $errMsg", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     private fun checkSilentAutoUpdate() {
         if (hasCheckedUpdateThisSession) return
         hasCheckedUpdateThisSession = true
