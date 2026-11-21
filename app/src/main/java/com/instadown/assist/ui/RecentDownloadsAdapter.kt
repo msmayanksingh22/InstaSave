@@ -32,6 +32,7 @@ class RecentDownloadsAdapter(
 
     override fun onBindViewHolder(holder: RecentViewHolder, position: Int) {
         val record = items[position]
+        holder.title.text = record.userFacingTitle
         holder.tvDate.text = record.formattedDate
 
         val isVideo = record.items.any { it.mediaType.equals("VIDEO", ignoreCase = true) }
@@ -69,6 +70,7 @@ class RecentDownloadsAdapter(
         val layoutBadge: FrameLayout = view.findViewById(R.id.layoutRecentBadge)
         val ivTypeIcon: ImageView = view.findViewById(R.id.ivRecentTypeIcon)
         val tvCarouselCount: TextView = view.findViewById(R.id.tvRecentCarouselCount)
+        val title: TextView = view.findViewById(R.id.recentTitle)
         val tvDate: TextView = view.findViewById(R.id.tvRecentDate)
     }
 }

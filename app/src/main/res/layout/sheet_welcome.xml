@@ -1,0 +1,15 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:padding="28dp" android:background="@color/surface_dark">
+    <ImageView android:layout_width="match_parent" android:layout_height="152dp" android:padding="16dp" android:background="#C6C5FF" android:src="@drawable/art_saved_prints" android:importantForAccessibility="no" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp"
+        android:text="Welcome to InstaSave" android:textSize="26sp" android:textStyle="bold" android:textColor="@color/text_primary" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp"
+        android:text="Paste an Instagram link to save photos and reels. Open Gallery to browse your saved posts."
+        android:textSize="16sp" android:textColor="@color/text_secondary" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp"
+        android:text="Want a shortcut while browsing Instagram? Turn on the floating assistant from Home."
+        android:textSize="14sp" android:textColor="@color/text_secondary" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/startSaving" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:minHeight="48dp" android:layout_marginTop="20dp" android:text="Get started" android:textAllCaps="false" />
+</LinearLayout>

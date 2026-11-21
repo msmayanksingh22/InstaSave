@@ -52,8 +52,8 @@
             android:clickable="true"
             android:focusable="true"
             app:cardCornerRadius="24dp"
-            app:cardBackgroundColor="#221C28"
-            app:strokeColor="#3A2A44"
+            app:cardBackgroundColor="@color/card_bg"
+            app:strokeColor="@color/card_stroke"
             app:strokeWidth="1dp"
             app:rippleColor="#33E1306C"
             app:layout_constraintTop_toTopOf="@id/ivHomeLogo"
@@ -78,7 +78,7 @@
                     android:id="@+id/tvServicePillText"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Running"
+                    android:text="Start assistant"
                     android:textSize="12sp"
                     android:textStyle="bold"
                     android:textColor="@color/white"
@@ -110,11 +110,10 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            app:layout_goneMarginTop="14dp"
+            app:layout_goneMarginTop="24dp"
             app:cardCornerRadius="24dp"
-            app:cardBackgroundColor="@color/card_bg"
-            app:strokeColor="@color/card_stroke"
-            app:strokeWidth="1dp"
+            app:cardBackgroundColor="#C6C5FF"
+            app:strokeWidth="0dp"
             app:layout_constraintTop_toBottomOf="@id/permissionsAlertContainer"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent">
@@ -123,24 +122,27 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="20dp">
+                android:padding="22dp">
+                <ImageView android:layout_width="92dp" android:layout_height="74dp" android:src="@drawable/art_saved_prints" android:importantForAccessibility="no" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Save from Instagram"
-                    android:textSize="22sp"
+                    android:id="@+id/homeGreeting" android:text="Save a post"
+                    android:textSize="34sp" android:fontFamily="sans-serif-medium" android:letterSpacing="-0.035"
                     android:textStyle="bold"
-                    android:textColor="@color/text_primary" />
+                    android:textColor="#201F38" />
 
+                <TextView android:id="@+id/welcomeHint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="#393755" android:textSize="14sp" android:text="Photos, reels and carousels from Instagram." />
+                <ProgressBar android:id="@+id/saveProgress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:visibility="gone" />
                 <!-- Input with built-in end-icon Paste button -->
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/tilInstagramUrl"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
+                    android:layout_marginTop="20dp"
                     app:boxBackgroundMode="filled"
-                    app:boxBackgroundColor="#13131A"
+                    app:boxBackgroundColor="#F3F2FF"
                     app:boxCornerRadiusTopStart="12dp"
                     app:boxCornerRadiusTopEnd="12dp"
                     app:boxCornerRadiusBottomStart="12dp"
@@ -151,7 +153,7 @@
                     app:hintEnabled="false"
                     app:endIconMode="custom"
                     app:endIconDrawable="@drawable/ic_copy_link"
-                    app:endIconTint="@color/insta_pink"
+                    app:endIconTint="#504A87"
                     app:endIconContentDescription="Paste Link">
 
                     <com.google.android.material.textfield.TextInputEditText
@@ -161,9 +163,9 @@
                         android:minHeight="56dp"
                         android:inputType="textUri"
                         android:maxLines="1"
-                        android:hint="Paste Instagram link here..."
-                        android:textColorHint="@color/text_muted"
-                        android:textColor="@color/white"
+                        android:hint="Paste an Instagram link"
+                        android:textColorHint="#5B5870"
+                        android:textColor="#201F38"
                         android:textSize="15sp"
                         android:imeOptions="actionDone"
                         android:padding="12dp" />
@@ -177,24 +179,25 @@
                     android:layout_marginTop="12dp"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
-                    android:text="Download Media ⚡"
+                    android:text="Save media"
+                    app:icon="@drawable/ic_download_arrow"
+                    app:iconGravity="textStart"
                     android:textSize="14sp"
                     android:textStyle="bold"
                     android:textAllCaps="false"
                     android:textColor="@color/white"
                     app:cornerRadius="12dp"
-                    android:background="@drawable/btn_rounded_accent"
-                    app:backgroundTint="@null" />
+                    app:iconTint="@color/white" app:backgroundTint="#353152" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Recent Downloads Section Header -->
+        <!-- Recently saved Section Header -->
         <TextView
             android:id="@+id/tvRecentHeader"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Recent Downloads"
-            android:textSize="15sp"
+            android:text="Recently saved"
+            android:textSize="22sp"
             android:textStyle="bold"
             android:textColor="@color/text_primary"
             android:layout_marginTop="16dp"
@@ -207,7 +210,7 @@
             android:layout_height="wrap_content"
             android:minHeight="48dp"
             android:gravity="center_vertical"
-            android:text="See All ›"
+            android:text="Open gallery"
             android:textColor="@color/insta_pink"
             android:textSize="13sp"
             android:textStyle="bold"
@@ -218,11 +221,11 @@
             app:layout_constraintBottom_toBottomOf="@id/tvRecentHeader"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- Horizontal Recent Downloads Shelf -->
+        <!-- Horizontal Recently saved Shelf -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rvRecentDownloads"
             android:layout_width="0dp"
-            android:layout_height="100dp"
+            android:layout_height="180dp"
             android:layout_marginTop="8dp"
             android:orientation="horizontal"
             android:overScrollMode="never"

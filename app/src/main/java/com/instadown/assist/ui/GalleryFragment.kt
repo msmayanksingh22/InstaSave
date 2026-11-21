@@ -186,7 +186,21 @@ class GalleryFragment : Fragment() {
                     lastReturnedPosition = position
                     val appCompatActivity = requireActivity() as? AppCompatActivity
                     if (appCompatActivity != null) {
-                        SharedMediaTransition.launchViewer(appCompatActivity, thumbView, record.id, position)
+                        val sheet = com.google.android.material.bottomsheet.BottomSheetDialog(requireContext())
+                        val actions = layoutInflater.inflate(R.layout.sheet_gallery_post, null)
+                        actions.findViewById<android.widget.TextView>(R.id.postHeading).text = record.userFacingTitle
+                        actions.findViewById<android.widget.TextView>(R.id.postSummary).text =
+                            "${record.formattedDate} · ${record.userFacingStatus}"
+                        actions.findViewById<View>(R.id.viewPostMedia).setOnClickListener {
+                            sheet.dismiss()
+                            SharedMediaTransition.launchViewer(appCompatActivity, thumbView, record.id, position)
+                        }
+                        actions.findViewById<View>(R.id.selectPost).setOnClickListener {
+                            sheet.dismiss()
+                            enterSelectionMode(record.id)
+                        }
+                        sheet.setContentView(actions)
+                        sheet.show()
                     }
                 }
             },

@@ -1,0 +1,17 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:padding="24dp" android:background="@color/surface_dark">
+    <TextView android:id="@+id/postHeading" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:textSize="22sp" android:textStyle="bold" android:textColor="@color/text_primary" />
+    <TextView android:id="@+id/postSummary" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="4dp" android:textColor="@color/text_secondary" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/viewPostMedia"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="48dp"
+        android:layout_marginTop="20dp" android:text="View media" android:textAllCaps="false"
+        app:icon="@drawable/ic_image" app:iconGravity="textStart" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/selectPost"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="48dp"
+        android:text="Select post" android:textAllCaps="false" app:icon="@drawable/ic_check_circle" app:iconGravity="textStart" />
+</LinearLayout>

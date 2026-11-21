@@ -3,11 +3,12 @@
     <style name="Theme.InstaSave" parent="Theme.Material3.Dark.NoActionBar">
         <!-- Brand & Accent -->
         <item name="colorPrimary">@color/insta_pink</item>
-        <item name="colorOnPrimary">@color/white</item>
+        <item name="android:statusBarColor">@color/bg_dark</item>
+        <item name="colorOnPrimary">@color/bg_dark</item>
         <item name="colorAccent">@color/insta_coral</item>
 
         <!-- BottomNavigationView Active Pill Color -->
-        <item name="colorSecondaryContainer">#2E1E38</item>
+        <item name="colorSecondaryContainer">#37344E</item>
         <item name="colorOnSecondaryContainer">@color/insta_pink</item>
 
         <!-- Dark Surfaces -->
@@ -27,7 +28,7 @@
     </style>
 
     <style name="Widget.InstaSave.BottomNav.Indicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
-        <item name="android:color">#2E1E38</item>
+        <item name="android:color">#37344E</item>
         <item name="android:width">56dp</item>
         <item name="android:height">32dp</item>
     </style>

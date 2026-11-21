@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="76dp"
+    android:layout_width="160dp"
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:layout_marginEnd="10dp"
@@ -8,8 +8,8 @@
     android:foreground="?android:attr/selectableItemBackground">
 
     <FrameLayout
-        android:layout_width="76dp"
-        android:layout_height="76dp"
+        android:layout_width="160dp"
+        android:layout_height="120dp"
         android:background="@drawable/card_background"
         android:clipToOutline="true">
 
@@ -52,6 +52,7 @@
         </FrameLayout>
     </FrameLayout>
 
+    <TextView android:id="@+id/recentTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:textSize="15sp" android:textStyle="bold" android:singleLine="true" android:ellipsize="end" android:textColor="@color/text_primary" />
     <TextView
         android:id="@+id/tvRecentDate"
         android:layout_width="match_parent"
@@ -59,8 +60,8 @@
         android:layout_marginTop="4dp"
         android:text="Sep 05"
         android:textColor="@color/text_secondary"
-        android:textSize="10sp"
-        android:gravity="center"
+        android:textSize="12sp"
+        android:gravity="start"
         android:singleLine="true"
         android:ellipsize="end" />
 

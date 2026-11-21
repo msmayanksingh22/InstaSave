@@ -65,11 +65,35 @@ class SettingsFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         prefs = InstaSavePreferences(requireContext())
 
+        listOf(
+            binding.downloadsHeading to binding.downloadsPanel,
+            binding.assistantHeading to binding.assistantPanel,
+            binding.storageHeading to binding.storagePanel
+        ).forEach { (heading, panel) ->
+            fun expand(open: Boolean) {
+                panel.visibility = if (open) View.VISIBLE else View.GONE
+                val icons = heading.compoundDrawablesRelative
+                val endIcon = if (open) R.drawable.ic_collapse_section else R.drawable.ic_expand_section
+                heading.setCompoundDrawablesRelativeWithIntrinsicBounds(icons[0], null, requireContext().getDrawable(endIcon), null)
+                androidx.core.view.ViewCompat.setStateDescription(heading, if (open) "Expanded" else "Collapsed")
+            }
+            expand(savedInstanceState?.getBoolean("section_${panel.id}") == true)
+            heading.setOnClickListener { expand(panel.visibility != View.VISIBLE) }
+        }
         setupWatchdogCard()
         setupDownloadPreferences()
         setupFloatingControls()
         setupMediaAndStorage()
         setupAppInfoAndUpdates()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        _binding?.let { views ->
+            listOf(views.downloadsPanel, views.assistantPanel, views.storagePanel).forEach {
+                outState.putBoolean("section_${it.id}", it.visibility == View.VISIBLE)
+            }
+        }
     }
 
     override fun onResume() {
@@ -98,7 +122,11 @@ class SettingsFragment : Fragment() {
             binding.tvSettingsStorageTotal.text = storage.formattedSize
             binding.tvSettingsStorageSubtitle.text =
                 "${storage.totalItems} saved items (${storage.photosCount} photos, ${storage.videosCount} reels)"
-            binding.tvWatchdogStatus.text = health.name
+            binding.tvWatchdogStatus.text = when (health) {
+                AccessibilityHealth.HEALTHY -> "Connected"
+                AccessibilityHealth.ZOMBIE_UNBOUND -> "Reconnect"
+                else -> "Off"
+            }
             val colorRes = when (health) {
                 AccessibilityHealth.HEALTHY -> R.color.status_green
                 AccessibilityHealth.ZOMBIE_UNBOUND -> R.color.status_amber
@@ -366,7 +394,7 @@ class SettingsFragment : Fragment() {
             val buildNum = PackageInfoCompat.getLongVersionCode(pInfo)
             binding.tvSettingsAppVersion.text = "Version ${pInfo.versionName} (Build $buildNum)"
         } catch (_: Exception) {
-            binding.tvSettingsAppVersion.text = "Version 1.2.5"
+            binding.tvSettingsAppVersion.text = "InstaSave for Android"
         }
 
         binding.cardCheckUpdates.setOnClickListener { startInAppUpdateFlow() }
@@ -430,41 +458,15 @@ class SettingsFragment : Fragment() {
             }
 
             if (!updateInfo.isAvailable) {
-                tvTitle.text = "You're Up to Date! 🎉"
+                tvTitle.text = "You’re up to date"
                 tvSubtitle.text = "InstaSave v${updateInfo.versionName} is the latest available version."
                 btnNegative.visibility = View.VISIBLE
                 btnNegative.text = "Dismiss"
                 btnNegative.setOnClickListener { dialog.dismiss() }
                 btnPositive.visibility = View.GONE
             } else {
-                tvTitle.text = "Update Available! 🚀"
-                tvSubtitle.text = "InstaSave v${updateInfo.versionName} is ready with major upgrades."
-                layoutReleaseNotes.visibility = View.VISIBLE
-                tvReleaseVersion.text = "Version: v${updateInfo.versionName}"
-                tvReleaseNotes.text = updateInfo.releaseNotes
-                val sizeMb = if (updateInfo.fileSizeBytes > 0) String.format(java.util.Locale.US, "%.1f MB", updateInfo.fileSizeBytes / (1024.0 * 1024.0)) else ""
-                tvReleaseSize.text = sizeMb
-
-                btnPositive.isEnabled = true
-                btnPositive.text = "Download & Install"
-                btnPositive.setOnClickListener {
-                    dialog.dismiss()
-                    (activity as? MainActivity)?.let { mainAct ->
-                        // Delegate download to host activity
-                        val existingApk = AppUpdateManager.getDownloadedUpdateApk(mainAct, updateInfo.versionName)
-                        if (existingApk != null) {
-                            AppUpdateManager.promptInstall(mainAct, existingApk, updateInfo.apkUrl, updateInfo.versionCode, updateInfo.sha256)
-                        } else {
-                            Toast.makeText(mainAct, "Downloading update in background...", Toast.LENGTH_SHORT).show()
-                            viewLifecycleOwner.lifecycleScope.launch {
-                                val apk = AppUpdateManager.downloadUpdate(mainAct, updateInfo)
-                                if (apk != null && apk.exists()) {
-                                    AppUpdateManager.promptInstall(mainAct, apk, updateInfo.apkUrl, updateInfo.versionCode, updateInfo.sha256)
-                                }
-                            }
-                        }
-                    }
-                }
+                dialog.dismiss()
+                (activity as? MainActivity)?.showUpdateAvailablePrompt(updateInfo)
             }
         }
     }

@@ -461,7 +461,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showUpdateAvailablePrompt(info: com.instadown.assist.util.AppUpdateInfo) {
+    fun showUpdateAvailablePrompt(info: com.instadown.assist.util.AppUpdateInfo) {
         if (isFinishing || isDestroyed) return
         val dialogView = layoutInflater.inflate(R.layout.dialog_in_app_update, null)
         val tvTitle = dialogView.findViewById<TextView>(R.id.tvUpdateDialogTitle)

@@ -105,7 +105,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val (recents, summary) = withContext(Dispatchers.IO) {
             val list = repo.getRecentTransactions(limit = 10)
             val storage = StorageAccountant.getStorageSummary(context)
-            Pair(list, "${storage.formattedSize} • ${storage.totalItems} items")
+            Pair(list, "${storage.formattedSize} · ${storage.totalItems} ${if (storage.totalItems == 1) "item" else "items"}")
         }
         _uiState.update {
             it.copy(

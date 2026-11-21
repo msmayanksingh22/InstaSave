@@ -4,23 +4,23 @@
     <color name="white">#FFFFFFFF</color>
     
     <!-- InstaSave Warm Gradient Tokens -->
-    <color name="insta_pink">#E1306C</color>
-    <color name="insta_purple">#833AB4</color>
-    <color name="insta_coral">#FD1D1D</color>
+    <color name="insta_pink">#AAA6FF</color>
+    <color name="insta_purple">#635CC5</color>
+    <color name="insta_coral">#938DFF</color>
     <color name="insta_amber">#FCAF45</color>
     
     <!-- Primary Brand Colors -->
-    <color name="primary">#E1306C</color>
-    <color name="primary_variant">#833AB4</color>
-    <color name="accent">#FD1D1D</color>
+    <color name="primary">#AAA6FF</color>
+    <color name="primary_variant">#635CC5</color>
+    <color name="accent">#938DFF</color>
 
     <!-- Surfaces & Neutrals (Dark Theme default) -->
-    <color name="bg_dark">#0D1017</color>
-    <color name="card_bg">#181D28</color>
-    <color name="card_stroke">#30394A</color>
+    <color name="bg_dark">#101118</color>
+    <color name="card_bg">#1D1F2A</color>
+    <color name="card_stroke">#373948</color>
     <color name="surface_variant">#242D3C</color>
-    <color name="background_dark">#0D1017</color>
-    <color name="surface_dark">#181D28</color>
+    <color name="background_dark">#101118</color>
+    <color name="surface_dark">#1D1F2A</color>
 
     <!-- Text Tokens -->
     <color name="text_primary">#F3F4F6</color>

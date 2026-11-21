@@ -60,7 +60,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:layout_marginStart="10dp"
-                        android:text="Accessibility Watchdog"
+                        android:text="Assistant connection"
                         android:textSize="14sp"
                         android:textStyle="bold"
                         android:textColor="@color/text_primary" />
@@ -99,19 +99,16 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- 2. DOWNLOAD PREFERENCES -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="DOWNLOAD PREFERENCES"
-            android:textColor="@color/insta_pink"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.08"
-            android:layout_marginBottom="8dp" />
-
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
+        <!-- 2. Download preferences -->
+        <TextView android:id="@+id/downloadsHeading"
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="60dp"
+            android:gravity="center_vertical" android:paddingStart="16dp" android:paddingEnd="16dp"
+            android:background="@drawable/card_background" android:layout_marginBottom="8dp"
+            android:drawableStart="@drawable/ic_download_arrow" android:drawablePadding="14dp" android:drawableTint="@color/insta_pink"
+            android:drawableEnd="@drawable/ic_expand_section" android:focusable="true"
+            android:text="Download preferences" android:textSize="16sp" android:textColor="@color/text_primary" />
+        <com.google.android.material.card.MaterialCardView android:id="@+id/downloadsPanel"
+            android:visibility="gone" android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             app:cardCornerRadius="16dp"
@@ -288,18 +285,15 @@
         </com.google.android.material.card.MaterialCardView>
 
         <!-- 3. FLOATING ASSISTANT & HUD -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="FLOATING ASSISTANT &amp; HUD"
-            android:textColor="@color/insta_pink"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.08"
-            android:layout_marginBottom="8dp" />
-
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
+        <TextView android:id="@+id/assistantHeading"
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="60dp"
+            android:gravity="center_vertical" android:paddingStart="16dp" android:paddingEnd="16dp"
+            android:background="@drawable/card_background" android:layout_marginBottom="8dp"
+            android:drawableStart="@drawable/ic_play_arrow" android:drawablePadding="14dp" android:drawableTint="@color/insta_pink"
+            android:drawableEnd="@drawable/ic_expand_section" android:focusable="true"
+            android:text="Floating assistant" android:textSize="16sp" android:textColor="@color/text_primary" />
+        <com.google.android.material.card.MaterialCardView android:id="@+id/assistantPanel"
+            android:visibility="gone" android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             app:cardCornerRadius="16dp"
@@ -319,7 +313,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:minHeight="48dp"
-                    android:text="Floating Trigger Bubble"
+                    android:text="Floating shortcut"
                     android:textColor="@color/text_primary"
                     android:textSize="14sp" />
 
@@ -328,7 +322,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:minHeight="48dp"
-                    android:text="Dynamic Island Progress HUD"
+                    android:text="Floating download progress"
                     android:textColor="@color/text_primary"
                     android:textSize="14sp" />
 
@@ -346,7 +340,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:minHeight="48dp"
-                    android:text="Haptic Touch Feedback"
+                    android:text="Vibrate on touch"
                     android:textColor="@color/text_primary"
                     android:textSize="14sp" />
 
@@ -457,18 +451,15 @@
         </com.google.android.material.card.MaterialCardView>
 
         <!-- 4. STORAGE & MEDIA -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="STORAGE &amp; MEDIA"
-            android:textColor="@color/insta_pink"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.08"
-            android:layout_marginBottom="8dp" />
-
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
+        <TextView android:id="@+id/storageHeading"
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="60dp"
+            android:gravity="center_vertical" android:paddingStart="16dp" android:paddingEnd="16dp"
+            android:background="@drawable/card_background" android:layout_marginBottom="8dp"
+            android:drawableStart="@drawable/ic_folder" android:drawablePadding="14dp" android:drawableTint="@color/insta_pink"
+            android:drawableEnd="@drawable/ic_expand_section" android:focusable="true"
+            android:text="Storage and media" android:textSize="16sp" android:textColor="@color/text_primary" />
+        <com.google.android.material.card.MaterialCardView android:id="@+id/storagePanel"
+            android:visibility="gone" android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             app:cardCornerRadius="16dp"
@@ -589,11 +580,11 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="APP &amp; DIAGNOSTICS"
+            android:text="Updates and support"
             android:textColor="@color/insta_pink"
-            android:textSize="11sp"
+            android:textSize="18sp"
             android:textStyle="bold"
-            android:letterSpacing="0.08"
+            android:letterSpacing="0"
             android:layout_marginBottom="8dp" />
 
         <com.google.android.material.card.MaterialCardView

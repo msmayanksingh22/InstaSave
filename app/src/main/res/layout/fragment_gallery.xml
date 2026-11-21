@@ -25,14 +25,14 @@
             android:gravity="center_vertical"
             android:paddingStart="16dp"
             android:paddingEnd="8dp"
-            android:background="#161422">
+            android:background="@color/bg_dark">
 
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="@string/gallery_title"
-                android:textSize="20sp"
+                android:textSize="26sp"
                 android:textStyle="bold"
                 android:textColor="@color/text_primary" />
 
@@ -226,7 +226,7 @@
         android:id="@+id/tvEmptyGallery"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="No downloaded media yet.\nPaste a link on the Downloader tab to start!"
+        android:text="No downloaded media yet.\nPaste a link on the Home tab to start!"
         android:textColor="@color/text_muted"
         android:textSize="14sp"
         android:gravity="center"

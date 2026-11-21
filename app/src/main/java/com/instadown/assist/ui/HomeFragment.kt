@@ -1,5 +1,7 @@
 package com.instadown.assist.ui
 
+import com.instadown.assist.overlay.ResilientHudState
+import com.instadown.assist.overlay.ResilientHudBus
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.net.Uri
@@ -52,10 +54,19 @@ class HomeFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        val intro = requireContext().getSharedPreferences("home_intro", 0)
+        if (intro.getBoolean("used", false)) {
+            binding.homeGreeting.text = "Save a post"
+            binding.welcomeHint.visibility = View.VISIBLE
+        }
         setupRecentDownloadsRecyclerView()
         setupListeners()
         setupShareIntentListener()
         observeViewModel()
+        if (activity?.intent?.action == Intent.ACTION_MAIN &&
+            !intro.getBoolean("welcomed", false) && childFragmentManager.findFragmentByTag("welcome") == null) {
+            WelcomeSheet().show(childFragmentManager, "welcome")
+        }
     }
 
     override fun onResume() {
@@ -142,6 +153,7 @@ class HomeFragment : Fragment() {
             val (isValid, cleanUrl) = ClipboardReader.validateInstagramUrl(raw)
             if (isValid) {
                 viewModel.clearUrlError()
+                requireContext().getSharedPreferences("home_intro", 0).edit().putBoolean("used", true).apply()
                 (activity as? MainActivity)?.executeManualDownload(cleanUrl)
             } else {
                 viewModel.setUrlError("Please enter a valid Instagram post or reel link")
@@ -171,6 +183,22 @@ class HomeFragment : Fragment() {
                     }
                 }
                 launch {
+                    ResilientHudBus.state.collect { state ->
+                        val busy = state is ResilientHudState.Resolving || state is ResilientHudState.Downloading
+                        val progress = binding.saveProgress
+                        progress.visibility = if (busy) View.VISIBLE else View.GONE
+                        progress.isIndeterminate = state !is ResilientHudState.Downloading || state.totalBytes <= 0
+                        if (state is ResilientHudState.Downloading) progress.progress = state.percent.coerceIn(0, 100)
+                        binding.btnQuickDownload.isEnabled = !busy
+                        binding.btnQuickDownload.text = when (state) {
+                            is ResilientHudState.Resolving -> "Finding media…"
+                            is ResilientHudState.Downloading -> if (state.totalBytes > 0) "Saving · ${progress.progress}%" else "Saving media…"
+                            is ResilientHudState.Success -> "Saved to Gallery"
+                            else -> "Save media"
+                        }
+                    }
+                }
+                launch {
                     viewModel.events.collect { event ->
                         when (event) {
                             is HomeEvent.ShowMessage -> {
@@ -194,7 +222,8 @@ class HomeFragment : Fragment() {
             if (isRunning) R.color.status_green else R.color.status_amber
         )
         binding.dotServicePill.backgroundTintList = ColorStateList.valueOf(pillDotColor)
-        binding.tvServicePillText.text = if (isRunning) "Running" else "Stopped"
+        binding.tvServicePillText.text = if (isRunning) "Pause assistant" else "Start assistant"
+        binding.tvServicePillText.setCompoundDrawablesWithIntrinsicBounds(if (isRunning) R.drawable.ic_pause else R.drawable.ic_play_arrow, 0, 0, 0)
         binding.pillServiceToggle.contentDescription =
             if (isRunning) "InstaSave is running. Tap to stop." else "InstaSave is stopped. Tap to start."
 
@@ -202,7 +231,7 @@ class HomeFragment : Fragment() {
         updatePermissionsBanner(state.isMissingPermissions, state.isA11yEnabled, state.canDrawOverlays)
 
         // 3. Quick-Download Button & Input State
-        binding.btnQuickDownload.isEnabled = !state.isSubmittingUrl
+        // The active operation controls the save button.
         binding.tilInstagramUrl.error = state.urlError
 
         // 4. Recent Downloads Shelf
