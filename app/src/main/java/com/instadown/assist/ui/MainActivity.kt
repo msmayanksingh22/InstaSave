@@ -181,9 +181,15 @@ class MainActivity : AppCompatActivity() {
             val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
             val isKeyboardOpen = insets.isVisible(WindowInsetsCompat.Type.ime())
 
-            // Hide BottomNav while typing so URL box and button stay visible
-            binding.bottomNavigation.isVisible = !isKeyboardOpen
-            binding.bottomNavigation.updatePadding(bottom = sysBars.bottom)
+            // Hide Floating Nav Deck while typing so URL box and button stay visible
+            binding.floatingNavContainer.isVisible = !isKeyboardOpen
+            val density = resources.displayMetrics.density
+            val baseBottomMargin = (16 * density).toInt()
+            val navParams = binding.floatingNavContainer.layoutParams as? androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
+            if (navParams != null) {
+                navParams.bottomMargin = baseBottomMargin + sysBars.bottom
+                binding.floatingNavContainer.layoutParams = navParams
+            }
 
             // Apply insets to fragment container
             binding.mainFragmentContainer.updatePadding(
@@ -490,7 +496,11 @@ class MainActivity : AppCompatActivity() {
             .setCancelable(true)
             .create()
 
-        dialog.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+        dialog.window?.apply {
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+            setDimAmount(0.80f)
+            addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        }
         dialog.show()
 
         val existingApk = com.instadown.assist.util.AppUpdateManager.getDownloadedUpdateApk(this@MainActivity, info.versionName)

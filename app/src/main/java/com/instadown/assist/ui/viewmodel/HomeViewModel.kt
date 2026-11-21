@@ -129,6 +129,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(isSubmittingUrl = isSubmitting) }
     }
 
+    fun startAssistantService() {
+        if (!Settings.canDrawOverlays(context)) {
+            _events.trySend(HomeEvent.OpenOverlayPermissionSettings)
+            return
+        }
+        prefs.isButtonEnabled = true
+        prefs.isServiceRunningDesired = true
+        runCatching {
+            FloatingTriggerService.start(context)
+        }.onSuccess {
+            _uiState.update { it.copy(isServiceRunning = true) }
+        }
+    }
+
     fun toggleService() {
         val shouldRun = !FloatingTriggerService.isRunning
         if (shouldRun && !Settings.canDrawOverlays(context)) {

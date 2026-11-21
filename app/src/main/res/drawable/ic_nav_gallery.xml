@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Modern Overlapping Photo Gallery Frames -->
+    <!-- Back card -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M7,3H18.5C19.88,3 21,4.12 21,5.5V17" />
+    <!-- Front card -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M3,8.5C3,7.12 4.12,6 5.5,6H16.5C17.88,6 19,7.12 19,8.5V19.5C19,20.88 17.88,22 16.5,22H5.5C4.12,22 3,20.88 3,19.5V8.5Z" />
+    <!-- Inner mountain / landscape lines -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M3.5,18L7.8,13.7C8.4,13.1 9.4,13.1 10,13.7L14,17.7" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12.5,16.2L13.8,14.9C14.4,14.3 15.4,14.3 16,14.9L18.5,17.4" />
+    <!-- Sun/Moon dot -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8,10.2A1.2,1.2 0 1,0 8,7.8A1.2,1.2 0 1,0 8,10.2Z" />
+</vector>

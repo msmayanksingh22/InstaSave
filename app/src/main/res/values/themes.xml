@@ -25,6 +25,29 @@
 
         <!-- Custom M3 Bottom Nav Active Indicator -->
         <item name="bottomNavigationStyle">@style/Widget.InstaSave.BottomNav</item>
+
+        <!-- Dialog & BottomSheet Deep Luxury Dimming (0.80) -->
+        <item name="android:backgroundDimAmount">0.80</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="bottomSheetDialogTheme">@style/ThemeOverlay.InstaSave.BottomSheetDialog</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.InstaSave.MaterialAlertDialog</item>
+    </style>
+
+    <style name="ThemeOverlay.InstaSave.BottomSheetDialog" parent="ThemeOverlay.Material3.BottomSheetDialog">
+        <item name="android:backgroundDimAmount">0.80</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="bottomSheetStyle">@style/Widget.InstaSave.BottomSheet</item>
+    </style>
+
+    <style name="Widget.InstaSave.BottomSheet" parent="Widget.Material3.BottomSheet">
+        <item name="android:background">@android:color/transparent</item>
+        <item name="backgroundTint">@android:color/transparent</item>
+    </style>
+
+    <style name="ThemeOverlay.InstaSave.MaterialAlertDialog" parent="ThemeOverlay.Material3.MaterialAlertDialog">
+        <item name="android:backgroundDimAmount">0.80</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="colorSurface">@color/card_bg</item>
     </style>
 
     <style name="Widget.InstaSave.BottomNav" parent="Widget.Material3.BottomNavigationView">

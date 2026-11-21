@@ -96,6 +96,8 @@ class ReDownloadSelectionBottomSheet : DialogFragment() {
                 android.view.WindowManager.LayoutParams.WRAP_CONTENT
             )
             setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            setDimAmount(0.80f)
+            addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         }
     }
 

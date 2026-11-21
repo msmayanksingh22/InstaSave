@@ -7,15 +7,12 @@ import android.util.AttributeSet
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.OvershootInterpolator
-import androidx.core.content.ContextCompat
 import com.instadown.assist.R
 
 /**
- * High-performance Canvas-rendered floating trigger button.
- * Enforces strictly invariant center coordinates (0px WindowManager drift)
- * and renders real progress rings (bytesWritten / totalBytes for single items;
- * (completed + itemFraction) / total for carousels), distinct success checkmarks,
- * partial success, duplicate, and error states.
+ * Ultra-Modern Luxury Canvas-rendered floating trigger button (Dynamic Island Dock).
+ * Renders obsidian glass background, neon dual-gradient jewel ring, real progress sweeps,
+ * animated spring checkmark, and mathematically symmetric vector arrow.
  */
 class FloatingTriggerButtonView @JvmOverloads constructor(
     context: Context,
@@ -39,36 +36,51 @@ class FloatingTriggerButtonView @JvmOverloads constructor(
     private var isPressedState: Boolean = false
 
     // Paints
-    private val gradientPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val obsidianBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.parseColor("#131622")
+    }
+    private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = Color.parseColor("#50000000")
+    }
+    private val neonBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        color = Color.WHITE
     }
     private val progressRingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
-        color = Color.WHITE
+    }
+    private val innerBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = Color.parseColor("#26FFFFFF")
     }
     private val successBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = Color.parseColor("#00C853") // Vibrant Green
+        color = Color.parseColor("#10B981") // Luxury Emerald
     }
     private val partialBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = Color.parseColor("#FF9100") // Amber
+        color = Color.parseColor("#F59E0B") // Amber
     }
     private val duplicateBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = Color.parseColor("#7928CA") // Purple
+        color = Color.parseColor("#8A67FF") // Violet
     }
     private val errorBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = Color.parseColor("#FF1744") // Red
+        color = Color.parseColor("#EF4444") // Coral Red
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         textAlign = Paint.Align.CENTER
+    }
+    private val vectorArrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+        color = Color.WHITE
     }
     private val checkmarkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -79,6 +91,7 @@ class FloatingTriggerButtonView @JvmOverloads constructor(
 
     // Geometries
     private val progressRect = RectF()
+    private val arrowPath = Path()
     private val checkmarkPath = Path()
     private val errorPath = Path()
     private var indeterminateRotation = 0f
@@ -89,30 +102,14 @@ class FloatingTriggerButtonView @JvmOverloads constructor(
     private var checkmarkProgress = 0f
     private var checkmarkAnimator: ValueAnimator? = null
 
-    // Bitmaps
-    private var downloadIconBitmap: Bitmap? = null
-
     init {
         val density = resources.displayMetrics.density
-        borderPaint.strokeWidth = 2.5f * density
-        progressRingPaint.strokeWidth = 3.5f * density
-        checkmarkPaint.strokeWidth = 4.0f * density
-        textPaint.textSize = 12f * density
-
-        loadIcons()
-    }
-
-    private fun loadIcons() {
-        val drawable = ContextCompat.getDrawable(context, R.drawable.ic_download_arrow)
-        if (drawable != null) {
-            val size = (24 * resources.displayMetrics.density).toInt()
-            val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bmp)
-            drawable.setBounds(0, 0, size, size)
-            drawable.setTint(Color.WHITE)
-            drawable.draw(canvas)
-            downloadIconBitmap = bmp
-        }
+        neonBorderPaint.strokeWidth = 2.0f * density
+        progressRingPaint.strokeWidth = 3.2f * density
+        innerBorderPaint.strokeWidth = 1.0f * density
+        vectorArrowPaint.strokeWidth = 2.2f * density
+        checkmarkPaint.strokeWidth = 3.5f * density
+        textPaint.textSize = 11.5f * density
     }
 
     fun setState(state: VisualState, progress: Int = 0, carouselLabel: String = "") {
@@ -121,12 +118,8 @@ class FloatingTriggerButtonView @JvmOverloads constructor(
         carouselStatusText = carouselLabel
 
         when (state) {
-            VisualState.RESOLVING -> {
-                startIndeterminateAnimation()
-            }
-            VisualState.DOWNLOADING -> {
-                stopIndeterminateAnimation()
-            }
+            VisualState.RESOLVING -> startIndeterminateAnimation()
+            VisualState.DOWNLOADING -> stopIndeterminateAnimation()
             VisualState.SUCCESS -> {
                 stopIndeterminateAnimation()
                 startCheckmarkAnimation()
@@ -171,7 +164,7 @@ class FloatingTriggerButtonView @JvmOverloads constructor(
     private fun startIndeterminateAnimation() {
         if (rotationAnimator?.isRunning == true) return
         rotationAnimator = ValueAnimator.ofFloat(0f, 360f).apply {
-            duration = 1000
+            duration = 900
             repeatCount = ValueAnimator.INFINITE
             interpolator = AccelerateDecelerateInterpolator()
             addUpdateListener {
@@ -191,8 +184,8 @@ class FloatingTriggerButtonView @JvmOverloads constructor(
     private fun startCheckmarkAnimation() {
         checkmarkAnimator?.cancel()
         checkmarkAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 350
-            interpolator = OvershootInterpolator(1.5f)
+            duration = 320
+            interpolator = OvershootInterpolator(1.4f)
             addUpdateListener {
                 checkmarkProgress = it.animatedValue as Float
                 invalidate()
@@ -204,19 +197,30 @@ class FloatingTriggerButtonView @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         if (w > 0 && h > 0) {
-            val shader = LinearGradient(
+            val neonShader = LinearGradient(
                 0f, 0f, w.toFloat(), h.toFloat(),
                 intArrayOf(
-                    Color.parseColor("#833AB4"),
-                    Color.parseColor("#E1306C"),
-                    Color.parseColor("#FD1D1D")
+                    Color.parseColor("#8A67FF"), // Radiant Violet
+                    Color.parseColor("#FF3377"), // Electric Coral
+                    Color.parseColor("#FFA238")  // Amber Glow
                 ),
                 null,
                 Shader.TileMode.CLAMP
             )
-            gradientPaint.shader = shader
+            neonBorderPaint.shader = neonShader
 
-            val padding = progressRingPaint.strokeWidth / 2f + 2f
+            val progressShader = LinearGradient(
+                0f, 0f, w.toFloat(), h.toFloat(),
+                intArrayOf(
+                    Color.parseColor("#38BDF8"), // Cyan
+                    Color.parseColor("#8A67FF")  // Violet
+                ),
+                null,
+                Shader.TileMode.CLAMP
+            )
+            progressRingPaint.shader = progressShader
+
+            val padding = progressRingPaint.strokeWidth / 2f + 3f
             progressRect.set(padding, padding, w - padding, h - padding)
         }
     }
@@ -231,91 +235,90 @@ class FloatingTriggerButtonView @JvmOverloads constructor(
         canvas.save()
         canvas.scale(scaleMultiplier, scaleMultiplier, cx, cy)
 
-        // 1. Base Background Circle
+        // 1. Subtle Outer Drop Shadow
+        canvas.drawCircle(cx, cy + 2f, radius + 1f, shadowPaint)
+
+        // 2. Base Background Fill
         when (currentState) {
             VisualState.SUCCESS -> canvas.drawCircle(cx, cy, radius, successBgPaint)
             VisualState.PARTIAL_SUCCESS -> canvas.drawCircle(cx, cy, radius, partialBgPaint)
             VisualState.DUPLICATE -> canvas.drawCircle(cx, cy, radius, duplicateBgPaint)
             VisualState.ERROR -> canvas.drawCircle(cx, cy, radius, errorBgPaint)
-            else -> canvas.drawCircle(cx, cy, radius, gradientPaint)
+            else -> canvas.drawCircle(cx, cy, radius, obsidianBgPaint)
         }
 
-        // 2. White inner border
-        canvas.drawCircle(cx, cy, radius, borderPaint)
+        // 3. Neon Jewel Border
+        if (currentState == VisualState.IDLE) {
+            canvas.drawCircle(cx, cy, radius, neonBorderPaint)
+        }
+        canvas.drawCircle(cx, cy, radius - 2f, innerBorderPaint)
 
-        // 3. Progress Ring Overlay
+        // 4. Progress Ring Overlay
         when (currentState) {
             VisualState.RESOLVING -> {
                 canvas.save()
                 canvas.rotate(indeterminateRotation, cx, cy)
-                canvas.drawArc(progressRect, 0f, 90f, false, progressRingPaint)
+                canvas.drawArc(progressRect, 0f, 100f, false, progressRingPaint)
                 canvas.restore()
             }
             VisualState.DOWNLOADING -> {
                 val sweep = (progressPercent / 100f) * 360f
                 canvas.drawArc(progressRect, -90f, sweep, false, progressRingPaint)
             }
-            else -> {
-                // No outer progress ring in other states
-            }
+            else -> {}
         }
 
-        // 4. Center State Representation
+        // 5. Center State Iconography
         when (currentState) {
-            VisualState.IDLE -> {
-                downloadIconBitmap?.let { bmp ->
-                    val left = cx - (bmp.width / 2f)
-                    val top = cy - (bmp.height / 2f)
-                    canvas.drawBitmap(bmp, left, top, null)
-                }
-            }
-            VisualState.RESOLVING -> {
-                downloadIconBitmap?.let { bmp ->
-                    val left = cx - (bmp.width / 2f)
-                    val top = cy - (bmp.height / 2f)
-                    canvas.drawBitmap(bmp, left, top, null)
-                }
+            VisualState.IDLE, VisualState.RESOLVING -> {
+                drawSymmetricArrow(canvas, cx, cy, radius * 0.42f)
             }
             VisualState.DOWNLOADING -> {
-                if (carouselStatusText.isNotBlank()) {
-                    // Show item progress text like "2/5" or "48%"
-                    val textY = cy - ((textPaint.descent() + textPaint.ascent()) / 2f)
-                    canvas.drawText(carouselStatusText, cx, textY, textPaint)
-                } else {
-                    // Show percentage
-                    val label = "$progressPercent%"
-                    val textY = cy - ((textPaint.descent() + textPaint.ascent()) / 2f)
-                    canvas.drawText(label, cx, textY, textPaint)
-                }
+                val label = if (carouselStatusText.isNotBlank()) carouselStatusText else "$progressPercent%"
+                val textY = cy - ((textPaint.descent() + textPaint.ascent()) / 2f)
+                canvas.drawText(label, cx, textY, textPaint)
             }
             VisualState.SUCCESS -> {
-                drawCheckmark(canvas, cx, cy, radius * 0.5f, checkmarkProgress)
+                drawCheckmark(canvas, cx, cy, radius * 0.52f, checkmarkProgress)
             }
             VisualState.PARTIAL_SUCCESS -> {
-                // Distinct partial state: label or dash
                 val label = if (carouselStatusText.isNotBlank()) carouselStatusText else "PARTIAL"
                 val textY = cy - ((textPaint.descent() + textPaint.ascent()) / 2f)
                 canvas.drawText(label, cx, textY, textPaint)
             }
             VisualState.DUPLICATE -> {
-                // Distinct duplicate indicator: "SAVED"
                 val label = "SAVED"
                 val textY = cy - ((textPaint.descent() + textPaint.ascent()) / 2f)
                 canvas.drawText(label, cx, textY, textPaint)
             }
             VisualState.ERROR -> {
-                drawErrorCross(canvas, cx, cy, radius * 0.4f)
+                drawErrorCross(canvas, cx, cy, radius * 0.38f)
             }
         }
 
         canvas.restore()
     }
 
+    private fun drawSymmetricArrow(canvas: Canvas, cx: Float, cy: Float, size: Float) {
+        arrowPath.reset()
+        // Arrow stem
+        arrowPath.moveTo(cx, cy - size * 0.75f)
+        arrowPath.lineTo(cx, cy + size * 0.45f)
+        // Arrow head
+        arrowPath.moveTo(cx - size * 0.55f, cy - size * 0.05f)
+        arrowPath.lineTo(cx, cy + size * 0.5f)
+        arrowPath.lineTo(cx + size * 0.55f, cy - size * 0.05f)
+        // Base landing tray
+        arrowPath.moveTo(cx - size * 0.7f, cy + size * 0.85f)
+        arrowPath.lineTo(cx + size * 0.7f, cy + size * 0.85f)
+
+        canvas.drawPath(arrowPath, vectorArrowPaint)
+    }
+
     private fun drawCheckmark(canvas: Canvas, cx: Float, cy: Float, size: Float, animProgress: Float) {
         if (animProgress <= 0f) return
         checkmarkPath.reset()
 
-        // Checkmark points relative to center
         val startX = cx - (size * 0.55f)
         val startY = cy
         val midX = cx - (size * 0.15f)

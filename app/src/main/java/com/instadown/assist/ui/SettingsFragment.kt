@@ -11,6 +11,7 @@ import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.ProgressBar
@@ -429,7 +430,11 @@ class SettingsFragment : Fragment() {
             .setCancelable(true)
             .create()
 
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setDimAmount(0.80f)
+            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        }
         dialog.show()
 
         btnNegative.setOnClickListener { dialog.dismiss() }
@@ -487,7 +492,11 @@ class SettingsFragment : Fragment() {
             .setCancelable(true)
             .create()
 
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setDimAmount(0.80f)
+            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        }
         dialog.show()
 
         var currentFilter = "ALL"

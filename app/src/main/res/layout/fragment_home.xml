@@ -16,7 +16,7 @@
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
         android:paddingTop="8dp"
-        android:paddingBottom="24dp">
+        android:paddingBottom="100dp">
 
         <!-- Top Header: Logo, Title, Live Service Status Pill -->
         <ImageView

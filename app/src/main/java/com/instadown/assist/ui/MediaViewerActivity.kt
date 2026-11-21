@@ -3,6 +3,7 @@ package com.instadown.assist.ui
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
@@ -58,6 +59,13 @@ class MediaViewerActivity : AppCompatActivity() {
     private lateinit var btnShare: ImageButton
     private lateinit var btnDelete: ImageButton
 
+    private lateinit var layoutCarouselBottomBar: LinearLayout
+    private lateinit var tvCarouselIndicatorPill: TextView
+    private lateinit var rvCarouselFilmstrip: RecyclerView
+    private lateinit var btnPrevItem: ImageButton
+    private lateinit var btnNextItem: ImageButton
+    private var filmstripAdapter: CarouselFilmstripAdapter? = null
+
     private var currentRecord: DownloadRecord? = null
     private var mediaItems: List<DownloadItemRecord> = emptyList()
     private val repo by lazy { DownloadRepository.getInstance(this) }
@@ -101,11 +109,30 @@ class MediaViewerActivity : AppCompatActivity() {
         btnExtractAudio = findViewById(R.id.btnExtractAudio)
         btnShare = findViewById(R.id.btnShare)
         btnDelete = findViewById(R.id.btnDelete)
+        layoutCarouselBottomBar = findViewById(R.id.layoutCarouselBottomBar)
+        tvCarouselIndicatorPill = findViewById(R.id.tvCarouselIndicatorPill)
+        rvCarouselFilmstrip = findViewById(R.id.rvCarouselFilmstrip)
+        btnPrevItem = findViewById(R.id.btnPrevItem)
+        btnNextItem = findViewById(R.id.btnNextItem)
+
+        btnPrevItem.setOnClickListener {
+            val prev = viewPager.currentItem - 1
+            if (prev >= 0) viewPager.setCurrentItem(prev, true)
+        }
+        btnNextItem.setOnClickListener {
+            val next = viewPager.currentItem + 1
+            if (next < mediaItems.size) viewPager.setCurrentItem(next, true)
+        }
 
         // Handle edge-to-edge system insets
         ViewCompat.setOnApplyWindowInsetsListener(topBar) { view, insets ->
             val statusBars = insets.getInsets(WindowInsetsCompat.Type.statusBars())
             view.setPadding(view.paddingLeft, statusBars.top + 16, view.paddingRight, view.paddingBottom)
+            insets
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(layoutCarouselBottomBar) { view, insets ->
+            val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, navBars.bottom + 16)
             insets
         }
 
@@ -214,11 +241,46 @@ class MediaViewerActivity : AppCompatActivity() {
         viewPager.setCurrentItem(safeInitial, false)
         updateHeader(safeInitial)
 
+        if (mediaItems.size > 1) {
+            layoutCarouselBottomBar.visibility = View.VISIBLE
+            rvCarouselFilmstrip.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(
+                this,
+                androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL,
+                false
+            )
+            filmstripAdapter = CarouselFilmstripAdapter(mediaItems, safeInitial) { clickedPos ->
+                viewPager.setCurrentItem(clickedPos, true)
+            }
+            rvCarouselFilmstrip.adapter = filmstripAdapter
+            updateCarouselNavButtons(safeInitial)
+            tvCarouselIndicatorPill.text = "Slide ${safeInitial + 1} of ${mediaItems.size}"
+        } else {
+            layoutCarouselBottomBar.visibility = View.GONE
+            btnPrevItem.visibility = View.GONE
+            btnNextItem.visibility = View.GONE
+        }
+
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 updateHeader(position)
+                updateCarouselNavButtons(position)
+                filmstripAdapter?.setSelectedPosition(position)
+                rvCarouselFilmstrip.smoothScrollToPosition(position)
+                tvCarouselIndicatorPill.text = "Slide ${position + 1} of ${mediaItems.size}"
             }
         })
+    }
+
+    private fun updateCarouselNavButtons(position: Int) {
+        if (mediaItems.size <= 1) {
+            btnPrevItem.visibility = View.GONE
+            btnNextItem.visibility = View.GONE
+            return
+        }
+        if (isControlsVisible) {
+            btnPrevItem.visibility = if (position > 0) View.VISIBLE else View.GONE
+            btnNextItem.visibility = if (position < mediaItems.size - 1) View.VISIBLE else View.GONE
+        }
     }
 
     private fun updateHeader(position: Int) {
@@ -279,6 +341,19 @@ class MediaViewerActivity : AppCompatActivity() {
                 topBar.visibility = if (isControlsVisible) View.VISIBLE else View.GONE
             }
             .start()
+
+        if (mediaItems.size > 1) {
+            layoutCarouselBottomBar.animate()
+                .alpha(targetAlpha)
+                .setDuration(200)
+                .withEndAction {
+                    layoutCarouselBottomBar.visibility = if (isControlsVisible) View.VISIBLE else View.GONE
+                }
+                .start()
+            val cur = viewPager.currentItem
+            btnPrevItem.visibility = if (isControlsVisible && cur > 0) View.VISIBLE else View.GONE
+            btnNextItem.visibility = if (isControlsVisible && cur < mediaItems.size - 1) View.VISIBLE else View.GONE
+        }
         if (isControlsVisible) topBar.visibility = View.VISIBLE
     }
 
@@ -499,5 +574,61 @@ class MediaViewerActivity : AppCompatActivity() {
             val seconds = totalSeconds % 60
             return String.format(java.util.Locale.US, "%d:%02d", minutes, seconds)
         }
+    }
+
+    private inner class CarouselFilmstripAdapter(
+        private val items: List<DownloadItemRecord>,
+        private var selectedPosition: Int,
+        private val onItemClick: (Int) -> Unit
+    ) : RecyclerView.Adapter<CarouselFilmstripAdapter.ThumbViewHolder>() {
+
+        fun setSelectedPosition(pos: Int) {
+            val prev = selectedPosition
+            selectedPosition = pos
+            notifyItemChanged(prev)
+            notifyItemChanged(selectedPosition)
+        }
+
+        inner class ThumbViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val card: com.google.android.material.card.MaterialCardView = view.findViewById(R.id.cardViewerThumb)
+            val ivThumb: ImageView = view.findViewById(R.id.ivCarouselItemThumb)
+            val tvIndex: TextView = view.findViewById(R.id.tvCarouselItemIndex)
+            val ivVideo: ImageView = view.findViewById(R.id.ivCarouselVideoBadge)
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ThumbViewHolder {
+            val view = layoutInflater.inflate(R.layout.item_viewer_carousel_thumb, parent, false)
+            return ThumbViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ThumbViewHolder, position: Int) {
+            val item = items[position]
+            holder.tvIndex.text = "#${position + 1}"
+            val isVideo = item.mediaType.equals("VIDEO", ignoreCase = true)
+            holder.ivVideo.visibility = if (isVideo) View.VISIBLE else View.GONE
+
+            val isSelected = position == selectedPosition
+            val density = resources.displayMetrics.density
+            holder.card.strokeWidth = if (isSelected) (2 * density).toInt() else (1 * density).toInt()
+            holder.card.strokeColor = if (isSelected) Color.parseColor("#8A67FF") else Color.parseColor("#33FFFFFF")
+            holder.card.scaleX = if (isSelected) 1.08f else 1.0f
+            holder.card.scaleY = if (isSelected) 1.08f else 1.0f
+
+            MediaThumbnailLoader.loadInto(
+                context = this@MediaViewerActivity,
+                uriString = item.mediaUri,
+                imageView = holder.ivThumb,
+                isVideo = isVideo,
+                targetWidth = 100,
+                targetHeight = 100,
+                scope = lifecycleScope
+            )
+
+            holder.itemView.setOnClickListener {
+                onItemClick(position)
+            }
+        }
+
+        override fun getItemCount(): Int = items.size
     }
 }

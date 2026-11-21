@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/viewerRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -11,6 +12,35 @@
         android:id="@+id/viewPager"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
+
+    <!-- Left Navigation Chevron -->
+    <ImageButton
+        android:id="@+id/btnPrevItem"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="center_vertical|start"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/card_background"
+        android:backgroundTint="#80000000"
+        android:src="@drawable/ic_arrow_back"
+        app:tint="@color/white"
+        android:visibility="gone"
+        android:contentDescription="Previous Slide" />
+
+    <!-- Right Navigation Chevron -->
+    <ImageButton
+        android:id="@+id/btnNextItem"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="center_vertical|end"
+        android:layout_marginEnd="8dp"
+        android:rotation="180"
+        android:background="@drawable/card_background"
+        android:backgroundTint="#80000000"
+        android:src="@drawable/ic_arrow_back"
+        app:tint="@color/white"
+        android:visibility="gone"
+        android:contentDescription="Next Slide" />
 
     <!-- Top Overlay Bar (Edge-to-Edge) -->
     <LinearLayout
@@ -87,6 +117,44 @@
             android:src="@drawable/ic_delete"
             android:tint="#FF5252"
             android:contentDescription="Delete" />
+    </LinearLayout>
+
+    <!-- Bottom Carousel Filmstrip & Navigation Tray -->
+    <LinearLayout
+        android:id="@+id/layoutCarouselBottomBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingBottom="24dp"
+        android:paddingTop="12dp"
+        android:background="#99000000"
+        android:visibility="gone">
+
+        <!-- Indicator Pill -->
+        <TextView
+            android:id="@+id/tvCarouselIndicatorPill"
+            android:layout_width="wrap_content"
+            android:layout_height="24dp"
+            android:gravity="center"
+            android:background="@drawable/bg_badge_compact"
+            android:paddingHorizontal="10dp"
+            android:textColor="@color/white"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:text="Slide 1 of 4"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Filmstrip RecyclerView -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvCarouselFilmstrip"
+            android:layout_width="wrap_content"
+            android:layout_height="52dp"
+            android:orientation="horizontal"
+            android:overScrollMode="never"
+            android:paddingHorizontal="16dp"
+            android:clipToPadding="false" />
     </LinearLayout>
 
 </FrameLayout>

@@ -96,7 +96,14 @@ class HomeFragment : Fragment() {
     private fun setupListeners() {
         // Live Service Status Pill Toggle
         binding.pillServiceToggle.setOnClickListener {
-            viewModel.toggleService()
+            val state = viewModel.uiState.value
+            if (state.isServiceRunning) {
+                viewModel.toggleService()
+            } else if (state.isMissingPermissions) {
+                showAssistantSetupSheet()
+            } else {
+                viewModel.toggleService()
+            }
         }
 
         // Navigate to Gallery Tab via "See All"
@@ -200,7 +207,7 @@ class HomeFragment : Fragment() {
                                 Toast.makeText(requireContext(), event.message, Toast.LENGTH_SHORT).show()
                             }
                             is HomeEvent.OpenOverlayPermissionSettings -> {
-                                requestOverlayPermission()
+                                showAssistantSetupSheet()
                             }
                         }
                     }
@@ -209,18 +216,37 @@ class HomeFragment : Fragment() {
         }
     }
 
+    private fun showAssistantSetupSheet() {
+        if (childFragmentManager.findFragmentByTag(AssistantSetupBottomSheet.TAG) == null) {
+            AssistantSetupBottomSheet.newInstance().apply {
+                setOnAssistantActivatedListener {
+                    viewModel.startAssistantService()
+                }
+            }.show(childFragmentManager, AssistantSetupBottomSheet.TAG)
+        }
+    }
+
     private fun renderUiState(state: HomeUiState) {
         // 1. Service Status Pill UI
         val isRunning = state.isServiceRunning
+        val isA11y = state.isA11yEnabled
         val pillDotColor = ContextCompat.getColor(
             requireContext(),
-            if (isRunning) R.color.status_green else R.color.status_amber
+            when {
+                isRunning && isA11y -> R.color.status_green
+                isRunning -> R.color.status_amber
+                else -> R.color.text_muted
+            }
         )
         binding.dotServicePill.backgroundTintList = ColorStateList.valueOf(pillDotColor)
-        binding.tvServicePillText.text = if (isRunning) "Pause assistant" else "Start assistant"
-        binding.tvServicePillText.setCompoundDrawablesWithIntrinsicBounds(if (isRunning) R.drawable.ic_pause else R.drawable.ic_play_arrow, 0, 0, 0)
+        binding.tvServicePillText.text = when {
+            isRunning && isA11y -> "Assistant: ON"
+            isRunning -> "Setup needed"
+            else -> "Assistant: OFF"
+        }
+        binding.tvServicePillText.setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0)
         binding.pillServiceToggle.contentDescription =
-            if (isRunning) "InstaSave is running. Tap to stop." else "InstaSave is stopped. Tap to start."
+            if (isRunning) "InstaSave assistant is active. Tap to stop." else "InstaSave assistant is off. Tap to configure or start."
 
         // 2. Conditional Permissions Banner
         updatePermissionsBanner(isRunning && state.isMissingPermissions, state.isA11yEnabled, state.canDrawOverlays)
@@ -257,8 +283,10 @@ class HomeFragment : Fragment() {
                 permissionsBannerBinding = BannerPermissionsAlertBinding.bind(inflated)
                 // Read live state inside listener to avoid stale boolean closure
                 permissionsBannerBinding?.cardPermissionsBanner?.setOnClickListener {
-                    val current = viewModel.uiState.value
-                    openMissingPermissionSettings(current.isA11yEnabled, current.canDrawOverlays)
+                    showAssistantSetupSheet()
+                }
+                permissionsBannerBinding?.btnBannerSettings?.setOnClickListener {
+                    showAssistantSetupSheet()
                 }
             }
         }
