@@ -67,7 +67,7 @@ class RecentDownloadsAdapter(
 
     class RecentViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val ivThumbnail: ImageView = view.findViewById(R.id.ivRecentThumbnail)
-        val layoutBadge: FrameLayout = view.findViewById(R.id.layoutRecentBadge)
+        val layoutBadge: View = view.findViewById(R.id.layoutRecentBadge)
         val ivTypeIcon: ImageView = view.findViewById(R.id.ivRecentTypeIcon)
         val tvCarouselCount: TextView = view.findViewById(R.id.tvRecentCarouselCount)
         val title: TextView = view.findViewById(R.id.recentTitle)

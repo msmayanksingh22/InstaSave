@@ -27,7 +27,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="top|end"
             android:layout_margin="6dp"
-            android:background="#CC090A10"
+            android:background="@drawable/bg_badge_compact"
             android:paddingStart="6dp"
             android:paddingEnd="6dp"
             android:paddingTop="3dp"
