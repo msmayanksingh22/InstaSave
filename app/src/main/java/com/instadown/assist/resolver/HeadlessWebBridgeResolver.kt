@@ -35,7 +35,7 @@ class HeadlessWebBridgeResolver(
     companion object {
         private const val TAG = "HeadlessWebBridge"
         private const val EXTRACTOR_URL = "https://fastdl.app/"
-        private const val TIMEOUT_MS = 9000L
+        private const val TIMEOUT_MS = 14000L
         private const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
         @Volatile
@@ -696,7 +696,13 @@ class HeadlessWebBridgeResolver(
                                 try {
                                     if (url && (url.indexOf('/api/convert') !== -1 || url.indexOf('convert') !== -1)) {
                                         response.clone().json().then(function(json) {
-                                            console.log('Intercepted /api/convert via fetch');
+                                            console.log('Intercepted /api/convert via fetch: status=' + response.status + ' payload=' + JSON.stringify(json).slice(0, 400));
+                                            if (json && (json.error || json.errorMessage || json.message)) {
+                                                var errMsg = json.error || json.errorMessage || json.message;
+                                                console.log('FastDl API error: ' + errMsg);
+                                                if (window._fastDlSendError) window._fastDlSendError(errMsg);
+                                                return;
+                                            }
                                             window._capturedFastDlApiData = json;
                                             var items = extractFromCapturedApiData();
                                             if (items && items.length > 0) {
@@ -705,8 +711,12 @@ class HeadlessWebBridgeResolver(
                                                 } else {
                                                     sendResult(items);
                                                 }
+                                            } else {
+                                                console.log('extractFromCapturedApiData returned empty for payload: ' + JSON.stringify(json).slice(0, 300));
                                             }
-                                        }).catch(function(_) {});
+                                        }).catch(function(e) {
+                                            console.log('Error reading convert json: ' + e);
+                                        });
                                     }
                                 } catch (_) {}
                                 return response;
@@ -725,7 +735,13 @@ class HeadlessWebBridgeResolver(
                             try {
                                 if (this._reqUrl && (this._reqUrl.indexOf('/api/convert') !== -1 || this._reqUrl.indexOf('convert') !== -1)) {
                                     var json = JSON.parse(this.responseText);
-                                    console.log('Intercepted /api/convert via XHR');
+                                    console.log('Intercepted /api/convert via XHR: payload=' + JSON.stringify(json).slice(0, 400));
+                                    if (json && (json.error || json.errorMessage || json.message)) {
+                                        var errMsg = json.error || json.errorMessage || json.message;
+                                        console.log('FastDl XHR error: ' + errMsg);
+                                        if (window._fastDlSendError) window._fastDlSendError(errMsg);
+                                        return;
+                                    }
                                     window._capturedFastDlApiData = json;
                                     var items = extractFromCapturedApiData();
                                     if (items && items.length > 0) {
@@ -751,16 +767,22 @@ class HeadlessWebBridgeResolver(
 
                         var isVid = !!(
                             d.downloadableVideoUrl ||
+                            d.video_url ||
                             (d.video_versions && d.video_versions.length > 0) ||
                             d.type === 'video' ||
                             d.media_type === 2 ||
-                            (typeof d.url === 'string' && d.url.indexOf('.mp4') !== -1)
+                            d.ext === 'mp4' ||
+                            (d.name && d.name.toLowerCase().indexOf('mp4') !== -1) ||
+                            (typeof d.url === 'string' && (d.url.indexOf('.mp4') !== -1 || d.url.indexOf('/t16/') !== -1 || d.url.indexOf('video') !== -1))
                         );
 
                         var vUrl = d.downloadableVideoUrl || 
+                                   d.video_url ||
                                    (d.video_versions && d.video_versions[0] && d.video_versions[0].url) ||
                                    (isVid && typeof d.url === 'string' ? d.url : null) ||
-                                   (isVid && Array.isArray(d.url) && d.url[0] && d.url[0].url);
+                                   (isVid && Array.isArray(d.url) && d.url[0] && (d.url[0].url || (typeof d.url[0] === 'string' ? d.url[0] : null))) ||
+                                   (isVid && d.link) ||
+                                   (isVid && d.downloadUrl);
 
                         var previewImg = d.previewImageUrl || 
                                          d.thumbnail_url || 
@@ -773,11 +795,13 @@ class HeadlessWebBridgeResolver(
                                          '';
 
                         var iUrl = d.downloadableImageUrl || 
+                                   d.display_url ||
                                    (typeof d.url === 'string' ? d.url : null) || 
-                                   (Array.isArray(d.url) && d.url[0] && d.url[0].url) || 
+                                   (Array.isArray(d.url) && d.url[0] && (d.url[0].url || (typeof d.url[0] === 'string' ? d.url[0] : null))) || 
+                                   d.link ||
                                    previewImg;
 
-                        var dlUrl = (isVid && vUrl) ? vUrl : (iUrl || vUrl);
+                        var dlUrl = (isVid && vUrl) ? vUrl : (iUrl || vUrl || (typeof d.url === 'string' ? d.url : null) || d.downloadUrl);
                         var thumb = previewImg || (isVid ? '' : dlUrl);
 
                         if (dlUrl) {
@@ -799,11 +823,13 @@ class HeadlessWebBridgeResolver(
                         rawList = d;
                     } else if (d && typeof d === 'object') {
                         if (Array.isArray(d.data)) rawList = d.data;
+                        else if (d.data && typeof d.data === 'object') rawList = [d.data];
                         else if (Array.isArray(d.items)) rawList = d.items;
                         else if (Array.isArray(d.result)) rawList = d.result;
                         else if (Array.isArray(d.media)) rawList = d.media;
                         else if (Array.isArray(d.url)) rawList = d.url;
                         else if (d.url && typeof d.url === 'string') rawList = [d];
+                        else if (d.downloadUrl || d.downloadableVideoUrl || d.downloadableImageUrl || d.link) rawList = [d];
                     }
                     if (rawList) {
                         return extractFromDataArray(rawList);
@@ -947,7 +973,7 @@ class HeadlessWebBridgeResolver(
                 }
 
                 function checkError() {
-                    var el = document.querySelector('.search-error, .alert-danger, .error-message');
+                    var el = document.querySelector('.search-error, .alert-danger, .error-message, error-component, [class*="error"], .search-result--error');
                     if (el && el.innerText && el.innerText.trim().length > 0) {
                         return el.innerText.trim();
                     }
@@ -983,7 +1009,6 @@ class HeadlessWebBridgeResolver(
                                     if (typeof p.handleSearchButtonClick === 'function') {
                                         console.log('Invoked proxy.handleSearchButtonClick()');
                                         p.handleSearchButtonClick();
-                                        return;
                                     }
                                 }
                                 el = el.parentElement;

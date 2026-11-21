@@ -239,10 +239,11 @@ class EmbedFallbackResolver(
             )
         }
 
-        // Check if embed indicates error or 404 page
+        // Check if embed indicates error or 404 page or disabled rich embed
         if (html!!.contains("<title>Page Not Found") ||
             html!!.contains("Page Not Found &bull; Instagram") ||
-            html!!.contains("Content Not Found")
+            html!!.contains("Content Not Found") ||
+            (html!!.contains("\"isRichEmbed\":false") && html!!.contains("\"contextJSON\":null"))
         ) {
             return@withContext ResolveResult(
                 success = false,
@@ -258,7 +259,7 @@ class EmbedFallbackResolver(
                 finalHost = finalHost,
                 error = ResolveError(
                     code = ResolveErrorCode.CONTENT_NOT_FOUND,
-                    message = "Embed page displayed error/not found for '${normalized.shortcode}'"
+                    message = "Embed page unavailable or rich embed disabled for '${normalized.shortcode}'"
                 )
             )
         }

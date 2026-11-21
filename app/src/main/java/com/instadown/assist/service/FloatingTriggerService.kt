@@ -37,11 +37,14 @@ import com.instadown.assist.download.model.DownloadResult
 import com.instadown.assist.overlay.ButtonSize
 import com.instadown.assist.overlay.FloatingPositionManager
 import com.instadown.assist.overlay.InstaSavePreferences
+import com.instadown.assist.overlay.ResilientHudBus
+import com.instadown.assist.overlay.ResilientHudState
 import com.instadown.assist.overlay.SpringFloatingDockController
 import com.instadown.assist.util.DownloadNotificationManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class FloatingTriggerService : Service() {
 
@@ -61,11 +64,44 @@ class FloatingTriggerService : Service() {
     private var isTriggerActive = false
     private var idleResetRunnable: Runnable? = null
 
+    private val clipboardCoordinator by lazy { com.instadown.assist.download.ClipboardDownloadCoordinator(this) }
+
     private val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
-        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        val clip = try { cm?.primaryClip } catch (e: Exception) { null }
-        val text = clip?.getItemAt(0)?.coerceToText(this)?.toString()
-        Log.i("OPPO_CLIP_TEST", "onPrimaryClipChanged fired: hasClip=${clip != null}, itemCount=${clip?.itemCount}, length=${text?.length ?: 0}")
+        if (!isRunning) return@OnPrimaryClipChangedListener
+        if (preferences.downloadMode != com.instadown.assist.overlay.DownloadMode.CLIPBOARD) return@OnPrimaryClipChangedListener
+
+        // Temporarily acquire focus to legally read clipboard on Android 10-14+
+        acquireFocusForClipboard()
+        mainHandler.postDelayed({
+            try {
+                val clip = com.instadown.assist.util.ClipboardReader.readCurrentClip(this)
+                if (clip.isValidInstagramUrl) {
+                    val decision = clipboardCoordinator.evaluateProcessDecision(
+                        cleanUrl = clip.cleanUrl,
+                        clipTimestamp = clip.timestamp,
+                        prefs = preferences
+                    )
+                    if (decision == com.instadown.assist.download.ClipboardDownloadCoordinator.ProcessDecision.ALLOW) {
+                        clipboardCoordinator.startProcessing(clip.cleanUrl)
+                        triggerHaptic()
+                        Toast.makeText(this, "Link detected! Saving in background...", Toast.LENGTH_SHORT).show()
+                        com.instadown.assist.InstaSaveApp.applicationScope.launch(Dispatchers.IO) {
+                            val dlResult = coordinator.executeDirectDownload(
+                                url = clip.cleanUrl,
+                                recordInDb = true
+                            )
+                            if (dlResult.success || dlResult.completedCount > 0) {
+                                clipboardCoordinator.onProcessingSuccess(clip.cleanUrl, System.currentTimeMillis(), preferences)
+                            } else {
+                                clipboardCoordinator.onProcessingFailed(clip.cleanUrl)
+                            }
+                        }
+                    }
+                }
+            } finally {
+                releaseFocusForClipboard()
+            }
+        }, 100)
     }
 
     companion object {
@@ -389,9 +425,34 @@ class FloatingTriggerService : Service() {
     private fun initiateDownloadFlow(tapX: Float, tapY: Float) {
         val a11y = InstaAccessibilityService.instance
         if (a11y == null) {
+            // High-resilience fallback: Check if user already has an Instagram URL in clipboard
+            acquireFocusForClipboard()
+            val clip = com.instadown.assist.util.ClipboardReader.readCurrentClip(this)
+            releaseFocusForClipboard()
+            if (clip.isValidInstagramUrl && clip.cleanUrl.isNotBlank()) {
+                triggerHaptic()
+                isTriggerActive = true
+                floatingButtonView?.setState(com.instadown.assist.ui.view.FloatingTriggerButtonView.VisualState.RESOLVING)
+                val opId = ResilientHudBus.startOperation()
+                ResilientHudBus.emit(ResilientHudState.LinkDetected(opId, "Instagram Link"))
+                com.instadown.assist.InstaSaveApp.applicationScope.launch {
+                    val result = coordinator.executeDirectDownload(url = clip.cleanUrl, operationId = opId)
+                    withContext(Dispatchers.Main) {
+                        isTriggerActive = false
+                        if (result.success) {
+                            updateStateVisual(StateVisual.SUCCESS)
+                        } else {
+                            updateStateVisual(StateVisual.ERROR)
+                            Toast.makeText(this@FloatingTriggerService, "Download failed: ${result.error}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+                return
+            }
+
             Toast.makeText(
                 this,
-                "Please enable InstaSave Accessibility Service in Android Settings",
+                "Please enable InstaSave Accessibility Service or copy an Instagram link",
                 Toast.LENGTH_LONG
             ).show()
             updateStateVisual(StateVisual.ERROR)
@@ -616,7 +677,10 @@ class FloatingTriggerService : Service() {
         val view = containerView ?: return
         try {
             params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+            view.isFocusable = true
+            view.isFocusableInTouchMode = true
             windowManager?.updateViewLayout(view, params)
+            view.requestFocus()
         } catch (ignored: Exception) {}
     }
 
@@ -624,6 +688,9 @@ class FloatingTriggerService : Service() {
         val params = windowParams ?: return
         val view = containerView ?: return
         try {
+            view.clearFocus()
+            view.isFocusable = false
+            view.isFocusableInTouchMode = false
             params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
             windowManager?.updateViewLayout(view, params)
         } catch (ignored: Exception) {}

@@ -10,8 +10,11 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import android.content.IntentSender
 import android.widget.*
 import androidx.activity.result.IntentSenderRequest
@@ -34,6 +37,7 @@ import com.instadown.assist.util.MediaThumbnailLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 
 class MediaViewerActivity : AppCompatActivity() {
 
@@ -58,6 +62,13 @@ class MediaViewerActivity : AppCompatActivity() {
     private lateinit var btnExtractAudio: ImageButton
     private lateinit var btnShare: ImageButton
     private lateinit var btnDelete: ImageButton
+    private lateinit var viewerRoot: View
+
+    private var downX = 0f
+    private var downY = 0f
+    private var isDismissDragging = false
+    private var dismissVelocityTracker: android.view.VelocityTracker? = null
+    private val touchSlop by lazy { android.view.ViewConfiguration.get(this).scaledTouchSlop }
 
     private lateinit var layoutCarouselBottomBar: LinearLayout
     private lateinit var tvCarouselIndicatorPill: TextView
@@ -100,6 +111,7 @@ class MediaViewerActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_media_viewer)
+        viewerRoot = findViewById(R.id.viewerRoot)
 
         viewPager = findViewById(R.id.viewPager)
         topBar = findViewById(R.id.topBar)
@@ -206,6 +218,110 @@ class MediaViewerActivity : AppCompatActivity() {
                 repo.reconcileWithMediaStore()
             }
         }
+    }
+
+    private fun isCurrentItemZoomed(): Boolean {
+        val recyclerView = viewPager.getChildAt(0) as? RecyclerView ?: return false
+        val viewHolder = recyclerView.findViewHolderForAdapterPosition(viewPager.currentItem) as? MediaPageViewHolder ?: return false
+        return viewHolder.isZoomed()
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = ev.rawX
+                downY = ev.rawY
+                isDismissDragging = false
+                dismissVelocityTracker?.recycle()
+                dismissVelocityTracker = android.view.VelocityTracker.obtain()
+                dismissVelocityTracker?.addMovement(ev)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                dismissVelocityTracker?.addMovement(ev)
+                val dy = ev.rawY - downY
+                val dx = ev.rawX - downX
+
+                if (!isDismissDragging) {
+                    if (abs(dy) > touchSlop && abs(dy) > abs(dx) * 1.5f && !isCurrentItemZoomed()) {
+                        isDismissDragging = true
+                        val cancelEvent = MotionEvent.obtain(ev).apply { action = MotionEvent.ACTION_CANCEL }
+                        super.dispatchTouchEvent(cancelEvent)
+                        cancelEvent.recycle()
+                    }
+                }
+
+                if (isDismissDragging) {
+                    viewPager.translationY = dy
+                    val dragFraction = (abs(dy) / (viewerRoot.height.toFloat().coerceAtLeast(1f))).coerceIn(0f, 1f)
+                    val scale = (1f - dragFraction * 0.22f).coerceIn(0.78f, 1f)
+                    viewPager.scaleX = scale
+                    viewPager.scaleY = scale
+
+                    val bgAlpha = ((1f - dragFraction * 1.25f).coerceIn(0f, 1f) * 255).toInt()
+                    viewerRoot.setBackgroundColor(android.graphics.Color.argb(bgAlpha, 0, 0, 0))
+
+                    val chromeAlpha = (1f - dragFraction * 2.5f).coerceIn(0f, 1f)
+                    topBar.alpha = chromeAlpha
+                    layoutCarouselBottomBar.alpha = chromeAlpha
+                    btnPrevItem.alpha = chromeAlpha
+                    btnNextItem.alpha = chromeAlpha
+                    return true
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (isDismissDragging) {
+                    dismissVelocityTracker?.addMovement(ev)
+                    dismissVelocityTracker?.computeCurrentVelocity(1000)
+                    val vy = dismissVelocityTracker?.yVelocity ?: 0f
+                    val dy = ev.rawY - downY
+                    val shouldDismiss = abs(dy) > (viewerRoot.height * 0.16f) ||
+                            (abs(vy) > 1100f && abs(dy) > touchSlop)
+
+                    if (shouldDismiss) {
+                        val targetY = if (dy >= 0) viewerRoot.height.toFloat() * 1.15f else -viewerRoot.height.toFloat() * 1.15f
+                        viewPager.animate()
+                            .translationY(targetY)
+                            .scaleX(0.72f)
+                            .scaleY(0.72f)
+                            .alpha(0f)
+                            .setDuration(220)
+                            .setInterpolator(AccelerateInterpolator())
+                            .withEndAction {
+                                finish()
+                                overridePendingTransition(0, 0)
+                            }
+                            .start()
+                        viewerRoot.animate()
+                            .alpha(0f)
+                            .setDuration(180)
+                            .start()
+                    } else {
+                        viewPager.animate()
+                            .translationY(0f)
+                            .scaleX(1f)
+                            .scaleY(1f)
+                            .alpha(1f)
+                            .setDuration(240)
+                            .setInterpolator(android.view.animation.DecelerateInterpolator())
+                            .start()
+                        viewerRoot.setBackgroundColor(android.graphics.Color.BLACK)
+                        topBar.animate().alpha(if (isControlsVisible) 1f else 0f).setDuration(200).start()
+                        layoutCarouselBottomBar.animate().alpha(if (isControlsVisible) 1f else 0f).setDuration(200).start()
+                        btnPrevItem.animate().alpha(if (isControlsVisible) 1f else 0f).setDuration(200).start()
+                        btnNextItem.animate().alpha(if (isControlsVisible) 1f else 0f).setDuration(200).start()
+                    }
+
+                    dismissVelocityTracker?.recycle()
+                    dismissVelocityTracker = null
+                    isDismissDragging = false
+                    return true
+                }
+                dismissVelocityTracker?.recycle()
+                dismissVelocityTracker = null
+                isDismissDragging = false
+            }
+        }
+        return super.dispatchTouchEvent(ev)
     }
 
     private fun loadTransaction(downloadId: Long, initialIndex: Int) {
@@ -438,6 +554,8 @@ class MediaViewerActivity : AppCompatActivity() {
         private val handler = Handler(Looper.getMainLooper())
         private var updateProgressRunnable: Runnable? = null
         private var isVideoPrepared = false
+
+        fun isZoomed(): Boolean = ivPhoto.visibility == View.VISIBLE && ivPhoto.isZoomed()
 
         fun bind(item: DownloadItemRecord, onItemClick: () -> Unit) {
             cleanup()

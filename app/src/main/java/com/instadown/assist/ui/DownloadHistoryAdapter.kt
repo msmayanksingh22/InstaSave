@@ -49,6 +49,8 @@ class DownloadHistoryAdapter(
         notifyDataSetChanged()
     }
 
+    fun getItem(position: Int): DownloadRecord? = items.getOrNull(position)
+
     fun updateProgressStates(newStates: Map<Long, RedownloadProgressState>) {
         val affectedIds = (progressStates.keys + newStates.keys).toSet()
         progressStates.clear()

@@ -233,6 +233,18 @@ class GalleryFragment : Fragment() {
     }
 
     private fun setupListeners() {
+        binding.swipeRefreshGallery.setColorSchemeResources(R.color.insta_pink, R.color.insta_purple, R.color.insta_amber)
+        binding.swipeRefreshGallery.setProgressBackgroundColorSchemeResource(R.color.card_bg)
+        binding.swipeRefreshGallery.setOnRefreshListener {
+            val appCtx = requireContext().applicationContext
+            viewLifecycleOwner.lifecycleScope.launch {
+                withContext(Dispatchers.IO) {
+                    DownloadRepository.getInstance(appCtx).reconcileWithMediaStore()
+                }
+                loadGallery()
+            }
+        }
+
         binding.btnAddLink.setOnClickListener {
             (activity as? MainActivity)?.navigateToTab(R.id.nav_home)
         }
@@ -324,6 +336,7 @@ class GalleryFragment : Fragment() {
                 DownloadRepository.getInstance(appCtx).getAllTransactions(includeFailed = false)
             }
             if (_binding == null || !isAdded) return@launch
+            binding.swipeRefreshGallery.isRefreshing = false
             allTransactions = transactions
             applyFilter()
         }
@@ -378,10 +391,10 @@ class GalleryFragment : Fragment() {
                 currentFilter != FilterType.ALL -> R.string.gallery_filter_empty
                 else -> R.string.gallery_library_empty
             })
-            binding.rvGallery.visibility = View.GONE
+            binding.swipeRefreshGallery.visibility = View.GONE
             binding.tvEmptyGallery.visibility = View.VISIBLE
         } else {
-            binding.rvGallery.visibility = View.VISIBLE
+            binding.swipeRefreshGallery.visibility = View.VISIBLE
             binding.tvEmptyGallery.visibility = View.GONE
         }
         adapter.submitList(filtered)

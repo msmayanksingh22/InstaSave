@@ -267,20 +267,27 @@
         </LinearLayout>
     </HorizontalScrollView>
 
-    <!-- 2-Column Media Grid RecyclerView -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rvGallery"
+    <!-- Gallery SwipeRefreshLayout -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipeRefreshGallery"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:paddingStart="6dp"
-        android:paddingEnd="6dp"
-        android:paddingTop="6dp"
-        android:paddingBottom="100dp"
-        android:clipToPadding="false"
         app:layout_constraintTop_toBottomOf="@id/scrollFilters"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rvGallery"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="100dp"
+            android:clipToPadding="false" />
+
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <!-- Empty State Placeholder -->
     <TextView

@@ -88,7 +88,7 @@ You are an expert principal Android systems engineer and architect working on In
   - `androidx.viewpager2:viewpager2:1.1.0`
   - `org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1`
   - `com.squareup.okhttp3:okhttp:4.12.0`
-- **Current Version**: `versionCode = 20`, `versionName = "1.3.2"`
+- **Current Version**: `versionCode = 26`, `versionName = "1.3.8"`
 
 ---
 
@@ -375,6 +375,29 @@ All release builds must be signed with the dedicated production keystore:
   - Recorded exact millisecond durations and status flags in `ResolveResult.diagnosticTrace`.
   - Routed all clipboard coordination decisions (`ALLOW`, `REJECT_ALREADY_PROCESSING`, `REJECT_ALREADY_COMPLETED`, `DEFER_QUEUED`) directly into `AppLogger`.
   - Surfaced rich diagnostic traces in `DownloadErrorBottomSheet` with 1-tap "Copy Debug Info" for instantaneous USB-free troubleshooting.
+
+### 30. Natural Physics Gestures & Android 10-14+ Background Clipboard Auto-Mode
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/ui/MediaViewerActivity.kt`
+  - `app/src/main/java/com/instadown/assist/ui/HistoryFragment.kt`
+  - `app/src/main/java/com/instadown/assist/ui/GalleryFragment.kt`
+  - `app/src/main/java/com/instadown/assist/overlay/FloatingHudPillView.kt`
+  - `app/src/main/java/com/instadown/assist/overlay/FloatingHudOverlayController.kt`
+  - `app/src/main/java/com/instadown/assist/service/FloatingTriggerService.kt`
+  - `app/src/main/java/com/instadown/assist/resolver/HeadlessWebBridgeResolver.kt`
+- **Root Cause & Fix for Automatic Mode Failure**:
+  - On Android 10-14+ (API 29-34), `ClipboardService.getPrimaryClip()` rejects background processes with `SecurityException` unless a window owned by that UID holds input focus. `acquireFocusForClipboard()` previously only modified layout params flags without requesting focus or enabling `isFocusable = true`, causing clipboard reads to time out.
+  - Properly wired window focus and bound `clipListener` to evaluate URLs and dispatch `coordinator.executeDirectDownload()` directly on `InstaSaveApp.applicationScope`.
+  - Added high-resilience clipboard fallback in `initiateDownloadFlow()` so user taps instantly trigger download if an Instagram link is already on the clipboard even if accessibility hasn't been enabled.
+- **Fluid Swipe-to-Dismiss in MediaViewerActivity**:
+  - Instagram/Twitter-grade vertical swipe physics coordinating with `ZoomableImageView.isZoomed()`.
+  - Smoothly translates, scales down ($1.0 \to 0.78$), fades background dim alpha, and dismisses on flick ($v_y > 1100\text{dp/s}$) or threshold ($> 16\%$ height), else springs back smoothly.
+- **Swipe-to-Action in History**:
+  - `ItemTouchHelper` with directional actions: Swiping Left (START) opens the glassmorphic Options bottom sheet; Swiping Right (END) shares the Instagram link. Includes rounded background canvas and haptic feedback.
+- **Pull-to-Refresh in History & Gallery**:
+  - Integrated `SwipeRefreshLayout` with Instagram brand color scheme (`insta_pink`, `insta_purple`, `insta_amber`), triggering non-blocking MediaStore reconciliation.
+- **Swipe-Up to Dismiss on Island HUD**:
+  - Natural upward swipe gesture on `FloatingHudPillView` flings and dismisses the pill immediately.
 
 ---
 

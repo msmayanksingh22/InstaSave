@@ -44,6 +44,12 @@ class FloatingHudPillView @JvmOverloads constructor(
     private var isExpanded = false
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    var onDismissRequested: (() -> Unit)? = null
+
+    private var initialTouchY = 0f
+    private var initialTouchX = 0f
+    private var isDraggingPill = false
+
     init {
         // Density scaling helper
         val density = context.resources.displayMetrics.density
@@ -343,5 +349,67 @@ class FloatingHudPillView @JvmOverloads constructor(
             })
             start()
         }
+    }
+
+    override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+        when (event.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                initialTouchY = event.rawY
+                initialTouchX = event.rawX
+                isDraggingPill = false
+                return true
+            }
+            android.view.MotionEvent.ACTION_MOVE -> {
+                val dy = event.rawY - initialTouchY
+                val dx = event.rawX - initialTouchX
+                if (dy < -20f || Math.abs(dx) > 30f) {
+                    isDraggingPill = true
+                }
+                if (isDraggingPill) {
+                    if (dy < 0f) {
+                        translationY = dy
+                    }
+                    val currentAlpha = (1f - (Math.abs(dy) / 120f)).coerceIn(0.2f, 1f)
+                    alpha = currentAlpha
+                    return true
+                }
+            }
+            android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                val dy = event.rawY - initialTouchY
+                val dx = event.rawX - initialTouchX
+                if (dy < -35f || Math.abs(dx) > 80f) {
+                    // Swiped up or swiped away
+                    animate()
+                        .translationY(-140f)
+                        .alpha(0f)
+                        .setDuration(180)
+                        .withEndAction {
+                            hidePill()
+                            onDismissRequested?.invoke()
+                        }
+                        .start()
+                    return true
+                } else if (!isDraggingPill && Math.abs(dy) < 15f && Math.abs(dx) < 15f) {
+                    // Tap on pill
+                    performClick()
+                    return true
+                } else {
+                    // Snap back
+                    animate()
+                        .translationY(0f)
+                        .alpha(1f)
+                        .setDuration(200)
+                        .setInterpolator(DecelerateInterpolator())
+                        .start()
+                    return true
+                }
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
+    override fun performClick(): Boolean {
+        super.performClick()
+        return true
     }
 }

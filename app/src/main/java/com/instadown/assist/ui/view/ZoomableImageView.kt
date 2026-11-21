@@ -118,6 +118,8 @@ class ZoomableImageView @JvmOverloads constructor(
         checkAndDisplayMatrix()
     }
 
+    fun isZoomed(): Boolean = getScale() > 1.05f
+
     private fun resetBaseMatrix() {
         val d = drawable ?: return
         val viewWidth = width.toFloat()

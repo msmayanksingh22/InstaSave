@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
  * on unauthenticated endpoints that return 302 Login Redirects or 429 Rate Limits.
  */
 object TierCircuitBreaker {
-    private const val COOLDOWN_MS = 10 * 60 * 1000L // 10 minutes
+    private const val COOLDOWN_MS = 60 * 1000L // 1 minute cooldown
     private val trippedMap = ConcurrentHashMap<String, Long>()
 
     fun trip(tier: String) {

@@ -76,6 +76,10 @@ class FloatingHudOverlayController(private val context: Context) {
                 ResilientHudBus.dismiss(force = true)
                 FloatingHudBus.reset()
             }
+            onDismissRequested = {
+                ResilientHudBus.dismiss(force = true)
+                FloatingHudBus.reset()
+            }
         }
         pillView = view
 

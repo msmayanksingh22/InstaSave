@@ -4,9 +4,15 @@ import android.app.Activity
 import android.content.Intent
 import android.content.IntentSender
 import android.content.res.ColorStateList
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -18,7 +24,9 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.SimpleItemAnimator
 import com.google.android.material.button.MaterialButton
 import com.instadown.assist.R
@@ -168,9 +176,140 @@ class HistoryFragment : Fragment() {
         binding.rvHistoryList.setHasFixedSize(true)
         (binding.rvHistoryList.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
         binding.rvHistoryList.adapter = adapter
+        setupSwipeGestures()
+    }
+
+    private fun setupSwipeGestures() {
+        val swipeCallback = object : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT) {
+            private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+            private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                textSize = 12f * resources.displayMetrics.density
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                textAlign = Paint.Align.CENTER
+            }
+            private val shareIcon = ContextCompat.getDrawable(requireContext(), R.drawable.ic_share)
+            private val optionsIcon = ContextCompat.getDrawable(requireContext(), R.drawable.ic_more_vert)
+            private val cornerRadius = 16f * resources.displayMetrics.density
+
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean = false
+
+            override fun getSwipeThreshold(viewHolder: RecyclerView.ViewHolder): Float = 0.35f
+
+            override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+                super.clearView(recyclerView, viewHolder)
+                getDefaultUIUtil().clearView(viewHolder.itemView)
+                viewHolder.itemView.translationX = 0f
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                val position = viewHolder.bindingAdapterPosition
+                val record = adapter.getItem(position)
+                getDefaultUIUtil().clearView(viewHolder.itemView)
+                viewHolder.itemView.translationX = 0f
+                adapter.notifyItemChanged(position)
+
+                if (record == null) return
+                viewHolder.itemView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+
+                if (direction == ItemTouchHelper.RIGHT) {
+                    try {
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, record.sourceUrl)
+                        }
+                        startActivity(Intent.createChooser(shareIntent, "Share Link"))
+                    } catch (_: Exception) {
+                        Toast.makeText(requireContext(), "Failed to share link", Toast.LENGTH_SHORT).show()
+                    }
+                } else if (direction == ItemTouchHelper.LEFT) {
+                    showItemOptionsDialog(record)
+                }
+            }
+
+            override fun onChildDraw(
+                c: Canvas,
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                dX: Float,
+                dY: Float,
+                actionState: Int,
+                isCurrentlyActive: Boolean
+            ) {
+                val itemView = viewHolder.itemView
+                val itemTop = itemView.top.toFloat()
+                val itemBottom = itemView.bottom.toFloat()
+                val itemHeight = itemBottom - itemTop
+
+                if (dX > 0) {
+                    bgPaint.color = Color.parseColor("#16233B")
+                    val bgRect = RectF(
+                        itemView.left.toFloat(),
+                        itemTop + 8f,
+                        itemView.left + dX,
+                        itemBottom - 8f
+                    )
+                    c.drawRoundRect(bgRect, cornerRadius, cornerRadius, bgPaint)
+
+                    shareIcon?.let { icon ->
+                        val iconSize = (24f * resources.displayMetrics.density).toInt()
+                        val iconTop = (itemTop + (itemHeight - iconSize) / 2f).toInt()
+                        val iconLeft = (itemView.left + 24f * resources.displayMetrics.density).toInt()
+                        icon.setBounds(iconLeft, iconTop, iconLeft + iconSize, iconTop + iconSize)
+                        icon.setTint(Color.parseColor("#3897F0"))
+                        icon.draw(c)
+
+                        c.drawText(
+                            "Share",
+                            iconLeft + iconSize / 2f,
+                            iconTop + iconSize + 14f * resources.displayMetrics.density,
+                            textPaint
+                        )
+                    }
+                } else if (dX < 0) {
+                    bgPaint.color = Color.parseColor("#2A1D34")
+                    val bgRect = RectF(
+                        itemView.right + dX,
+                        itemTop + 8f,
+                        itemView.right.toFloat(),
+                        itemBottom - 8f
+                    )
+                    c.drawRoundRect(bgRect, cornerRadius, cornerRadius, bgPaint)
+
+                    optionsIcon?.let { icon ->
+                        val iconSize = (24f * resources.displayMetrics.density).toInt()
+                        val iconTop = (itemTop + (itemHeight - iconSize) / 2f).toInt()
+                        val iconRight = (itemView.right - 24f * resources.displayMetrics.density).toInt()
+                        icon.setBounds(iconRight - iconSize, iconTop, iconRight, iconTop + iconSize)
+                        icon.setTint(ContextCompat.getColor(requireContext(), R.color.insta_pink))
+                        icon.draw(c)
+
+                        c.drawText(
+                            "Options",
+                            iconRight - iconSize / 2f,
+                            iconTop + iconSize + 14f * resources.displayMetrics.density,
+                            textPaint
+                        )
+                    }
+                }
+
+                super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive)
+            }
+        }
+        ItemTouchHelper(swipeCallback).attachToRecyclerView(binding.rvHistoryList)
     }
 
     private fun setupListeners() {
+        binding.swipeRefreshHistory.setColorSchemeResources(R.color.insta_pink, R.color.insta_purple, R.color.insta_amber)
+        binding.swipeRefreshHistory.setProgressBackgroundColorSchemeResource(R.color.card_bg)
+        binding.swipeRefreshHistory.setOnRefreshListener {
+            loadHistory(forceReconcile = true)
+        }
+
         binding.btnHistoryRefresh.setOnClickListener {
             loadHistory(forceReconcile = true)
         }
@@ -267,7 +406,7 @@ class HistoryFragment : Fragment() {
         }
 
         if (filtered.isEmpty()) {
-            binding.rvHistoryList.visibility = View.GONE
+            binding.swipeRefreshHistory.visibility = View.GONE
             binding.layoutEmptyHistory.visibility = View.VISIBLE
             binding.tvEmptyHistoryDescription.text = when (currentFilter) {
                 HistoryFilter.ALL -> "No saved Instagram media in your history yet."
@@ -276,7 +415,7 @@ class HistoryFragment : Fragment() {
             }
         } else {
             binding.layoutEmptyHistory.visibility = View.GONE
-            binding.rvHistoryList.visibility = View.VISIBLE
+            binding.swipeRefreshHistory.visibility = View.VISIBLE
             adapter.submitList(filtered)
         }
     }
@@ -298,6 +437,7 @@ class HistoryFragment : Fragment() {
             binding.chipFilterDeleted.text = "Deleted ($deletedCount)"
 
             binding.tvHistoryHeaderSummary.text = historySummary(totalCount, deletedCount)
+            binding.swipeRefreshHistory.isRefreshing = false
             applyFilter()
 
             // 2. Background MediaStore reconciliation
