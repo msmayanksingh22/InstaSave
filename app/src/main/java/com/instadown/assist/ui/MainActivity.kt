@@ -495,7 +495,7 @@ class MainActivity : AppCompatActivity() {
 
         val existingApk = com.instadown.assist.util.AppUpdateManager.getDownloadedUpdateApk(this@MainActivity, info.versionName)
         if (existingApk != null) {
-            tvTitle.text = "Update Ready! 🚀"
+            tvTitle.text = "Ready to install"
             tvSubtitle.text = "InstaSave v${info.versionName} is downloaded and ready to install."
             btnPositive.text = "Install Now"
             btnNegative.text = "Re-download"
@@ -514,7 +514,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        tvTitle.text = "Update Available! 🚀"
+        tvTitle.text = "Update available"
         tvSubtitle.text = "A new version of InstaSave is ready to install."
         btnNegative.text = "Later"
         btnNegative.setOnClickListener { dialog.dismiss() }

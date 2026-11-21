@@ -244,12 +244,13 @@ class HistoryFragment : Fragment() {
     private fun updateFilterChipStyles() {
         val pink = ContextCompat.getColor(requireContext(), R.color.insta_pink)
         val muted = ContextCompat.getColor(requireContext(), R.color.text_secondary)
-        val white = ContextCompat.getColor(requireContext(), R.color.white)
+        val activeText = ContextCompat.getColor(requireContext(), R.color.bg_dark)
         val cardBg = ContextCompat.getColor(requireContext(), R.color.card_bg)
 
         fun styleChip(btn: MaterialButton, isActive: Boolean) {
             btn.strokeColor = ContextCompat.getColorStateList(requireContext(), if (isActive) R.color.insta_pink else R.color.card_stroke)
-            btn.setTextColor(if (isActive) white else muted)
+            btn.isSelected = isActive
+            btn.setTextColor(if (isActive) activeText else muted)
             btn.backgroundTintList = ColorStateList.valueOf(if (isActive) pink else cardBg)
         }
 
@@ -296,7 +297,7 @@ class HistoryFragment : Fragment() {
             binding.chipFilterOnDevice.text = "On Device ($onDeviceCount)"
             binding.chipFilterDeleted.text = "Deleted ($deletedCount)"
 
-            binding.tvHistoryHeaderSummary.text = "$totalCount items recorded • $deletedCount available to re-download"
+            binding.tvHistoryHeaderSummary.text = historySummary(totalCount, deletedCount)
             applyFilter()
 
             // 2. Background MediaStore reconciliation
@@ -314,7 +315,7 @@ class HistoryFragment : Fragment() {
                             binding.chipFilterAll.text = "All ($newTotal)"
                             binding.chipFilterOnDevice.text = "On Device ($newOnDevice)"
                             binding.chipFilterDeleted.text = "Deleted ($newDeleted)"
-                            binding.tvHistoryHeaderSummary.text = "$newTotal items recorded • $newDeleted available to re-download"
+                            binding.tvHistoryHeaderSummary.text = historySummary(newTotal, newDeleted)
                             applyFilter()
                         }
                     }
@@ -517,6 +518,11 @@ class HistoryFragment : Fragment() {
             pendingConsentItemIds = null
             Toast.makeText(requireContext(), "Failed to request permission to delete media", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun historySummary(posts: Int, deleted: Int): String {
+        val count = resources.getQuantityString(R.plurals.saved_post_count, posts, posts)
+        return if (deleted == 0) count else getString(R.string.history_restore_summary, count, deleted)
     }
 
     override fun onDestroyView() {

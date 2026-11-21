@@ -3,6 +3,7 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/rootGalleryContainer"
+    android:focusableInTouchMode="true"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg_dark">
@@ -71,7 +72,7 @@
             android:gravity="center_vertical"
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
-            android:background="#231326"
+            android:background="@color/card_bg"
             android:visibility="gone">
 
             <ImageButton
@@ -133,6 +134,36 @@
     </FrameLayout>
 
     <!-- Filter Chips Row (Constrained below galleryHeaderContainer) -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/gallerySearchBox"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="4dp"
+        app:hintEnabled="false"
+        app:boxBackgroundColor="@color/card_bg"
+        app:boxCornerRadiusTopStart="16dp"
+        app:boxCornerRadiusTopEnd="16dp"
+        app:boxCornerRadiusBottomStart="16dp"
+        app:boxCornerRadiusBottomEnd="16dp"
+        app:startIconDrawable="@drawable/ic_search_saved"
+        app:endIconMode="clear_text"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/galleryHeaderContainer">
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/gallerySearch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:singleLine="true"
+            android:inputType="text"
+            android:imeOptions="actionSearch"
+            android:textSize="15sp"
+            android:hint="@string/search_saved_posts" />
+    </com.google.android.material.textfield.TextInputLayout>
+
     <HorizontalScrollView
         android:id="@+id/scrollFilters"
         android:layout_width="0dp"
@@ -142,8 +173,8 @@
         android:paddingEnd="12dp"
         android:paddingTop="8dp"
         android:paddingBottom="8dp"
-        android:background="#13131A"
-        app:layout_constraintTop_toBottomOf="@id/galleryHeaderContainer"
+        android:background="@color/bg_dark"
+        app:layout_constraintTop_toBottomOf="@id/gallerySearchBox"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 

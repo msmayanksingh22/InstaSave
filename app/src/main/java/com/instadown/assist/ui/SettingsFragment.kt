@@ -421,10 +421,6 @@ class SettingsFragment : Fragment() {
         val tvTitle = dialogView.findViewById<TextView>(R.id.tvUpdateDialogTitle)
         val tvSubtitle = dialogView.findViewById<TextView>(R.id.tvUpdateDialogSubtitle)
         val pbChecking = dialogView.findViewById<ProgressBar>(R.id.pbUpdateChecking)
-        val layoutReleaseNotes = dialogView.findViewById<View>(R.id.layoutReleaseNotes)
-        val tvReleaseVersion = dialogView.findViewById<TextView>(R.id.tvReleaseVersion)
-        val tvReleaseSize = dialogView.findViewById<TextView>(R.id.tvReleaseSize)
-        val tvReleaseNotes = dialogView.findViewById<TextView>(R.id.tvReleaseNotes)
         val btnNegative = dialogView.findViewById<Button>(R.id.btnUpdateNegative)
         val btnPositive = dialogView.findViewById<Button>(R.id.btnUpdatePositive)
 
@@ -437,18 +433,21 @@ class SettingsFragment : Fragment() {
         dialog.show()
 
         btnNegative.setOnClickListener { dialog.dismiss() }
-        btnPositive.isEnabled = false
+        btnNegative.setText(android.R.string.cancel)
+        btnPositive.visibility = View.GONE
 
-        viewLifecycleOwner.lifecycleScope.launch {
+        val appContext = requireContext().applicationContext
+        val check = viewLifecycleOwner.lifecycleScope.launch {
             val updateInfo = withContext(Dispatchers.IO) {
-                AppUpdateManager.checkForUpdates(requireContext().applicationContext)
+                AppUpdateManager.checkForUpdates(appContext)
             }
+            if (!dialog.isShowing) return@launch
             pbChecking.visibility = View.GONE
 
             if (updateInfo == null) {
                 tvTitle.text = "Connection Error"
                 tvSubtitle.text = "Could not check for updates. Please verify your internet connection."
-                btnPositive.isEnabled = true
+                btnPositive.visibility = View.VISIBLE
                 btnPositive.text = "Retry"
                 btnPositive.setOnClickListener {
                     dialog.dismiss()
@@ -459,7 +458,7 @@ class SettingsFragment : Fragment() {
 
             if (!updateInfo.isAvailable) {
                 tvTitle.text = "You’re up to date"
-                tvSubtitle.text = "InstaSave v${updateInfo.versionName} is the latest available version."
+                tvSubtitle.text = binding.tvSettingsAppVersion.text
                 btnNegative.visibility = View.VISIBLE
                 btnNegative.text = "Dismiss"
                 btnNegative.setOnClickListener { dialog.dismiss() }
@@ -469,6 +468,7 @@ class SettingsFragment : Fragment() {
                 (activity as? MainActivity)?.showUpdateAvailablePrompt(updateInfo)
             }
         }
+        dialog.setOnDismissListener { check.cancel() }
     }
 
     private fun showDiagnosticLogsDialog() {

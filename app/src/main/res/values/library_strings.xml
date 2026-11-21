@@ -1,0 +1,13 @@
+<resources>
+    <string name="save_a_post">Save a post</string>
+    <string name="home_supported_media">Photos, reels and carousels.</string>
+    <string name="search_saved_posts">Search saved posts</string>
+    <string name="gallery_search_empty">No matching posts.\nTry another account, caption or post code.</string>
+    <string name="gallery_filter_empty">No posts of this type yet.\nChoose All to browse your library.</string>
+    <string name="gallery_library_empty">Your saved posts will appear here.\nSave your first post from Home.</string>
+    <plurals name="saved_post_count">
+        <item quantity="one">%d post</item>
+        <item quantity="other">%d posts</item>
+    </plurals>
+    <string name="history_restore_summary">%1$s · %2$d available to restore</string>
+</resources>

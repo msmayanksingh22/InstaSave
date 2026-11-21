@@ -132,7 +132,7 @@ class DownloadHistoryAdapter(
         holder.tvSubtitle.text = if (sizeFormatted != "0 KB") "$typeDescription • $sizeFormatted" else typeDescription
 
         // Date Line: Includes original save date & shortcode
-        holder.tvDate.text = "Saved on ${record.formattedDate} • $displayShortcode"
+        holder.tvDate.text = "Saved ${record.formattedDate}"
 
         // Type Icon
         if (record.isCarousel) {
@@ -252,7 +252,7 @@ class DownloadHistoryAdapter(
                     holder.dotStatus.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#F59E0B"))
                     holder.layoutStatusBadge.setBackgroundColor(Color.parseColor("#2E2010"))
                     holder.tvStatusText.setTextColor(Color.parseColor("#F59E0B"))
-                    holder.tvStatusText.text = "Deleted from Device • Tap Re-download"
+                    holder.tvStatusText.text = "Removed from device"
                 } else {
                     holder.btnRedownload.visibility = View.GONE
                     holder.btnViewMedia.visibility = View.VISIBLE
@@ -261,7 +261,7 @@ class DownloadHistoryAdapter(
                     holder.dotStatus.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#10B981"))
                     holder.layoutStatusBadge.setBackgroundColor(Color.parseColor("#1B2B20"))
                     holder.tvStatusText.setTextColor(Color.parseColor("#10B981"))
-                    holder.tvStatusText.text = "On Device • Ready in Gallery"
+                    holder.tvStatusText.text = "On device"
                 }
             }
         }

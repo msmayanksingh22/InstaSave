@@ -55,10 +55,6 @@ class HomeFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         val intro = requireContext().getSharedPreferences("home_intro", 0)
-        if (intro.getBoolean("used", false)) {
-            binding.homeGreeting.text = "Save a post"
-            binding.welcomeHint.visibility = View.VISIBLE
-        }
         setupRecentDownloadsRecyclerView()
         setupListeners()
         setupShareIntentListener()
@@ -153,7 +149,6 @@ class HomeFragment : Fragment() {
             val (isValid, cleanUrl) = ClipboardReader.validateInstagramUrl(raw)
             if (isValid) {
                 viewModel.clearUrlError()
-                requireContext().getSharedPreferences("home_intro", 0).edit().putBoolean("used", true).apply()
                 (activity as? MainActivity)?.executeManualDownload(cleanUrl)
             } else {
                 viewModel.setUrlError("Please enter a valid Instagram post or reel link")
@@ -228,7 +223,7 @@ class HomeFragment : Fragment() {
             if (isRunning) "InstaSave is running. Tap to stop." else "InstaSave is stopped. Tap to start."
 
         // 2. Conditional Permissions Banner
-        updatePermissionsBanner(state.isMissingPermissions, state.isA11yEnabled, state.canDrawOverlays)
+        updatePermissionsBanner(isRunning && state.isMissingPermissions, state.isA11yEnabled, state.canDrawOverlays)
 
         // 3. Quick-Download Button & Input State
         // The active operation controls the save button.

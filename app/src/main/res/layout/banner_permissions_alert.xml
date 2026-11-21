@@ -37,7 +37,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="8dp"
-                android:text="System Setup Needed"
+                android:text="Assistant setup"
                 android:textColor="@color/white"
                 android:textStyle="bold"
                 android:textSize="13sp" />
@@ -47,7 +47,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="32dp"
                 android:gravity="center"
-                android:text="Fix Issues ›"
+                android:text="Open settings"
                 android:textColor="@color/insta_pink"
                 android:textStyle="bold"
                 android:textSize="12sp"

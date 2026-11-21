@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.net.Uri
+import androidx.core.widget.doAfterTextChanged
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -89,6 +90,7 @@ class GalleryFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (savedInstanceState != null) {
+            currentFilter = FilterType.values().firstOrNull { it.name == savedInstanceState.getString("galleryFilter") } ?: FilterType.ALL
             pendingConsentDownloadId = savedInstanceState.getLong(KEY_PENDING_DL_ID, -1L).takeIf { it != -1L }
             pendingConsentItemIds = savedInstanceState.getLongArray(KEY_PENDING_ITEM_IDS)?.toList()
             val queueArray = savedInstanceState.getLongArray("key_pending_free_up_queue")
@@ -101,6 +103,7 @@ class GalleryFragment : Fragment() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
+        outState.putString("galleryFilter", currentFilter.name)
         pendingConsentDownloadId?.let { outState.putLong(KEY_PENDING_DL_ID, it) }
         pendingConsentItemIds?.let { outState.putLongArray(KEY_PENDING_ITEM_IDS, it.toLongArray()) }
         if (pendingFreeUpQueue.isNotEmpty()) {
@@ -124,6 +127,13 @@ class GalleryFragment : Fragment() {
         setupRecyclerView()
         setupListeners()
         setupFilterChips()
+        binding.gallerySearch.doAfterTextChanged { applyFilter() }
+        binding.gallerySearch.setOnEditorActionListener { field, action, _ ->
+            if (action != android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) return@setOnEditorActionListener false
+            androidx.core.view.ViewCompat.getWindowInsetsController(field)?.hide(androidx.core.view.WindowInsetsCompat.Type.ime())
+            field.clearFocus()
+            true
+        }
 
         // Sync with SQLite updates (conflated & debounced)
         viewLifecycleOwner.lifecycleScope.launch {
@@ -188,6 +198,10 @@ class GalleryFragment : Fragment() {
                     if (appCompatActivity != null) {
                         val sheet = com.google.android.material.bottomsheet.BottomSheetDialog(requireContext())
                         val actions = layoutInflater.inflate(R.layout.sheet_gallery_post, null)
+                        actions.findViewById<android.widget.ImageView>(R.id.postCover).setImageDrawable(thumbView.drawable?.constantState?.newDrawable() ?: thumbView.drawable)
+                        val caption = actions.findViewById<android.widget.TextView>(R.id.postCaption)
+                        caption.text = record.caption?.trim()
+                        caption.visibility = if (caption.text.isNullOrBlank()) View.GONE else View.VISIBLE
                         actions.findViewById<android.widget.TextView>(R.id.postHeading).text = record.userFacingTitle
                         actions.findViewById<android.widget.TextView>(R.id.postSummary).text =
                             "${record.formattedDate} · ${record.userFacingStatus}"
@@ -252,7 +266,7 @@ class GalleryFragment : Fragment() {
         binding.chipPhotos.setOnClickListener { setFilter(FilterType.PHOTOS) }
         binding.chipReels.setOnClickListener { setFilter(FilterType.REELS) }
         binding.chipCarousels.setOnClickListener { setFilter(FilterType.CAROUSELS) }
-        setFilter(FilterType.ALL)
+        setFilter(currentFilter)
     }
 
     private fun enterSelectionMode(initialSelectedId: Long?) {
@@ -260,6 +274,10 @@ class GalleryFragment : Fragment() {
         adapter.selectedIds.clear()
         if (initialSelectedId != null) adapter.selectedIds.add(initialSelectedId)
 
+        binding.gallerySearch.clearFocus()
+        androidx.core.view.ViewCompat.getWindowInsetsController(binding.root)?.hide(androidx.core.view.WindowInsetsCompat.Type.ime())
+        binding.gallerySearchBox.visibility = View.GONE
+        binding.scrollFilters.visibility = View.GONE
         binding.galleryTopBar.visibility = View.GONE
         binding.gallerySelectionBar.visibility = View.VISIBLE
         backCallback.isEnabled = true
@@ -271,6 +289,8 @@ class GalleryFragment : Fragment() {
         adapter.isSelectionMode = false
         adapter.selectedIds.clear()
         binding.gallerySelectionBar.visibility = View.GONE
+        binding.gallerySearchBox.visibility = View.VISIBLE
+        binding.scrollFilters.visibility = View.VISIBLE
         binding.galleryTopBar.visibility = View.VISIBLE
         backCallback.isEnabled = false
         adapter.notifyDataSetChanged()
@@ -313,12 +333,13 @@ class GalleryFragment : Fragment() {
         currentFilter = filter
         val pink = ContextCompat.getColor(requireContext(), R.color.insta_pink)
         val muted = ContextCompat.getColor(requireContext(), R.color.text_secondary)
-        val white = ContextCompat.getColor(requireContext(), R.color.white)
+        val activeText = ContextCompat.getColor(requireContext(), R.color.bg_dark)
         val cardBg = ContextCompat.getColor(requireContext(), R.color.card_bg)
 
         fun styleChip(btn: MaterialButton, isActive: Boolean) {
             btn.strokeColor = ContextCompat.getColorStateList(requireContext(), if (isActive) R.color.insta_pink else R.color.card_stroke)
-            btn.setTextColor(if (isActive) white else muted)
+            btn.isSelected = isActive
+            btn.setTextColor(if (isActive) activeText else muted)
             btn.backgroundTintList = ColorStateList.valueOf(if (isActive) pink else cardBg)
         }
 
@@ -330,17 +351,33 @@ class GalleryFragment : Fragment() {
     }
 
     private fun getFilteredList(): List<DownloadRecord> {
-        return when (currentFilter) {
+        val byType = when (currentFilter) {
             FilterType.ALL -> allTransactions
             FilterType.PHOTOS -> allTransactions.filter { !it.isCarousel && !it.postType.equals("REEL", ignoreCase = true) && it.items.firstOrNull()?.mediaType != "VIDEO" }
             FilterType.REELS -> allTransactions.filter { it.postType.equals("REEL", ignoreCase = true) || it.items.firstOrNull()?.mediaType == "VIDEO" }
             FilterType.CAROUSELS -> allTransactions.filter { it.isCarousel }
         }
+        val query = binding.gallerySearch.text.toString().trim()
+        return if (query.isEmpty()) byType else byType.filter { record ->
+            record.userFacingTitle.contains(query, ignoreCase = true) ||
+                record.caption.orEmpty().contains(query, ignoreCase = true) ||
+                record.shortcode.contains(query, ignoreCase = true)
+        }
     }
 
     private fun applyFilter() {
         val filtered = getFilteredList()
+        binding.btnStartSelection.isEnabled = filtered.isNotEmpty()
+        if (adapter.isSelectionMode) {
+            adapter.selectedIds.retainAll(filtered.map { it.id }.toSet())
+            if (filtered.isEmpty()) exitSelectionMode() else updateSelectionBar()
+        }
         if (filtered.isEmpty()) {
+            binding.tvEmptyGallery.setText(when {
+                binding.gallerySearch.text.toString().isNotBlank() -> R.string.gallery_search_empty
+                currentFilter != FilterType.ALL -> R.string.gallery_filter_empty
+                else -> R.string.gallery_library_empty
+            })
             binding.rvGallery.visibility = View.GONE
             binding.tvEmptyGallery.visibility = View.VISIBLE
         } else {

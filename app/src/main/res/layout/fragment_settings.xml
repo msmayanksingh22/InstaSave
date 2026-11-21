@@ -643,7 +643,7 @@
                         style="?attr/materialButtonOutlinedStyle"
                         android:layout_width="wrap_content"
                         android:layout_height="38dp"
-                        android:text="Check ⚡"
+                        android:text="Check"
                         android:textColor="@color/insta_pink"
                         app:strokeColor="@color/insta_pink"
                         app:cornerRadius="10dp" />

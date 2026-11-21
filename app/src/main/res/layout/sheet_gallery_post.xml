@@ -2,10 +2,21 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="wrap_content"
     android:orientation="vertical" android:padding="24dp" android:background="@color/surface_dark">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <com.google.android.material.imageview.ShapeableImageView android:id="@+id/postCover"
+            android:layout_width="80dp" android:layout_height="80dp" android:scaleType="centerCrop"
+            android:importantForAccessibility="no" app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.InstaSave.PostCover" />
+        <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+            android:layout_marginStart="16dp" android:orientation="vertical">
     <TextView android:id="@+id/postHeading" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:textSize="22sp" android:textStyle="bold" android:textColor="@color/text_primary" />
     <TextView android:id="@+id/postSummary" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:layout_marginTop="4dp" android:textColor="@color/text_secondary" />
+        </LinearLayout>
+    </LinearLayout>
+    <TextView android:id="@+id/postCaption" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="12dp" android:textColor="@color/text_secondary" android:maxLines="3"
+        android:ellipsize="end" android:textSize="14sp" />
     <com.google.android.material.button.MaterialButton android:id="@+id/viewPostMedia"
         android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="48dp"
         android:layout_marginTop="20dp" android:text="View media" android:textAllCaps="false"

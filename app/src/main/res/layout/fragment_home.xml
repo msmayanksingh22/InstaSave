@@ -123,17 +123,41 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:padding="22dp">
-                <ImageView android:layout_width="92dp" android:layout_height="74dp" android:src="@drawable/art_saved_prints" android:importantForAccessibility="no" />
-
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:id="@+id/homeGreeting" android:text="Save a post"
-                    android:textSize="34sp" android:fontFamily="sans-serif-medium" android:letterSpacing="-0.035"
-                    android:textStyle="bold"
-                    android:textColor="#201F38" />
-
-                <TextView android:id="@+id/welcomeHint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="#393755" android:textSize="14sp" android:text="Photos, reels and carousels from Instagram." />
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:id="@+id/homeGreeting"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/save_a_post"
+                            android:textColor="#201F38"
+                            android:textSize="30sp"
+                            android:textStyle="bold"
+                            android:letterSpacing="-0.035" />
+                        <TextView
+                            android:id="@+id/welcomeHint"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:text="@string/home_supported_media"
+                            android:textSize="14sp"
+                            android:textColor="#393755" />
+                    </LinearLayout>
+                    <ImageView
+                        android:layout_width="76dp"
+                        android:layout_height="70dp"
+                        android:layout_marginStart="8dp"
+                        android:src="@drawable/art_saved_prints"
+                        android:importantForAccessibility="no" />
+                </LinearLayout>
                 <ProgressBar android:id="@+id/saveProgress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:visibility="gone" />
                 <!-- Input with built-in end-icon Paste button -->
                 <com.google.android.material.textfield.TextInputLayout
