@@ -7,17 +7,18 @@
     android:layout_height="wrap_content"
     android:clickable="true"
     android:focusable="true"
-    app:cardCornerRadius="14dp"
-    app:cardBackgroundColor="#2A1B18"
-    app:strokeColor="#5C2E20"
+    app:cardCornerRadius="16dp"
+    app:cardBackgroundColor="#21181C"
+    app:strokeColor="#522D28"
     app:strokeWidth="1dp"
-    app:rippleColor="#33E1306C">
+    app:cardElevation="0dp"
+    app:rippleColor="#33FF8A3D">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:padding="14dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -26,8 +27,8 @@
             android:gravity="center_vertical">
 
             <ImageView
-                android:layout_width="20dp"
-                android:layout_height="20dp"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
                 android:src="@drawable/ic_warning"
                 app:tint="@color/status_amber"
                 android:contentDescription="Permission Warning" />
@@ -36,11 +37,11 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:text="Assistant setup"
+                android:layout_marginStart="10dp"
+                android:text="Assistant setup required"
                 android:textColor="@color/white"
                 android:textStyle="bold"
-                android:textSize="13sp" />
+                android:textSize="13.5sp" />
 
             <TextView
                 android:id="@+id/btnBannerSettings"
@@ -48,21 +49,23 @@
                 android:layout_height="32dp"
                 android:gravity="center"
                 android:text="Open settings"
-                android:textColor="@color/insta_pink"
+                android:textColor="@color/status_amber"
                 android:textStyle="bold"
                 android:textSize="12sp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp" />
+                android:background="@drawable/card_background"
+                android:backgroundTint="#33F59E0B"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp" />
         </LinearLayout>
 
         <TextView
             android:id="@+id/tvMissingPermissionsText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="Enable Accessibility Assistant or Overlay for 1-tap saving."
+            android:layout_marginTop="8dp"
+            android:text="Enable Accessibility Assistant or Overlay for 1-tap background saving."
             android:textColor="@color/text_secondary"
-            android:textSize="11.5sp" />
+            android:textSize="12sp"
+            android:lineSpacingExtra="2dp" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

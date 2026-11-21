@@ -7,55 +7,59 @@
     android:layout_height="match_parent"
     android:fillViewport="true"
     android:background="@color/bg_dark"
-    android:focusableInTouchMode="true">
+    android:focusableInTouchMode="true"
+    android:overScrollMode="never">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
-        android:paddingBottom="16dp">
+        android:paddingTop="8dp"
+        android:paddingBottom="24dp">
 
-        <!-- Top Header: Logo, Title, Live Service Pill Toggle -->
+        <!-- Top Header: Logo, Title, Live Service Status Pill -->
         <ImageView
             android:id="@+id/ivHomeLogo"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
             android:src="@drawable/ic_app_logo"
             android:contentDescription="@string/app_name"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            android:layout_marginTop="12dp" />
+            android:layout_marginTop="8dp" />
 
         <TextView
             android:id="@+id/tvHomeTitle"
             android:layout_width="0dp"
+            android:layout_height="wrap_content"
             android:maxLines="1"
             android:ellipsize="end"
+            android:layout_marginStart="12dp"
             android:layout_marginEnd="8dp"
-            app:layout_constraintEnd_toStartOf="@id/pillServiceToggle"
-            android:layout_height="wrap_content"
             android:text="@string/app_name"
-            android:textSize="20sp"
+            android:textSize="22sp"
             android:textStyle="bold"
+            android:letterSpacing="-0.02"
             android:textColor="@color/text_primary"
-            android:layout_marginStart="10dp"
             app:layout_constraintTop_toTopOf="@id/ivHomeLogo"
             app:layout_constraintBottom_toBottomOf="@id/ivHomeLogo"
-            app:layout_constraintStart_toEndOf="@id/ivHomeLogo" />
+            app:layout_constraintStart_toEndOf="@id/ivHomeLogo"
+            app:layout_constraintEnd_toStartOf="@id/pillServiceToggle" />
 
         <!-- Service Status Pill (Clickable & Accessible) -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/pillServiceToggle"
             android:layout_width="wrap_content"
-            android:layout_height="48dp"
+            android:layout_height="38dp"
             android:clickable="true"
             android:focusable="true"
-            app:cardCornerRadius="24dp"
+            app:cardCornerRadius="19dp"
             app:cardBackgroundColor="@color/card_bg"
             app:strokeColor="@color/card_stroke"
             app:strokeWidth="1dp"
-            app:rippleColor="#33E1306C"
+            app:cardElevation="0dp"
+            app:rippleColor="#208A67FF"
             app:layout_constraintTop_toTopOf="@id/ivHomeLogo"
             app:layout_constraintBottom_toBottomOf="@id/ivHomeLogo"
             app:layout_constraintEnd_toEndOf="parent">
@@ -65,8 +69,8 @@
                 android:layout_height="match_parent"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:paddingStart="10dp"
-                android:paddingEnd="12dp">
+                android:paddingStart="12dp"
+                android:paddingEnd="14dp">
 
                 <View
                     android:id="@+id/dotServicePill"
@@ -81,17 +85,17 @@
                     android:text="Start assistant"
                     android:textSize="12sp"
                     android:textStyle="bold"
-                    android:textColor="@color/white"
-                    android:layout_marginStart="6dp" />
+                    android:textColor="@color/text_primary"
+                    android:layout_marginStart="8dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- FrameLayout container around ViewStub keeps constraint anchor intact -->
+        <!-- Permissions Alert Container ViewStub -->
         <FrameLayout
             android:id="@+id/permissionsAlertContainer"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="12dp"
             android:visibility="gone"
             app:layout_constraintTop_toBottomOf="@id/ivHomeLogo"
             app:layout_constraintStart_toStartOf="parent"
@@ -104,16 +108,17 @@
                 android:layout="@layout/banner_permissions_alert" />
         </FrameLayout>
 
-        <!-- Hero Quick-Download Card (with goneMarginTop for clean spacing when banner is hidden) -->
+        <!-- Obsidian Glassmorphic Hero Save Card -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardQuickDownload"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            app:layout_goneMarginTop="24dp"
+            android:layout_marginTop="14dp"
+            app:layout_goneMarginTop="16dp"
             app:cardCornerRadius="24dp"
-            app:cardBackgroundColor="#C6C5FF"
+            app:cardElevation="0dp"
             app:strokeWidth="0dp"
+            app:cardBackgroundColor="@android:color/transparent"
             app:layout_constraintTop_toBottomOf="@id/permissionsAlertContainer"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent">
@@ -122,109 +127,129 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="22dp">
+                android:background="@drawable/bg_hero_card"
+                android:padding="20dp">
+
+                <!-- Title & Art Horizontal Row -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:gravity="center_vertical">
+
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:orientation="vertical">
+
                         <TextView
                             android:id="@+id/homeGreeting"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:text="@string/save_a_post"
-                            android:textColor="#201F38"
-                            android:textSize="30sp"
+                            android:textColor="@color/text_primary"
+                            android:textSize="26sp"
                             android:textStyle="bold"
-                            android:letterSpacing="-0.035" />
+                            android:letterSpacing="-0.03" />
+
                         <TextView
                             android:id="@+id/welcomeHint"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
                             android:text="@string/home_supported_media"
-                            android:textSize="14sp"
-                            android:textColor="#393755" />
+                            android:textSize="13sp"
+                            android:textColor="@color/text_secondary" />
                     </LinearLayout>
+
                     <ImageView
-                        android:layout_width="76dp"
-                        android:layout_height="70dp"
-                        android:layout_marginStart="8dp"
+                        android:layout_width="80dp"
+                        android:layout_height="72dp"
+                        android:layout_marginStart="10dp"
                         android:src="@drawable/art_saved_prints"
                         android:importantForAccessibility="no" />
                 </LinearLayout>
-                <ProgressBar android:id="@+id/saveProgress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:visibility="gone" />
-                <!-- Input with built-in end-icon Paste button -->
+
+                <ProgressBar 
+                    android:id="@+id/saveProgress" 
+                    style="?android:attr/progressBarStyleHorizontal" 
+                    android:layout_width="match_parent" 
+                    android:layout_height="wrap_content" 
+                    android:layout_marginTop="10dp" 
+                    android:indeterminateTint="@color/insta_pink"
+                    android:visibility="gone" />
+
+                <!-- Input with Built-in End-Icon Paste Button -->
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/tilInstagramUrl"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
+                    android:layout_marginTop="16dp"
                     app:boxBackgroundMode="filled"
-                    app:boxBackgroundColor="#F3F2FF"
-                    app:boxCornerRadiusTopStart="12dp"
-                    app:boxCornerRadiusTopEnd="12dp"
-                    app:boxCornerRadiusBottomStart="12dp"
-                    app:boxCornerRadiusBottomEnd="12dp"
-                    app:boxStrokeWidth="0dp"
-                    app:boxStrokeWidthFocused="1dp"
-                    app:boxStrokeColor="@color/insta_pink"
+                    app:boxBackgroundColor="@color/surface_inset"
+                    app:boxCornerRadiusTopStart="14dp"
+                    app:boxCornerRadiusTopEnd="14dp"
+                    app:boxCornerRadiusBottomStart="14dp"
+                    app:boxCornerRadiusBottomEnd="14dp"
+                    app:boxStrokeWidth="1dp"
+                    app:boxStrokeColor="@color/card_stroke"
+                    app:boxStrokeWidthFocused="1.5dp"
                     app:hintEnabled="false"
                     app:endIconMode="custom"
                     app:endIconDrawable="@drawable/ic_copy_link"
-                    app:endIconTint="#504A87"
+                    app:endIconTint="@color/insta_pink"
                     app:endIconContentDescription="Paste Link">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/etInstagramUrl"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:minHeight="56dp"
+                        android:minHeight="52dp"
                         android:inputType="textUri"
                         android:maxLines="1"
                         android:hint="Paste an Instagram link"
-                        android:textColorHint="#5B5870"
-                        android:textColor="#201F38"
-                        android:textSize="15sp"
+                        android:textColorHint="@color/text_muted"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14.5sp"
                         android:imeOptions="actionDone"
                         android:padding="12dp" />
                 </com.google.android.material.textfield.TextInputLayout>
 
-                <!-- Gradient Download Button -->
+                <!-- Gradient Hero Download Button -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnQuickDownload"
                     android:layout_width="match_parent"
-                    android:layout_height="48dp"
+                    android:layout_height="50dp"
                     android:layout_marginTop="12dp"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
                     android:text="Save media"
                     app:icon="@drawable/ic_download_arrow"
                     app:iconGravity="textStart"
-                    android:textSize="14sp"
+                    app:iconPadding="8dp"
+                    android:textSize="14.5sp"
                     android:textStyle="bold"
                     android:textAllCaps="false"
                     android:textColor="@color/white"
-                    app:cornerRadius="12dp"
-                    app:iconTint="@color/white" app:backgroundTint="#353152" />
+                    app:cornerRadius="14dp"
+                    app:iconTint="@color/white"
+                    android:background="@drawable/btn_hero_gradient"
+                    app:backgroundTint="@null" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Recently saved Section Header -->
+        <!-- Recently Saved Section Header -->
         <TextView
             android:id="@+id/tvRecentHeader"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Recently saved"
-            android:textSize="22sp"
+            android:textSize="20sp"
             android:textStyle="bold"
+            android:letterSpacing="-0.02"
             android:textColor="@color/text_primary"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="20dp"
             app:layout_constraintTop_toBottomOf="@id/cardQuickDownload"
             app:layout_constraintStart_toStartOf="parent" />
 
@@ -234,7 +259,7 @@
             android:layout_height="wrap_content"
             android:minHeight="48dp"
             android:gravity="center_vertical"
-            android:text="Open gallery"
+            android:text="Open gallery →"
             android:textColor="@color/insta_pink"
             android:textSize="13sp"
             android:textStyle="bold"
@@ -245,12 +270,12 @@
             app:layout_constraintBottom_toBottomOf="@id/tvRecentHeader"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- Horizontal Recently saved Shelf -->
+        <!-- Horizontal Recently Saved Shelf -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rvRecentDownloads"
             android:layout_width="0dp"
-            android:layout_height="180dp"
-            android:layout_marginTop="8dp"
+            android:layout_height="184dp"
+            android:layout_marginTop="10dp"
             android:orientation="horizontal"
             android:overScrollMode="never"
             android:clipToPadding="false"
@@ -258,14 +283,14 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- Empty state placeholder -->
+        <!-- Empty State Placeholder -->
         <TextView
             android:id="@+id/tvNoRecent"
             android:layout_width="0dp"
-            android:layout_height="70dp"
-            android:layout_marginTop="8dp"
+            android:layout_height="80dp"
+            android:layout_marginTop="10dp"
             android:text="@string/no_recent_downloads"
-            android:textSize="12sp"
+            android:textSize="13sp"
             android:textColor="@color/text_muted"
             android:gravity="center"
             android:background="@drawable/card_background"
@@ -274,7 +299,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- Barrier prevents chip overlap on empty state -->
+        <!-- Barrier Prevents Chip Overlap on Empty State -->
         <androidx.constraintlayout.widget.Barrier
             android:id="@+id/barrierRecentBottom"
             android:layout_width="wrap_content"
@@ -287,13 +312,14 @@
             android:id="@+id/chipStorageFootprint"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="14dp"
             android:text="Calculating storage..."
             android:textColor="@color/text_secondary"
-            android:textSize="11.5sp"
+            android:textSize="12sp"
             app:chipBackgroundColor="@color/card_bg"
             app:chipStrokeColor="@color/card_stroke"
             app:chipStrokeWidth="1dp"
+            app:chipCornerRadius="18dp"
             app:chipIcon="@drawable/ic_folder"
             app:chipIconTint="@color/insta_pink"
             app:layout_constraintTop_toBottomOf="@id/barrierRecentBottom"

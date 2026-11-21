@@ -23,7 +23,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:background="@drawable/card_background"
-                android:backgroundTint="#26E1306C" />
+                android:backgroundTint="#268A67FF" />
 
             <ImageView
                 android:id="@+id/ivUpdateDialogIcon"
@@ -49,7 +49,7 @@
                 android:text="Checking for updates"
                 android:textSize="17sp"
                 android:textStyle="bold"
-                android:textColor="@color/white" />
+                android:textColor="@color/text_primary" />
 
             <TextView
                 android:id="@+id/tvUpdateDialogSubtitle"
@@ -81,7 +81,7 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="@drawable/card_background"
-        android:backgroundTint="#1E1C2B"
+        android:backgroundTint="@color/surface_variant"
         android:padding="14dp"
         android:layout_marginBottom="14dp"
         android:visibility="gone">
@@ -97,7 +97,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Version 1.2.1"
+                android:text="Version 1.3.6"
                 android:textSize="13.5sp"
                 android:textStyle="bold"
                 android:textColor="@color/insta_pink" />
@@ -111,7 +111,7 @@
                 android:textStyle="bold"
                 android:textColor="@color/text_muted"
                 android:background="@drawable/card_background"
-                android:backgroundTint="#2A2838"
+                android:backgroundTint="@color/card_bg"
                 android:paddingHorizontal="8dp"
                 android:paddingVertical="2dp" />
         </LinearLayout>
@@ -119,7 +119,7 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="#1AFFFFFF"
+            android:background="@color/card_stroke"
             android:layout_marginTop="8dp"
             android:layout_marginBottom="8dp" />
 
@@ -140,7 +140,7 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="@drawable/card_background"
-        android:backgroundTint="#1D1A2E"
+        android:backgroundTint="@color/surface_variant"
         android:padding="14dp"
         android:layout_marginBottom="14dp"
         android:visibility="gone">
@@ -208,12 +208,11 @@
             android:minHeight="48dp"
             android:layout_marginStart="8dp"
             android:text="Update"
-            android:textColor="@color/bg_dark"
+            android:textColor="@color/white"
             android:textAllCaps="false"
             android:textSize="14sp"
             android:textStyle="bold"
-            android:background="@drawable/btn_rounded_accent"
-            android:backgroundTint="@color/insta_pink"
+            android:background="@drawable/btn_hero_gradient"
             android:paddingHorizontal="20dp" />
     </LinearLayout>
 

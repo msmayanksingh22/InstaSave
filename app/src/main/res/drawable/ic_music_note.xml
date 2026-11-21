@@ -4,7 +4,26 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+
+    <!-- Musical Note Head -->
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z" />
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.0"
+        android:pathData="M9,18 m -3,0 a 3,2.5 0 1,0 6,0 a 3,2.5 0 1,0 -6,0" />
+
+    <!-- Vertical Stem -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.0"
+        android:strokeLineCap="round"
+        android:pathData="M12,18 V5.5" />
+
+    <!-- Floating Top Flag -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.0"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12,5.5 C15.5,5.5 17.5,7 18.5,10" />
+
 </vector>

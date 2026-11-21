@@ -1,9 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-  <path
-      android:fillColor="#FFFFFFFF"
-      android:pathData="M1,21h22L12,2 1,21zM13,18h-2v-2h2v2zM13,14h-2v-4h2v4z"/>
+
+    <!-- Rounded Equilateral Caution Triangle -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.0"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M10.3,4.2 L2.4,18 C1.9,18.8 2.5,19.8 3.5,19.8 H20.5 C21.5,19.8 22.1,18.8 21.6,18 L13.7,4.2 C13.2,3.4 12,3.4 11.5,4.2 Z" />
+
+    <!-- Exclamation Stem -->
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.0"
+        android:strokeLineCap="round"
+        android:pathData="M12,9 V13" />
+
+    <!-- Exclamation Bottom Dot -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,16.5 m -1,0 a 1,1 0 1,0 2,0 a 1,1 0 1,0 -2,0" />
+
 </vector>

@@ -1,14 +1,73 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="116dp" android:height="96dp" android:viewportWidth="116" android:viewportHeight="96">
-    <group android:pivotX="60" android:pivotY="45" android:rotation="14">
-        <path android:fillColor="#605DD6" android:pathData="M33,9h64v70h-64z"/>
-        <path android:strokeColor="#DEDDFF" android:strokeWidth="1" android:fillColor="#00000000" android:pathData="M38,14h54v60h-54z"/>
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="116dp"
+    android:height="96dp"
+    android:viewportWidth="116"
+    android:viewportHeight="96">
+
+    <!-- Ambient Violet Glow Disc -->
+    <path
+        android:fillAlpha="0.25"
+        android:fillColor="#7850FD"
+        android:pathData="M64,48 m -32,0 a 32,32 0 1,0 64,0 a 32,32 0 1,0 -64,0" />
+
+    <!-- Back Angled Polaroid Card -->
+    <group
+        android:pivotX="62"
+        android:pivotY="46"
+        android:rotation="12">
+        <path
+            android:fillColor="#1E2338"
+            android:strokeColor="#3E476A"
+            android:strokeWidth="1.2"
+            android:pathData="M34,10 h60 a4,4 0 0 1 4,4 v62 a4,4 0 0 1 -4,4 h-60 a4,4 0 0 1 -4,-4 v-62 a4,4 0 0 1 4,-4 z" />
+        <path
+            android:fillColor="#2A304D"
+            android:pathData="M38,15 h52 v50 h-52 z" />
+        <path
+            android:fillColor="#FF2A6D"
+            android:pathData="M76,24 m -4,0 a 4,4 0 1,0 8,0 a 4,4 0 1,0 -8,0" />
+        <path
+            android:fillColor="#7850FD"
+            android:pathData="M38,55 l16,-18 l22,28 h-38 z" />
     </group>
-    <group android:pivotX="51" android:pivotY="49" android:rotation="-9">
-        <path android:fillColor="#FAFAFF" android:pathData="M12,15h75v69h-75z"/>
-        <path android:fillColor="#28264E" android:pathData="M17,20h65v51h-65z"/>
-        <path android:fillColor="#FFAA72" android:pathData="M62,26a7,7 0,1 0,0.1 0z"/>
-        <path android:fillColor="#9197FF" android:pathData="M17,58l20,-23l26,36h-46z"/>
-        <path android:fillColor="#C6EEBC" android:pathData="M31,71l31,-29l20,20v9z"/>
-        <path android:fillColor="#A6A5B8" android:pathData="M18,76h21v2h-21z"/>
+
+    <!-- Front Angled Floating Polaroid Card -->
+    <group
+        android:pivotX="48"
+        android:pivotY="48"
+        android:rotation="-8">
+        <path
+            android:fillColor="#151928"
+            android:strokeColor="#4A567D"
+            android:strokeWidth="1.4"
+            android:pathData="M14,14 h66 a4,4 0 0 1 4,4 v62 a4,4 0 0 1 -4,4 h-66 a4,4 0 0 1 -4,-4 v-62 a4,4 0 0 1 4,-4 z" />
+        <!-- Photo Frame Surface -->
+        <path
+            android:fillColor="#0D0F18"
+            android:pathData="M18,18 h58 v48 h-58 z" />
+        <!-- Sunset Gradient Sun Accent -->
+        <path
+            android:fillColor="#FFAE42"
+            android:pathData="M60,25 m -5,0 a 5,5 0 1,0 10,0 a 5,5 0 1,0 -10,0" />
+        <!-- Mountain Layers -->
+        <path
+            android:fillColor="#E1306C"
+            android:pathData="M18,54 l18,-20 l22,32 h-40 z" />
+        <path
+            android:fillColor="#8A67FF"
+            android:pathData="M34,66 l24,-22 l18,18 v4 z" />
+        <!-- Caption Mock Line -->
+        <path
+            android:strokeColor="#3D4766"
+            android:strokeWidth="2.5"
+            android:strokeLineCap="round"
+            android:pathData="M22,73 h24" />
+        <path
+            android:strokeColor="#FF2A6D"
+            android:strokeWidth="2.5"
+            android:strokeLineCap="round"
+            android:pathData="M50,73 h8" />
     </group>
+
 </vector>

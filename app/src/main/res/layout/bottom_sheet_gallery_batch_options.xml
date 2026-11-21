@@ -1,19 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="@color/card_bg"
+    android:background="@drawable/bg_bottom_sheet"
     android:paddingBottom="24dp">
 
     <!-- Drag Handle -->
     <View
-        android:layout_width="36dp"
-        android:layout_height="4dp"
+        android:layout_width="38dp"
+        android:layout_height="4.5dp"
         android:layout_gravity="center_horizontal"
         android:layout_marginTop="12dp"
-        android:layout_marginBottom="14dp"
-        android:background="#4DFFFFFF" />
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/card_background"
+        android:backgroundTint="#3D4664" />
 
     <!-- Batch Info Header -->
     <LinearLayout
@@ -28,7 +30,7 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:src="@drawable/ic_delete"
-            android:tint="#EF4444"
+            app:tint="#EF4444"
             android:background="@drawable/card_background"
             android:backgroundTint="#241E26"
             android:padding="10dp"
@@ -64,7 +66,7 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#1AFFFFFF"
+        android:background="@color/card_stroke"
         android:layout_marginBottom="14dp" />
 
     <!-- Actions List -->
@@ -91,7 +93,7 @@
                 android:layout_width="28dp"
                 android:layout_height="28dp"
                 android:src="@drawable/ic_delete"
-                android:tint="#EF4444"
+                app:tint="#EF4444"
                 android:contentDescription="Free Up Phone Storage" />
 
             <LinearLayout
@@ -198,7 +200,7 @@
                 android:id="@+id/btnBatchPermanentDelete"
                 style="@style/Widget.AppCompat.Button.Borderless"
                 android:layout_width="match_parent"
-                android:layout_height="38dp"
+                android:layout_height="40dp"
                 android:text="Permanently Erase from History"
                 android:textColor="#EF4444"
                 android:textSize="12sp"
@@ -209,15 +211,17 @@
         </LinearLayout>
 
         <!-- Cancel Button -->
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnBatchCancel"
-            style="@style/Widget.AppCompat.Button.Borderless"
+            style="?attr/materialButtonOutlinedStyle"
             android:layout_width="match_parent"
-            android:layout_height="42dp"
+            android:layout_height="44dp"
             android:text="Cancel"
             android:textColor="@color/text_secondary"
             android:textSize="13sp"
-            android:layout_marginTop="12dp" />
+            app:cornerRadius="14dp"
+            app:strokeColor="@color/card_stroke"
+            android:layout_marginTop="14dp" />
 
     </LinearLayout>
 

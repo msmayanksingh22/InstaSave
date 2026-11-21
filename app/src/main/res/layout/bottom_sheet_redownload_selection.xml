@@ -4,17 +4,18 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="@color/card_bg"
+    android:background="@drawable/bg_bottom_sheet"
     android:paddingBottom="24dp">
 
     <!-- Drag Handle -->
     <View
-        android:layout_width="36dp"
-        android:layout_height="4dp"
+        android:layout_width="38dp"
+        android:layout_height="4.5dp"
         android:layout_gravity="center_horizontal"
         android:layout_marginTop="12dp"
-        android:layout_marginBottom="12dp"
-        android:background="#4DFFFFFF" />
+        android:layout_marginBottom="14dp"
+        android:background="@drawable/card_background"
+        android:backgroundTint="#3D4664" />
 
     <!-- Sheet Header -->
     <LinearLayout
@@ -52,11 +53,11 @@
 
         <ImageButton
             android:id="@+id/btnSheetClose"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_close"
-            android:tint="@color/text_secondary"
+            app:tint="@color/text_secondary"
             android:contentDescription="Close" />
     </LinearLayout>
 
@@ -68,28 +69,38 @@
         android:paddingHorizontal="20dp"
         android:paddingBottom="12dp">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSelectMissingOnly"
-            style="@style/Widget.AppCompat.Button.Borderless"
+            style="?attr/materialButtonOutlinedStyle"
             android:layout_width="wrap_content"
             android:layout_height="36dp"
-            android:background="@drawable/card_background"
+            android:minHeight="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
             android:text="Missing Only"
             android:textColor="@color/insta_pink"
             android:textSize="12sp"
-            android:paddingHorizontal="12dp"
+            app:cornerRadius="18dp"
+            app:strokeColor="@color/insta_pink"
+            app:strokeWidth="1dp"
+            app:backgroundTint="#25213D"
             android:layout_marginEnd="8dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSelectAll"
-            style="@style/Widget.AppCompat.Button.Borderless"
+            style="?attr/materialButtonOutlinedStyle"
             android:layout_width="wrap_content"
             android:layout_height="36dp"
-            android:background="@drawable/card_background"
+            android:minHeight="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
             android:text="Select All"
             android:textColor="@color/text_secondary"
             android:textSize="12sp"
-            android:paddingHorizontal="12dp" />
+            app:cornerRadius="18dp"
+            app:strokeColor="@color/card_stroke"
+            app:strokeWidth="1dp"
+            app:backgroundTint="@color/card_bg" />
 
         <ProgressBar
             android:id="@+id/pbVerifying"
@@ -130,23 +141,27 @@
         android:paddingHorizontal="20dp"
         android:paddingTop="16dp">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSheetCancel"
-            style="@style/Widget.AppCompat.Button.Borderless"
+            style="?attr/materialButtonOutlinedStyle"
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_weight="1"
             android:text="Cancel"
             android:textColor="@color/text_secondary"
-            android:textSize="14sp"
-            android:layout_marginEnd="8dp" />
+            android:textSize="13.5sp"
+            app:strokeColor="@color/card_stroke"
+            app:cornerRadius="14dp"
+            android:layout_marginEnd="10dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnRestoreConfirm"
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_weight="1.6"
-            android:background="@drawable/btn_rounded_accent"
+            android:background="@drawable/btn_hero_gradient"
+            app:backgroundTint="@null"
+            app:cornerRadius="14dp"
             android:text="Restore (0)"
             android:textColor="@color/white"
             android:textSize="14sp"

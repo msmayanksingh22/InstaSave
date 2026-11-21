@@ -25,7 +25,7 @@
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:paddingStart="16dp"
-            android:paddingEnd="8dp"
+            android:paddingEnd="12dp"
             android:background="@color/bg_dark">
 
             <TextView
@@ -35,6 +35,7 @@
                 android:text="@string/gallery_title"
                 android:textSize="26sp"
                 android:textStyle="bold"
+                android:letterSpacing="-0.02"
                 android:textColor="@color/text_primary" />
 
             <com.google.android.material.button.MaterialButton
@@ -47,20 +48,22 @@
                 android:insetBottom="0dp"
                 android:text="Select"
                 android:textColor="@color/insta_pink"
-                android:textSize="12sp"
+                android:textSize="12.5sp"
+                android:textStyle="bold"
                 app:strokeColor="@color/insta_pink"
-                app:cornerRadius="10dp" />
+                app:strokeWidth="1dp"
+                app:cornerRadius="18dp" />
 
             <ImageButton
                 android:id="@+id/btnAddLink"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:padding="12dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="10dp"
                 android:src="@drawable/ic_link"
                 app:tint="@color/insta_pink"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="Paste Link"
-                android:layout_marginStart="2dp" />
+                android:layout_marginStart="4dp" />
         </LinearLayout>
 
         <!-- Contextual Selection Bar (Shown only in selection mode) -->
@@ -77,9 +80,9 @@
 
             <ImageButton
                 android:id="@+id/btnCloseSelection"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:padding="12dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="10dp"
                 android:src="@drawable/ic_close"
                 app:tint="@color/white"
                 android:background="?attr/selectableItemBackgroundBorderless"
@@ -90,7 +93,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginStart="4dp"
+                android:layout_marginStart="6dp"
                 android:text="1 selected"
                 android:textSize="15sp"
                 android:textStyle="bold"
@@ -100,7 +103,7 @@
                 android:id="@+id/btnSelectAllToggle"
                 style="?attr/materialButtonOutlinedStyle"
                 android:layout_width="wrap_content"
-                android:layout_height="36dp"
+                android:layout_height="34dp"
                 android:minHeight="0dp"
                 android:insetTop="0dp"
                 android:insetBottom="0dp"
@@ -108,14 +111,14 @@
                 android:textColor="@color/white"
                 android:textSize="12sp"
                 app:strokeColor="#50FFFFFF"
-                app:cornerRadius="10dp"
+                app:cornerRadius="17dp"
                 android:layout_marginEnd="4dp" />
 
             <ImageButton
                 android:id="@+id/btnBatchShare"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:padding="12dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="10dp"
                 android:src="@drawable/ic_share"
                 app:tint="@color/white"
                 android:background="?attr/selectableItemBackgroundBorderless"
@@ -123,9 +126,9 @@
 
             <ImageButton
                 android:id="@+id/btnBatchDelete"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:padding="12dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:padding="10dp"
                 android:src="@drawable/ic_delete"
                 app:tint="@color/status_red"
                 android:background="?attr/selectableItemBackgroundBorderless"
@@ -133,7 +136,7 @@
         </LinearLayout>
     </FrameLayout>
 
-    <!-- Filter Chips Row (Constrained below galleryHeaderContainer) -->
+    <!-- Search Box (Constrained below galleryHeaderContainer) -->
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/gallerySearchBox"
         style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense"
@@ -147,11 +150,17 @@
         app:boxCornerRadiusTopEnd="16dp"
         app:boxCornerRadiusBottomStart="16dp"
         app:boxCornerRadiusBottomEnd="16dp"
+        app:boxStrokeColor="@color/card_stroke"
+        app:boxStrokeWidth="1dp"
+        app:boxStrokeWidthFocused="1.5dp"
         app:startIconDrawable="@drawable/ic_search_saved"
+        app:startIconTint="@color/text_muted"
         app:endIconMode="clear_text"
+        app:endIconTint="@color/text_muted"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@id/galleryHeaderContainer">
+
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/gallerySearch"
             android:layout_width="match_parent"
@@ -160,19 +169,24 @@
             android:singleLine="true"
             android:inputType="text"
             android:imeOptions="actionSearch"
-            android:textSize="15sp"
-            android:hint="@string/search_saved_posts" />
+            android:textSize="14.5sp"
+            android:textColor="@color/text_primary"
+            android:textColorHint="@color/text_muted"
+            android:hint="@string/search_saved_posts"
+            android:paddingHorizontal="14dp" />
     </com.google.android.material.textfield.TextInputLayout>
 
+    <!-- Filter Chips Row -->
     <HorizontalScrollView
         android:id="@+id/scrollFilters"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:scrollbars="none"
-        android:paddingStart="12dp"
-        android:paddingEnd="12dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
         android:paddingTop="8dp"
         android:paddingBottom="8dp"
+        android:clipToPadding="false"
         android:background="@color/bg_dark"
         app:layout_constraintTop_toBottomOf="@id/gallerySearchBox"
         app:layout_constraintStart_toStartOf="parent"
@@ -193,8 +207,12 @@
                 android:insetBottom="0dp"
                 android:text="All"
                 android:textColor="@color/white"
-                android:textSize="12sp"
+                android:textSize="12.5sp"
+                android:textStyle="bold"
                 app:cornerRadius="18dp"
+                app:strokeColor="@color/insta_pink"
+                app:strokeWidth="1.2dp"
+                app:backgroundTint="#25213D"
                 android:layout_marginEnd="8dp" />
 
             <com.google.android.material.button.MaterialButton
@@ -207,8 +225,11 @@
                 android:insetBottom="0dp"
                 android:text="Photos"
                 android:textColor="@color/text_secondary"
-                android:textSize="12sp"
+                android:textSize="12.5sp"
                 app:cornerRadius="18dp"
+                app:strokeColor="@color/card_stroke"
+                app:strokeWidth="1dp"
+                app:backgroundTint="@color/card_bg"
                 android:layout_marginEnd="8dp" />
 
             <com.google.android.material.button.MaterialButton
@@ -221,8 +242,11 @@
                 android:insetBottom="0dp"
                 android:text="Reels"
                 android:textColor="@color/text_secondary"
-                android:textSize="12sp"
+                android:textSize="12.5sp"
                 app:cornerRadius="18dp"
+                app:strokeColor="@color/card_stroke"
+                app:strokeWidth="1dp"
+                app:backgroundTint="@color/card_bg"
                 android:layout_marginEnd="8dp" />
 
             <com.google.android.material.button.MaterialButton
@@ -235,8 +259,11 @@
                 android:insetBottom="0dp"
                 android:text="Carousels"
                 android:textColor="@color/text_secondary"
-                android:textSize="12sp"
-                app:cornerRadius="18dp" />
+                android:textSize="12.5sp"
+                app:cornerRadius="18dp"
+                app:strokeColor="@color/card_stroke"
+                app:strokeWidth="1dp"
+                app:backgroundTint="@color/card_bg" />
         </LinearLayout>
     </HorizontalScrollView>
 

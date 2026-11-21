@@ -580,12 +580,13 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Updates and support"
-            android:textColor="@color/insta_pink"
-            android:textSize="18sp"
+            android:text="Updates &amp; Diagnostics"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
             android:textStyle="bold"
-            android:letterSpacing="0"
-            android:layout_marginBottom="8dp" />
+            android:letterSpacing="-0.01"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="10dp" />
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
@@ -632,7 +633,7 @@
                             android:id="@+id/tvSettingsAppVersion"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Version 1.2.5"
+                            android:text="Version 1.3.6"
                             android:textSize="11.5sp"
                             android:textColor="@color/text_muted"
                             android:layout_marginTop="2dp" />
@@ -646,7 +647,7 @@
                         android:text="Check"
                         android:textColor="@color/insta_pink"
                         app:strokeColor="@color/insta_pink"
-                        app:cornerRadius="10dp" />
+                        app:cornerRadius="14dp" />
                 </LinearLayout>
 
                 <com.google.android.material.divider.MaterialDivider
@@ -696,7 +697,8 @@
                         android:layout_height="38dp"
                         android:text="View"
                         android:textColor="@color/white"
-                        app:cornerRadius="10dp" />
+                        app:strokeColor="@color/card_stroke"
+                        app:cornerRadius="14dp" />
                 </LinearLayout>
 
                 <com.google.android.material.divider.MaterialDivider
@@ -710,10 +712,11 @@
                     android:id="@+id/btnShareApp"
                     style="?attr/materialButtonOutlinedStyle"
                     android:layout_width="match_parent"
-                    android:layout_height="42dp"
+                    android:layout_height="44dp"
                     android:text="Share InstaSave with Friends"
                     android:textColor="@color/white"
-                    app:cornerRadius="10dp"
+                    app:strokeColor="@color/card_stroke"
+                    app:cornerRadius="14dp"
                     app:icon="@drawable/ic_share"
                     app:iconTint="@color/white" />
 

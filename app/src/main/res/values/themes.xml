@@ -1,20 +1,24 @@
 <resources>
-    <!-- Base Application Theme -->
+    <!-- Base Application Theme: Modern Material 3 Obsidian Luxury -->
     <style name="Theme.InstaSave" parent="Theme.Material3.Dark.NoActionBar">
         <!-- Brand & Accent -->
         <item name="colorPrimary">@color/insta_pink</item>
         <item name="android:statusBarColor">@color/bg_dark</item>
-        <item name="colorOnPrimary">@color/bg_dark</item>
+        <item name="android:navigationBarColor">@color/bg_dark</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="colorOnPrimary">@color/white</item>
         <item name="colorAccent">@color/insta_coral</item>
 
         <!-- BottomNavigationView Active Pill Color -->
-        <item name="colorSecondaryContainer">#37344E</item>
+        <item name="colorSecondaryContainer">#25213D</item>
         <item name="colorOnSecondaryContainer">@color/insta_pink</item>
 
-        <!-- Dark Surfaces -->
+        <!-- Dark Obsidian Surfaces -->
         <item name="android:colorBackground">@color/bg_dark</item>
         <item name="colorSurface">@color/bg_dark</item>
         <item name="colorSurfaceContainer">@color/card_bg</item>
+        <item name="colorSurfaceContainerHigh">@color/surface_elevated</item>
         <item name="colorOnSurface">@color/text_primary</item>
         <item name="colorOnSurfaceVariant">@color/text_secondary</item>
         <item name="colorOutline">@color/card_stroke</item>
@@ -25,17 +29,23 @@
 
     <style name="Widget.InstaSave.BottomNav" parent="Widget.Material3.BottomNavigationView">
         <item name="itemActiveIndicatorStyle">@style/Widget.InstaSave.BottomNav.Indicator</item>
+        <item name="itemRippleColor">#208A67FF</item>
     </style>
 
     <style name="Widget.InstaSave.BottomNav.Indicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
-        <item name="android:color">#37344E</item>
-        <item name="android:width">56dp</item>
+        <item name="android:color">#25213D</item>
+        <item name="android:width">60dp</item>
         <item name="android:height">32dp</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.InstaSave.NavIndicator</item>
+    </style>
+
+    <style name="ShapeAppearance.InstaSave.NavIndicator" parent="ShapeAppearance.Material3.Corner.Full">
+        <item name="cornerSize">16dp</item>
     </style>
 
     <!-- Official Android 12-16 Splash Screen Theme -->
     <style name="Theme.InstaSave.Starting" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">#0C0A12</item>
+        <item name="windowSplashScreenBackground">@color/bg_dark</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_app_logo</item>
         <item name="postSplashScreenTheme">@style/Theme.InstaSave</item>
     </style>
@@ -43,6 +53,6 @@
     <!-- Backward compatibility alias -->
     <style name="Theme.InstaDown" parent="Theme.InstaSave" />
     <style name="ShapeAppearanceOverlay.InstaSave.PostCover" parent="">
-        <item name="cornerSize">12dp</item>
+        <item name="cornerSize">14dp</item>
     </style>
 </resources>

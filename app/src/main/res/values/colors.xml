@@ -1,43 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Base Canvas & Absolute Tones -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     
-    <!-- InstaSave Warm Gradient Tokens -->
-    <color name="insta_pink">#AAA6FF</color>
-    <color name="insta_purple">#635CC5</color>
-    <color name="insta_coral">#938DFF</color>
-    <color name="insta_amber">#FCAF45</color>
+    <!-- Obsidian Dark Luxury Surfaces (OLED True Midnight) -->
+    <color name="bg_dark">#090A10</color>
+    <color name="background_dark">#090A10</color>
+    <color name="card_bg">#131622</color>
+    <color name="surface_dark">#131622</color>
+    <color name="surface_variant">#191E2E</color>
+    <color name="surface_inset">#0D0F17</color>
+    <color name="surface_elevated">#1E2335</color>
+    <color name="card_stroke">#252B3E</color>
+    <color name="card_stroke_glow">#3D4664</color>
+    <color name="card_stroke_accent">#8A67FF</color>
+
+    <!-- Vibrant Cyber-Instagram Gradient & Brand Tokens -->
+    <color name="insta_pink">#8A67FF</color>
+    <color name="insta_purple">#6845F5</color>
+    <color name="insta_coral">#FF3377</color>
+    <color name="insta_amber">#FF8A3D</color>
+    <color name="brand_violet">#8A67FF</color>
+    <color name="brand_magenta">#FF2A6D</color>
+    <color name="brand_orange">#FF8038</color>
     
-    <!-- Primary Brand Colors -->
-    <color name="primary">#AAA6FF</color>
-    <color name="primary_variant">#635CC5</color>
-    <color name="accent">#938DFF</color>
+    <!-- Primary Brand Bindings -->
+    <color name="primary">#8A67FF</color>
+    <color name="primary_variant">#6845F5</color>
+    <color name="accent">#FF3377</color>
 
-    <!-- Surfaces & Neutrals (Dark Theme default) -->
-    <color name="bg_dark">#101118</color>
-    <color name="card_bg">#1D1F2A</color>
-    <color name="card_stroke">#373948</color>
-    <color name="surface_variant">#242D3C</color>
-    <color name="background_dark">#101118</color>
-    <color name="surface_dark">#1D1F2A</color>
+    <!-- Refined Typography Tokens (High Luminance, WCAG AAA) -->
+    <color name="text_primary">#F8F9FD</color>
+    <color name="text_secondary">#A2AABF</color>
+    <color name="text_muted">#68728A</color>
+    <color name="text_inverse">#090A10</color>
 
-    <!-- Text Tokens -->
-    <color name="text_primary">#F3F4F6</color>
-    <color name="text_secondary">#B3BDCE</color>
-    <color name="text_muted">#929FB4</color>
-
-    <!-- Semantic Indicators -->
+    <!-- Semantic Indicators & Badges -->
     <color name="status_green">#10B981</color>
     <color name="status_green_bg">#1A10B981</color>
     <color name="status_amber">#F59E0B</color>
     <color name="status_amber_bg">#1AF59E0B</color>
-    <color name="status_red">#EF4444</color>
-    <color name="status_red_bg">#1AEF4444</color>
-    <color name="status_blue">#3B82F6</color>
+    <color name="status_red">#FF4D4D</color>
+    <color name="status_red_bg">#1AFF4D4D</color>
+    <color name="status_blue">#38BDF8</color>
+    <color name="status_blue_bg">#1A38BDF8</color>
     
-    <!-- Legacy Accents for ResolverTestActivity -->
-    <color name="accent_blue">#2196F3</color>
-    <color name="accent_red">#F44336</color>
-    <color name="accent_yellow">#FFC107</color>
+    <!-- Legacy Accents & Backward Compatibility -->
+    <color name="accent_blue">#38BDF8</color>
+    <color name="accent_red">#FF4D4D</color>
+    <color name="accent_yellow">#F59E0B</color>
 </resources>
