@@ -199,7 +199,7 @@ class GalleryFragment : Fragment() {
             }
         )
 
-        binding.rvGallery.layoutManager = GridLayoutManager(requireContext(), 2)
+        binding.rvGallery.layoutManager = GridLayoutManager(requireContext(), resources.getInteger(R.integer.media_grid_columns))
         binding.rvGallery.setHasFixedSize(true)
         binding.rvGallery.adapter = adapter
     }

@@ -28,11 +28,15 @@ class MediaSelectionActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_URL = "extra_instagram_url"
-        var preloadedResult: com.instadown.assist.resolver.model.ResolveResult? = null
+        private val pendingResults = android.util.LruCache<String, com.instadown.assist.resolver.model.ResolveResult>(8)
 
         fun start(context: Context, url: String, preloaded: com.instadown.assist.resolver.model.ResolveResult? = null) {
-            preloadedResult = preloaded
             val intent = Intent(context, MediaSelectionActivity::class.java).apply {
+                if (preloaded != null) {
+                    val token = java.util.UUID.randomUUID().toString()
+                    pendingResults.put(token, preloaded)
+                    putExtra("selectionRequest", token)
+                }
                 putExtra(EXTRA_URL, url)
             }
             context.startActivity(intent)
@@ -48,10 +52,22 @@ class MediaSelectionActivity : AppCompatActivity() {
     private lateinit var tvDownloadStatus: TextView
 
     private val resolver by lazy { CompositeInstagramResolver(this) }
-    private val coordinator by lazy { InstagramDownloadCoordinator(this, resolver = resolver) }
+    private var restoredSelection: IntArray? = null
+
+    class SelectionState : androidx.lifecycle.ViewModel() {
+        var result: com.instadown.assist.resolver.model.ResolveResult? = null
+    }
+
+    private val selectionState by lazy { androidx.lifecycle.ViewModelProvider(this)[SelectionState::class.java] }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        val selection = if (currentResolveResult != null) selectedIndices.toIntArray() else restoredSelection
+        if (selection != null) outState.putIntArray("selection", selection)
+    }
 
     private var targetUrl: String = ""
-    private var currentResolveResult: com.instadown.assist.resolver.model.ResolveResult? = null
+    private val currentResolveResult get() = selectionState.result
     private var resolvedItems: List<ResolvedMedia> = emptyList()
     private val selectedIndices = mutableSetOf<Int>()
     private var isDownloading = false
@@ -80,11 +96,15 @@ class MediaSelectionActivity : AppCompatActivity() {
         tvDownloadStatus = findViewById(R.id.tvDownloadStatus)
 
         // Handle edge-to-edge window insets
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootMediaSelection)) { _, windowInsets ->
+        val topPadding = topBar.paddingTop
+        val bottomPadding = bottomBar.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootMediaSelection)) { root, windowInsets ->
             val statusBar = windowInsets.getInsets(WindowInsetsCompat.Type.statusBars())
             val navBar = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars())
-            topBar.setPadding(topBar.paddingLeft, statusBar.top + 8, topBar.paddingRight, topBar.paddingBottom)
-            bottomBar.setPadding(bottomBar.paddingLeft, bottomBar.paddingTop, bottomBar.paddingRight, navBar.bottom + 8)
+            val safe = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            root.setPadding(safe.left, root.paddingTop, safe.right, root.paddingBottom)
+            topBar.setPadding(topBar.paddingLeft, maxOf(statusBar.top, safe.top) + topPadding, topBar.paddingRight, topBar.paddingBottom)
+            bottomBar.setPadding(bottomBar.paddingLeft, bottomBar.paddingTop, bottomBar.paddingRight, navBar.bottom + bottomPadding)
             windowInsets
         }
 
@@ -100,7 +120,7 @@ class MediaSelectionActivity : AppCompatActivity() {
             }
         )
 
-        rvMediaTiles.layoutManager = GridLayoutManager(this, 2)
+        rvMediaTiles.layoutManager = GridLayoutManager(this, resources.getInteger(R.integer.media_grid_columns))
         // Selection changes should not cross-fade or flash already loaded previews.
         rvMediaTiles.itemAnimator = null
 
@@ -116,11 +136,12 @@ class MediaSelectionActivity : AppCompatActivity() {
         }
 
         btnDownloadSelected.setOnClickListener {
-            startDownload()
+            if (currentResolveResult == null) loadMediaMetadata() else startDownload()
         }
 
-        val preloaded = preloadedResult
-        preloadedResult = null
+        restoredSelection = savedInstanceState?.getIntArray("selection")
+        val preloaded = currentResolveResult
+            ?: intent.getStringExtra("selectionRequest")?.let { pendingResults.remove(it) }
 
         if (preloaded != null && preloaded.success && preloaded.items.isNotEmpty()) {
             displayResolvedMedia(preloaded)
@@ -130,10 +151,14 @@ class MediaSelectionActivity : AppCompatActivity() {
     }
 
     private fun displayResolvedMedia(result: com.instadown.assist.resolver.model.ResolveResult) {
-        currentResolveResult = result
+        selectionState.result = result
         resolvedItems = result.items
         selectedIndices.clear()
-        for (i in resolvedItems.indices) selectedIndices.add(i)
+        val previous = restoredSelection
+        if (previous == null) selectedIndices.addAll(resolvedItems.indices)
+        else previous.filterTo(selectedIndices) { it in resolvedItems.indices }
+        restoredSelection = null
+        btnToggleSelectAll.visibility = View.VISIBLE
 
         // Use the loader's bounded concurrency and shared in-flight requests.
         lifecycleScope.launch(Dispatchers.IO) {
@@ -175,21 +200,29 @@ class MediaSelectionActivity : AppCompatActivity() {
 
     private fun loadMediaMetadata() {
         tvSubtitle.text = "Resolving Instagram post..."
+        btnToggleSelectAll.visibility = View.GONE
+        btnDownloadSelected.setText(R.string.selection_loading)
         pbDownloadProgress.isIndeterminate = true
         pbDownloadProgress.visibility = View.VISIBLE
         btnDownloadSelected.isEnabled = false
 
         lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                resolver.resolve(targetUrl, validateCdn = false)
+            val result = try {
+                withContext(Dispatchers.IO) { resolver.resolve(targetUrl, validateCdn = false) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                com.instadown.assist.util.AppLogger.w("MediaSelection", "Resolution failed: ${e.javaClass.simpleName}")
+                null
             }
 
             pbDownloadProgress.visibility = View.GONE
 
-            if (!result.success || result.items.isEmpty()) {
-                val errorMsg = result.error?.message ?: "Failed to resolve post media"
+            if (result == null || !result.success || result.items.isEmpty()) {
+                val errorMsg = result?.error?.message ?: getString(R.string.selection_resolve_failed)
                 tvSubtitle.text = "Error: $errorMsg"
-                Toast.makeText(this@MediaSelectionActivity, errorMsg, Toast.LENGTH_LONG).show()
+                btnDownloadSelected.setText(R.string.selection_retry)
+                btnDownloadSelected.isEnabled = true
                 return@launch
             }
 
@@ -260,6 +293,11 @@ class MediaSelectionActivity : AppCompatActivity() {
         override fun onBindViewHolder(holder: MediaTileViewHolder, position: Int) {
             val item = resolvedItems[position]
             val isSelected = selectedIndices.contains(position)
+            holder.itemView.isSelected = isSelected
+            holder.itemView.contentDescription = getString(
+                if (item.mediaType == MediaType.VIDEO) R.string.selection_video else R.string.selection_photo,
+                position + 1, resolvedItems.size
+            )
 
             holder.tvIndexBadge.text = "#${position + 1}"
             holder.ivVideoIndicator.visibility = if (item.mediaType == MediaType.VIDEO) View.VISIBLE else View.GONE

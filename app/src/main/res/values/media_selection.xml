@@ -1,0 +1,8 @@
+<resources>
+    <integer name="media_grid_columns">2</integer>
+    <string name="selection_loading">Finding media…</string>
+    <string name="selection_retry">Try again</string>
+    <string name="selection_resolve_failed">Couldn’t load this post. Check your connection and try again.</string>
+    <string name="selection_video">Video %1$d of %2$d</string>
+    <string name="selection_photo">Photo %1$d of %2$d</string>
+</resources>

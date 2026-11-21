@@ -130,7 +130,8 @@ object MediaStoreWriter {
 
             val buffer = ByteArray(BUFFER_SIZE)
             var read: Int
-            var firstBytes: ByteArray? = null
+            val firstBytes = ByteArray(64)
+            var headerSize = 0
             var lastEmitMs = 0L
             var lastEmitPercent = -1
 
@@ -149,8 +150,10 @@ object MediaStoreWriter {
                     )
                 }
 
-                if (firstBytes == null && read > 0) {
-                    firstBytes = buffer.copyOf(minOf(read, 64))
+                if (headerSize < firstBytes.size) {
+                    val count = minOf(read, firstBytes.size - headerSize)
+                    buffer.copyInto(firstBytes, headerSize, 0, count)
+                    headerSize += count
                 }
 
                 outputStream.write(buffer, 0, read)
@@ -200,7 +203,7 @@ object MediaStoreWriter {
 
             // 2. Separate "download completed" from "download verified"
             // Verify container & magic bytes from captured initial stream buffer
-            val structureError = validateHeaderBytes(firstBytes, mediaType)
+            val structureError = validateHeaderBytes(firstBytes.copyOf(headerSize), mediaType)
             if (structureError != null) {
                 Log.e(TAG, "File structure validation failed for $uri: $structureError")
                 deleteIncompleteEntry(resolver, uri)
