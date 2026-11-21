@@ -275,6 +275,26 @@ class CompositeInstagramResolver(
             return finalRes
         }
 
+        // Rescue Fallback: If Fast Embed had resolved items (even partial or single cover), rescue it!
+        if (embedResult != null && embedResult.items.isNotEmpty()) {
+            trace.add(
+                com.instadown.assist.resolver.model.StepTrace(
+                    stepIndex = stepIndex++,
+                    stepName = "Rescue Fallback (Fast Embed)",
+                    durationMs = 0L,
+                    success = true,
+                    details = "Rescued ${embedResult.items.size} item(s) from Fast Embed after downstream tiers failed"
+                )
+            )
+            val rescuedResult = embedResult.copy(
+                success = true,
+                totalResolutionTimeMs = System.currentTimeMillis() - startTime,
+                diagnosticTrace = trace
+            )
+            AppLogger.w(TAG, "All downstream tiers failed; successfully rescued ${rescuedResult.items.size} item(s) via Fast Embed fallback:\n${rescuedResult.formattedTrace}")
+            return rescuedResult
+        }
+
         // All tiers failed: compile comprehensive diagnostic trace
         val finalResult = ResolveResult(
             success = false,

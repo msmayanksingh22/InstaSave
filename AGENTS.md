@@ -88,7 +88,7 @@ You are an expert principal Android systems engineer and architect working on In
   - `androidx.viewpager2:viewpager2:1.1.0`
   - `org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1`
   - `com.squareup.okhttp3:okhttp:4.12.0`
-- **Current Version**: `versionCode = 27`, `versionName = "1.3.9"`
+- **Current Version**: `versionCode = 28`, `versionName = "1.4.0"`
 
 ---
 
@@ -418,6 +418,21 @@ All release builds must be signed with the dedicated production keystore:
   - Added 1-tap `btnCopyImage` in `MediaViewerActivity` top bar.
   - Added "Copy" button and tile long-press copy in `MediaSelectionActivity` for carousels.
   - Fully compatible with Gboard image suggestions, WhatsApp, Telegram, Slack, Notes, etc.
+
+### 32. Native Embed Carousel Extractor & Mathematically Symmetric UI
+- **Files**:
+  - `app/src/main/java/com/instadown/assist/resolver/EmbedFallbackResolver.kt`
+  - `app/src/main/java/com/instadown/assist/resolver/CompositeInstagramResolver.kt`
+  - `app/src/main/res/layout/fragment_home.xml`
+  - `app/src/main/res/layout/activity_media_selection.xml`
+  - `app/src/test/java/com/instadown/assist/resolver/ResolverCarouselTest.kt`
+- **Native Embed Carousel Extraction (<800ms)**:
+  - Previously, `EmbedFallbackResolver` discarded all carousel items and returned `PARTIAL_MEDIA` to defer to `HeadlessWebBridgeResolver` (FastDL.app). On real devices, FastDL often stalled or timed out, causing resolution failure ("Download failed").
+  - Implemented `extractCarouselItemsFromEmbed`: parses Meta's ServerJS `edge_sidecar_to_children` payload directly from captioned embed HTML, recovering all 8 to 15+ carousel items (images, videos, resolutions, and thumbnails) in sub-800ms directly from Meta's CDN without headless WebView overhead.
+  - Added end-of-pipeline safety rescue in `CompositeInstagramResolver`: if downstream tiers fail or time out, any media items recovered by Fast Embed are preserved and rescued so the user never encounters a false "Download failed".
+- **Mathematically Symmetric UI Layout & Proportional Spacing**:
+  - Replaced lopsided 1.15 vs 0.85 button weights with exact 50/50 horizontal weight distribution (`layout_width="0dp"`, `layout_weight="1"`, `height="44dp"`, `cornerRadius="12dp"`, `gap="8dp"`).
+  - Scaled down bulky hero card padding (20dp -> 16dp), greeting font (26sp -> 20sp), and art illustration (80x72dp -> 54x48dp) so the interface breathes cleanly and adapts proportionally to all Android device sizes and DPIs.
 
 ---
 

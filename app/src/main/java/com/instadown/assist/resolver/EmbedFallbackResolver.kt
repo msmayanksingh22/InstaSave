@@ -10,6 +10,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONArray
+import org.json.JSONObject
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -100,6 +102,164 @@ class EmbedFallbackResolver(
                 }
             }
             return false
+        }
+
+        fun extractCarouselItemsFromEmbed(html: String): List<ResolvedMedia> {
+            val items = mutableListOf<ResolvedMedia>()
+            val key = "edge_sidecar_to_children"
+            val idx = html.indexOf(key)
+            if (idx == -1) return items
+
+            val braceStart = html.indexOf('{', idx)
+            if (braceStart == -1) return items
+
+            var depth = 0
+            var braceEnd = -1
+            for (i in braceStart until html.length) {
+                val c = html[i]
+                if (c == '{') depth++
+                else if (c == '}') {
+                    depth--
+                    if (depth == 0) {
+                        braceEnd = i + 1
+                        break
+                    }
+                }
+            }
+
+            if (braceEnd <= braceStart) return items
+
+            val rawSub = html.substring(braceStart, braceEnd)
+            val unescaped = rawSub
+                .replace("\\\"", "\"")
+                .replace("\\/", "/")
+                .replace("\\\\", "\\")
+
+            try {
+                val json = JSONObject(unescaped)
+                val edges = json.optJSONArray("edges")
+                if (edges != null) {
+                    for (i in 0 until edges.length()) {
+                        val edge = edges.optJSONObject(i) ?: continue
+                        val node = edge.optJSONObject("node") ?: continue
+
+                        val isVideo = node.optBoolean("is_video", false)
+                        val rawDisplayUrl = node.optString("display_url")
+                        val rawVideoUrl = node.optString("video_url")
+
+                        val displayUrl = if (rawDisplayUrl.isNotBlank()) unescapeUrl(rawDisplayUrl) else null
+                        val videoUrl = if (rawVideoUrl.isNotBlank()) unescapeUrl(rawVideoUrl) else null
+
+                        // Determine optimal thumbnail from display_resources (~240-480px)
+                        var thumbUrl: String? = null
+                        val resources = node.optJSONArray("display_resources")
+                        if (resources != null && resources.length() > 0) {
+                            for (r in 0 until resources.length()) {
+                                val resObj = resources.optJSONObject(r) ?: continue
+                                val src = resObj.optString("src")
+                                val w = resObj.optInt("config_width", 0)
+                                if (w in 240..480 && src.isNotBlank()) {
+                                    thumbUrl = unescapeUrl(src)
+                                    break
+                                }
+                            }
+                        }
+                        if (thumbUrl == null) {
+                            thumbUrl = displayUrl
+                        }
+
+                        val dimensions = node.optJSONObject("dimensions")
+                        val width = dimensions?.optInt("width")
+                        val height = dimensions?.optInt("height")
+
+                        if (isVideo && !videoUrl.isNullOrBlank()) {
+                            val candidate = MediaCandidate(
+                                url = videoUrl,
+                                width = width,
+                                height = height,
+                                mimeType = "video/mp4",
+                                isSelected = true,
+                                selectionReason = "Carousel video stream (Slide #${i + 1})"
+                            )
+                            items.add(
+                                ResolvedMedia(
+                                    index = i,
+                                    mediaType = MediaType.VIDEO,
+                                    mediaUrl = videoUrl,
+                                    thumbnailUrl = thumbUrl,
+                                    width = width,
+                                    height = height,
+                                    durationMs = null,
+                                    bitRate = null,
+                                    qualityClassification = "Carousel video stream",
+                                    selectionReason = "Extracted from captioned embed edge_sidecar_to_children (Slide #${i + 1})",
+                                    candidates = listOf(candidate)
+                                )
+                            )
+                        } else if (!displayUrl.isNullOrBlank()) {
+                            val candidate = MediaCandidate(
+                                url = displayUrl,
+                                width = width,
+                                height = height,
+                                mimeType = "image/jpeg",
+                                isSelected = true,
+                                selectionReason = "Carousel high-res image (Slide #${i + 1})"
+                            )
+                            items.add(
+                                ResolvedMedia(
+                                    index = i,
+                                    mediaType = MediaType.IMAGE,
+                                    mediaUrl = displayUrl,
+                                    thumbnailUrl = thumbUrl,
+                                    width = width,
+                                    height = height,
+                                    durationMs = null,
+                                    bitRate = null,
+                                    qualityClassification = "Carousel high-resolution photo",
+                                    selectionReason = "Extracted from captioned embed edge_sidecar_to_children (Slide #${i + 1})",
+                                    candidates = listOf(candidate)
+                                )
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                AppLogger.w(TAG, "Failed to parse JSON edge_sidecar_to_children: ${e.message}")
+            }
+
+            // Fallback: Regex extraction if JSON parsing missed items
+            if (items.isEmpty()) {
+                val displayPattern = Pattern.compile("""\\*\"display_url\\*\"\s*:\s*\\*\"([^\"\\]*(?:\\.[^\"\\]*)*)\\*\"""")
+                val matcher = displayPattern.matcher(rawSub)
+                val foundDisplayUrls = mutableListOf<String>()
+                while (matcher.find()) {
+                    val raw = matcher.group(1) ?: continue
+                    val clean = unescapeUrl(raw)
+                    if (clean.startsWith("http") && !foundDisplayUrls.contains(clean)) {
+                        foundDisplayUrls.add(clean)
+                    }
+                }
+
+                foundDisplayUrls.forEachIndexed { idx, dUrl ->
+                    items.add(
+                        ResolvedMedia(
+                            index = idx,
+                            mediaType = MediaType.IMAGE,
+                            mediaUrl = dUrl,
+                            thumbnailUrl = dUrl,
+                            width = null,
+                            height = null,
+                            durationMs = null,
+                            bitRate = null,
+                            qualityClassification = "Carousel photo (regex fallback)",
+                            selectionReason = "Recovered from embed sidecar payload",
+                            candidates = emptyList()
+                        )
+                    )
+                }
+            }
+
+            return items
         }
     }
 
@@ -329,7 +489,51 @@ class EmbedFallbackResolver(
                 html!!.contains("class=\"Carousel")
 
         if (isCarousel) {
-            com.instadown.assist.util.AppLogger.i(TAG, "Embed payload represents carousel. Deferring to HeadlessWebBridgeResolver for full extraction.")
+            val carouselItems = extractCarouselItemsFromEmbed(html!!)
+            if (carouselItems.isNotEmpty()) {
+                AppLogger.i(TAG, "Embed extracted ${carouselItems.size} carousel items directly from edge_sidecar_to_children in ${System.currentTimeMillis() - startTime}ms")
+                var finalItems = carouselItems
+                var stageB: StageBResult? = null
+                if (validateCdn && carouselItems.isNotEmpty()) {
+                    val cdn = MediaValidator.validate(carouselItems[0].mediaUrl, carouselItems[0].mediaType)
+                    finalItems = carouselItems.mapIndexed { i, itm -> if (i == 0) itm.copy(cdnValidation = cdn) else itm }
+                    stageB = StageBResult(
+                        success = cdn.isAccessible,
+                        validationTimeMs = 0L,
+                        allAccessible = cdn.isAccessible,
+                        itemsValidated = 1,
+                        error = cdn.notes
+                    )
+                }
+
+                return@withContext ResolveResult(
+                    success = true,
+                    originalInputUrl = url,
+                    canonicalUrl = normalized.canonicalUrl,
+                    shortcode = normalized.shortcode,
+                    sourcePathType = normalized.sourcePathType,
+                    postType = PostType.CAROUSEL,
+                    items = finalItems,
+                    methodUsed = "EmbedFallbackResolver (Sidecar)",
+                    totalResolutionTimeMs = System.currentTimeMillis() - startTime,
+                    stageA = StageAResult(
+                        success = true,
+                        postType = PostType.CAROUSEL,
+                        itemsCount = finalItems.size,
+                        shortcode = normalized.shortcode,
+                        identityVerification = "EMBED_SIDECAR_MATCH",
+                        extractionTimeMs = System.currentTimeMillis() - startTime
+                    ),
+                    stageB = stageB,
+                    initialHost = initialHost,
+                    finalHost = finalHost,
+                    authorUsername = authorUsername,
+                    caption = caption
+                )
+            }
+
+            // Fallback if carousel items couldn't be extracted from embed payload
+            AppLogger.i(TAG, "Embed payload represents carousel but sidecar extraction found 0 items. Deferring to downstream tiers.")
             return@withContext ResolveResult(
                 success = false,
                 isPartial = true,
@@ -343,9 +547,11 @@ class EmbedFallbackResolver(
                 totalResolutionTimeMs = System.currentTimeMillis() - startTime,
                 initialHost = initialHost,
                 finalHost = finalHost,
+                authorUsername = authorUsername,
+                caption = caption,
                 error = ResolveError(
                     code = ResolveErrorCode.PARTIAL_MEDIA,
-                    message = "Embed payload represents a multi-item carousel. Deferring to HeadlessWebBridgeResolver for complete 15+ item extraction."
+                    message = "Embed payload represents a multi-item carousel. Deferring to HeadlessWebBridgeResolver for complete extraction."
                 )
             )
         }

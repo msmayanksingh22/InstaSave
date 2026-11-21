@@ -63,6 +63,68 @@ class ResolverCarouselTest {
     }
 
     @Test
+    fun testEmbedFallbackExtractsFullCarouselFromEdgeSidecar() = runBlocking {
+        val embedHtml = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <script>
+                    window.__additionalDataLoaded('/p/C_carouselValid/', {
+                        "graphql": {
+                            "shortcode_media": {
+                                "edge_sidecar_to_children": {
+                                    "edges": [
+                                        {
+                                            "node": {
+                                                "id": "1",
+                                                "is_video": false,
+                                                "display_url": "https://cdn.instagram.com/photo_1.jpg",
+                                                "dimensions": {"width": 1080, "height": 1350}
+                                            }
+                                        },
+                                        {
+                                            "node": {
+                                                "id": "2",
+                                                "is_video": true,
+                                                "display_url": "https://cdn.instagram.com/thumb_2.jpg",
+                                                "video_url": "https://cdn.instagram.com/video_2.mp4",
+                                                "dimensions": {"width": 1080, "height": 1920}
+                                            }
+                                        },
+                                        {
+                                            "node": {
+                                                "id": "3",
+                                                "is_video": false,
+                                                "display_url": "https://cdn.instagram.com/photo_3.jpg",
+                                                "dimensions": {"width": 1080, "height": 1080}
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    });
+                </script>
+            </head>
+            <body></body>
+            </html>
+        """.trimIndent()
+
+        val resolver = EmbedFallbackResolver(client = createMockClientWithHtml(embedHtml))
+        val result = resolver.resolve("https://www.instagram.com/p/C_carouselValid/", validateCdn = false)
+
+        assertTrue("Carousel embed with valid edges must succeed", result.success)
+        assertEquals(PostType.CAROUSEL, result.postType)
+        assertEquals(3, result.items.size)
+        assertEquals("https://cdn.instagram.com/photo_1.jpg", result.items[0].mediaUrl)
+        assertEquals(MediaType.IMAGE, result.items[0].mediaType)
+        assertEquals("https://cdn.instagram.com/video_2.mp4", result.items[1].mediaUrl)
+        assertEquals(MediaType.VIDEO, result.items[1].mediaType)
+        assertEquals("https://cdn.instagram.com/photo_3.jpg", result.items[2].mediaUrl)
+        assertEquals(MediaType.IMAGE, result.items[2].mediaType)
+    }
+
+    @Test
     fun testEmbedFallbackRejectsCarouselWithIsCarouselIndicator() = runBlocking {
         val embedHtml = """
             <div class="EmbedSidecar" data-media-type="GraphSidecar">
