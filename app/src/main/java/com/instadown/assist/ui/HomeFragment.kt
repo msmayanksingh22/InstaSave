@@ -150,15 +150,41 @@ class HomeFragment : Fragment() {
         binding.btnQuickDownload.setOnClickListener {
             val raw = binding.etInstagramUrl.text?.toString()?.trim() ?: ""
             if (raw.isBlank()) {
-                viewModel.setUrlError("Please paste an Instagram link")
+                viewModel.setUrlError("Please paste an Instagram link or @username")
                 return@setOnClickListener
             }
             val (isValid, cleanUrl) = ClipboardReader.validateInstagramUrl(raw)
             if (isValid) {
                 viewModel.clearUrlError()
                 (activity as? MainActivity)?.executeManualDownload(cleanUrl)
+            } else if (com.instadown.assist.browser.InstagramRouteParser.isValidProfileInput(raw)) {
+                viewModel.clearUrlError()
+                ProfileExplorerActivity.start(requireContext(), raw)
             } else {
-                viewModel.setUrlError("Please enter a valid Instagram post or reel link")
+                viewModel.setUrlError("Please enter a valid Instagram link or @username")
+            }
+        }
+
+        // Explore Creator Profile Button
+        binding.btnExploreProfile.setOnClickListener {
+            val raw = binding.etInstagramUrl.text?.toString()?.trim() ?: ""
+            if (raw.isNotBlank()) {
+                if (com.instadown.assist.browser.InstagramRouteParser.isValidProfileInput(raw)) {
+                    viewModel.clearUrlError()
+                    ProfileExplorerActivity.start(requireContext(), raw)
+                } else {
+                    viewModel.setUrlError("Enter a valid Instagram link or @username")
+                }
+                return@setOnClickListener
+            }
+
+            val clip = ClipboardReader.readCurrentClip(requireContext())
+            val clipText = clip.text.trim()
+            if (clip.isValidInstagramUrl || com.instadown.assist.browser.InstagramRouteParser.isValidProfileInput(clipText)) {
+                viewModel.clearUrlError()
+                ProfileExplorerActivity.start(requireContext(), clipText)
+            } else {
+                showExploreProfilePrompt()
             }
         }
 
@@ -231,6 +257,77 @@ class HomeFragment : Fragment() {
                 }
             }
         }
+    }
+
+    private fun showExploreProfilePrompt() {
+        val ctx = requireContext()
+        val density = resources.displayMetrics.density
+        val pad = (20 * density).toInt()
+
+        val container = android.widget.LinearLayout(ctx).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, (12 * density).toInt(), pad, (4 * density).toInt())
+        }
+
+        val input = android.widget.EditText(ctx).apply {
+            hint = "@username or Instagram link"
+            setSingleLine(true)
+            setTextColor(ContextCompat.getColor(ctx, R.color.text_primary))
+            setHintTextColor(ContextCompat.getColor(ctx, R.color.text_muted))
+            backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.primary))
+        }
+        container.addView(input)
+
+        val recentCreators = viewModel.uiState.value.recentDownloads
+            .mapNotNull { it.authorUsername?.removePrefix("@")?.trim()?.takeIf { u -> u.isNotBlank() } }
+            .distinct()
+            .take(3)
+
+        var dialog: androidx.appcompat.app.AlertDialog? = null
+
+        if (recentCreators.isNotEmpty()) {
+            val label = android.widget.TextView(ctx).apply {
+                text = "Recent creators"
+                textSize = 12f
+                setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary))
+                setPadding(0, (14 * density).toInt(), 0, (6 * density).toInt())
+            }
+            container.addView(label)
+
+            val chipRow = com.google.android.material.chip.ChipGroup(ctx).apply {
+                isSingleLine = false
+            }
+            for (creator in recentCreators) {
+                val chip = com.google.android.material.chip.Chip(ctx).apply {
+                    text = "@$creator"
+                    setTextColor(ContextCompat.getColor(ctx, R.color.text_primary))
+                    chipBackgroundColor = ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.surface_elevated))
+                    chipStrokeColor = ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.card_stroke))
+                    chipStrokeWidth = 1f * density
+                    setOnClickListener {
+                        dialog?.dismiss()
+                        ProfileExplorerActivity.start(ctx, creator)
+                    }
+                }
+                chipRow.addView(chip)
+            }
+            container.addView(chipRow)
+        }
+
+        dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+            .setTitle("Explore Creator Profile")
+            .setView(container)
+            .setPositiveButton("Open") { _, _ ->
+                val text = input.text?.toString()?.trim().orEmpty()
+                if (com.instadown.assist.browser.InstagramRouteParser.isValidProfileInput(text)) {
+                    ProfileExplorerActivity.start(ctx, text)
+                } else {
+                    Toast.makeText(ctx, "Enter a valid @username or Instagram link", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .create()
+        dialog.show()
     }
 
     private fun showAssistantSetupSheet() {

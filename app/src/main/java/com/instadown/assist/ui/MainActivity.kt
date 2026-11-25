@@ -231,6 +231,7 @@ class MainActivity : AppCompatActivity() {
         }.commit()
 
         activeTabId = targetTabId
+        ViewCompat.requestApplyInsets(binding.rootMainContainer)
         backToHomeCallback.isEnabled = (targetTabId != R.id.nav_home)
     }
 

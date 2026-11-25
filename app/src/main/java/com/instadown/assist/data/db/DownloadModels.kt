@@ -43,7 +43,7 @@ data class DownloadRecord(
             ?: thumbnailPath
 
     val isCarousel: Boolean
-        get() = carouselCount > 1 || items.size > 1
+        get() = postType.equals("CAROUSEL", ignoreCase = true) || carouselCount > 1 || items.size > 1
 
     val availableItemCount: Int
         get() = items.count { it.status == ItemStatus.AVAILABLE && it.mediaUri != null }
@@ -52,7 +52,7 @@ data class DownloadRecord(
         get() = if (isCarousel) maxOf(carouselCount, items.size) else 1
 
     val isPartiallyDeleted: Boolean
-        get() = availableItemCount > 0 && availableItemCount < totalItemCount
+        get() = availableItemCount in 1 until items.size
 
     val userFacingTitle: String
         get() = when {
@@ -125,8 +125,47 @@ data class DownloadTransactionEvent(
     val items: List<ItemEvent> = emptyList(),
     val authorUsername: String? = null,
     val caption: String? = null,
-    val thumbnailPath: String? = null
+    val thumbnailPath: String? = null,
+    val sourceItemCount: Int? = null
 )
+
+/** A save may cover any subset of a carousel, including a retry of an already saved slide. */
+internal fun DownloadTransactionEvent.mergeWith(previous: DownloadRecord?): DownloadRecord {
+    val byIndex = previous?.items.orEmpty().associateBy { it.itemIndex }.toMutableMap()
+    for (item in items) {
+        val prior = byIndex[item.itemIndex]
+        if (item.mediaUri == null && prior != null) continue
+        val sameFile = prior?.takeIf { it.mediaUri == item.mediaUri }
+        byIndex[item.itemIndex] = DownloadItemRecord(
+            id = sameFile?.id ?: 0L, downloadId = previous?.id ?: 0L,
+            itemIndex = item.itemIndex, mediaType = item.mediaType, mediaUri = item.mediaUri,
+            fileName = item.fileName, width = item.width.takeIf { it > 0 } ?: sameFile?.width ?: 0,
+            height = item.height.takeIf { it > 0 } ?: sameFile?.height ?: 0,
+            sizeBytes = item.sizeBytes.takeIf { it > 0 } ?: sameFile?.sizeBytes ?: 0L,
+            status = if (item.mediaUri != null) ItemStatus.AVAILABLE else item.status
+        )
+    }
+    val merged = byIndex.values.sortedBy { it.itemIndex }
+    val available = merged.count { it.status == ItemStatus.AVAILABLE && it.mediaUri != null }
+    val mergedStatus = when {
+        merged.isEmpty() -> previous?.status ?: status
+        available == merged.size -> TransactionStatus.SUCCESS
+        available > 0 -> TransactionStatus.PARTIAL_SUCCESS
+        merged.any { it.status == ItemStatus.EXTERNAL_DELETED } -> TransactionStatus.EXTERNAL_DELETED
+        else -> status
+    }
+    val count = maxOf(previous?.carouselCount ?: 1, sourceItemCount ?: 1, (merged.lastOrNull()?.itemIndex ?: 0) + 1)
+    val bytes = merged.sumOf { it.sizeBytes }
+    return DownloadRecord(
+        id = previous?.id ?: 0L, transactionId = transactionId, shortcode = shortcode,
+        postType = if (count > 1 || previous?.isCarousel == true) "CAROUSEL" else postType,
+        sourceUrl = sourceUrl.ifBlank { previous?.sourceUrl.orEmpty() }, createdAt = timestamp,
+        carouselCount = count, status = mergedStatus,
+        totalBytes = if (bytes > 0) bytes else maxOf(totalBytes, previous?.totalBytes ?: 0L),
+        items = merged, authorUsername = authorUsername ?: previous?.authorUsername,
+        caption = caption ?: previous?.caption, thumbnailPath = thumbnailPath ?: previous?.thumbnailPath
+    )
+}
 
 data class DeleteHistoryResult(
     val historyRemoved: Boolean,

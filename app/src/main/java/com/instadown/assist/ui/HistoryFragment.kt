@@ -211,9 +211,8 @@ class HistoryFragment : Fragment() {
                 val record = adapter.getItem(position)
                 getDefaultUIUtil().clearView(viewHolder.itemView)
                 viewHolder.itemView.translationX = 0f
-                adapter.notifyItemChanged(position)
-
                 if (record == null) return
+                adapter.notifyItemChanged(position)
                 viewHolder.itemView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
 
                 if (direction == ItemTouchHelper.RIGHT) {
@@ -591,7 +590,7 @@ class HistoryFragment : Fragment() {
             }
             sheet.show(childFragmentManager, "ReDownloadSelectionBottomSheet")
         } else {
-            enqueueRedownload(record, null)
+            enqueueRedownload(record, record.items.singleOrNull()?.let { setOf(it.itemIndex) })
         }
     }
 
@@ -621,12 +620,7 @@ class HistoryFragment : Fragment() {
             Toast.makeText(requireContext(), "Instagram URL not available", Toast.LENGTH_SHORT).show()
             return
         }
-        try {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-            startActivity(intent)
-        } catch (e: Exception) {
-            Toast.makeText(requireContext(), "Cannot open link: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
+        ProfileExplorerActivity.start(requireContext(), url)
     }
 
     private fun showItemOptionsDialog(record: DownloadRecord) {

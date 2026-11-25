@@ -164,9 +164,11 @@ object UrlNormalizer {
 
                 client.newCall(request).execute().use { response ->
                     if (response.code in 301..308) {
-                        val location = response.header("Location")
-                        if (!location.isNullOrBlank()) {
-                            val probedNormalized = normalize(location)
+                        val location = response.header("Location")?.let { response.request.url.resolve(it) }
+                        if (location != null && location.isHttps &&
+                            location.host in setOf("instagram.com", "www.instagram.com", "instagr.am", "www.instagr.am") &&
+                            location.pathSegments.firstOrNull() in setOf("p", "reel", "reels", "tv")) {
+                            val probedNormalized = normalize(location.encodedPath)
                             if (probedNormalized != null) {
                                 com.instadown.assist.util.AppLogger.i("UrlNormalizer", "Probed share redirect: $extracted -> ${probedNormalized.canonicalUrl}")
                                 return@withTimeoutOrNull probedNormalized

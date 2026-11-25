@@ -33,35 +33,38 @@ class EmbedFallbackResolver(
         }
 
         private fun unescapeUrl(raw: String): String {
-            var s = raw
-                .replace("\\u0026", "&")
+            var s = raw.trim()
+                .replace(Regex("""\\+u0026""", RegexOption.IGNORE_CASE), "&")
+                .replace(Regex("""\\+u0025""", RegexOption.IGNORE_CASE), "%")
+                .replace(Regex("""\\+u003[dD]"""), "=")
                 .replace("&amp;", "&")
-                .replace("\\u0025", "%")
                 .replace("&lt;", "<")
                 .replace("&gt;", ">")
                 .replace("&quot;", "\"")
-            s = s.replace(Regex("""\\+/"""), "/")
-            s = s.replace(Regex("""\\+""""), "\"")
+                .replace(Regex("""\\+/"""), "/")
+                .replace(Regex("""\\+""""), "\"")
+            // Strip any stray trailing JSON/HTML delimiters if a fallback regex ever over-matched
+            s = s.trimEnd('\\', '"', '\'', '}', ']')
             return s.trim()
         }
 
         private val EMBED_VIDEO_PATTERNS = listOf(
-            Pattern.compile("""\\*\"video_url\\*\"\s*:\s*\\*\"([^\"\\]*(?:\\.[^\"\\]*)*)\\*\""""),
-            Pattern.compile("""video_url[\\\"'\s]*:[\\\"'\s]*(https?:[^\s\"']+)"""),
-            Pattern.compile("""\\*\"playable_url(?:_quality_hd)?\\*\"\s*:\s*\\*\"([^\"\\]*(?:\\.[^\"\\]*)*)\\*\""""),
-            Pattern.compile("""(https?:[\\/]+[^\"'\s<>]+\.mp4[^\"'\s<>]*)"""),
+            Pattern.compile("""\\*\"video_url\\*\"\s*:\s*\\*\"((?:[^\"\\]|\\[^\"])+?)\\*\""""),
+            Pattern.compile("""video_url[\\\"'\s]*:[\\\"'\s]*(https?:[^\s\"'\\]+)"""),
+            Pattern.compile("""\\*\"playable_url(?:_quality_hd)?\\*\"\s*:\s*\\*\"((?:[^\"\\]|\\[^\"])+?)\\*\""""),
+            Pattern.compile("""(https?:[\\/]+[^\"'\\\s<>]+\.mp4[^\"'\\\s<>]*)"""),
             Pattern.compile("""<video[^>]+src=[\"']([^\"']+)[\"']""", Pattern.CASE_INSENSITIVE),
             Pattern.compile("""<source[^>]+src=[\"']([^\"']+)[\"']""", Pattern.CASE_INSENSITIVE),
-            Pattern.compile("""\\*\"video_versions\\*\"\s*:\s*\[\s*\{\s*\\*\"url\\*\"\s*:\s*\\*\"([^\"\\]+?)\\*\"""")
+            Pattern.compile("""\\*\"video_versions\\*\"\s*:\s*\[\s*\{\s*\\*\"url\\*\"\s*:\s*\\*\"((?:[^\"\\]|\\[^\"])+?)\\*\"""")
         )
 
         private val EMBED_IMAGE_PATTERNS = listOf(
             Pattern.compile("""<img[^>]+class=[\"'][^\"']*EmbeddedMediaImage[^\"']*[\"'][^>]+src=[\"']([^\"']+)[\"']""", Pattern.CASE_INSENSITIVE),
-            Pattern.compile("""\\*\"(?:display_url|thumbnail_src)\\*\"\s*:\s*\\*\"([^\"\\]*(?:\\.[^\"\\]*)*)\\*\""""),
-            Pattern.compile("""(?:display_url|thumbnail_src)[\\\"'\s]*:[\\\"'\s]*(https?:[^\s\"']+)"""),
-            Pattern.compile("""(https?:[\\/]+[^\"'\s<>]*(?:cdninstagram\.com|fbcdn\.net)[^\"'\s<>]+\.jpg[^\"'\s<>]*)"""),
+            Pattern.compile("""\\*\"(?:display_url|thumbnail_src)\\*\"\s*:\s*\\*\"((?:[^\"\\]|\\[^\"])+?)\\*\""""),
+            Pattern.compile("""(?:display_url|thumbnail_src)[\\\"'\s]*:[\\\"'\s]*(https?:[^\s\"'\\]+)"""),
+            Pattern.compile("""(https?:[\\/]+[^\"'\\\s<>]*(?:cdninstagram\.com|fbcdn\.net)[^\"'\\\s<>]+\.jpg[^\"'\\\s<>]*)"""),
             Pattern.compile("""<img[^>]+src=[\"'](https?://[^\"'\s<>]*(?:cdninstagram\.com|fbcdn\.net)[^\"'\s<>]*)[\"']""", Pattern.CASE_INSENSITIVE),
-            Pattern.compile("""\\*\"image_versions2\\*\"\s*:\s*\{\s*\\*\"candidates\\*\"\s*:\s*\[\s*\{\s*\\*\"url\\*\"\s*:\s*\\*\"([^\"\\]+?)\\*\"""")
+            Pattern.compile("""\\*\"image_versions2\\*\"\s*:\s*\{\s*\\*\"candidates\\*\"\s*:\s*\[\s*\{\s*\\*\"url\\*\"\s*:\s*\\*\"((?:[^\"\\]|\\[^\"])+?)\\*\"""")
         )
 
         private val EMBED_AUTHOR_PATTERNS = listOf(
@@ -229,7 +232,7 @@ class EmbedFallbackResolver(
 
             // Fallback: Regex extraction if JSON parsing missed items
             if (items.isEmpty()) {
-                val displayPattern = Pattern.compile("""\\*\"display_url\\*\"\s*:\s*\\*\"([^\"\\]*(?:\\.[^\"\\]*)*)\\*\"""")
+                val displayPattern = Pattern.compile("""\\*\"display_url\\*\"\s*:\s*\\*\"((?:[^\"\\]|\\[^\"])+?)\\*\"""")
                 val matcher = displayPattern.matcher(rawSub)
                 val foundDisplayUrls = mutableListOf<String>()
                 while (matcher.find()) {

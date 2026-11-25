@@ -1,12 +1,13 @@
 {
   "packageName": "com.instadown.assist",
-  "versionCode": 28,
-  "versionName": "1.4.0",
-  "tag": "v1.4.0",
-  "releaseNotes": "High-speed native embed carousel extraction (<800ms) directly parsing all 8 to 15+ multi-item carousels from Meta CDN; pipeline fallback safety net preventing resolution failure; mathematically symmetric 50/50 hero button layout with compact 16dp card padding and responsive typography.",
-  "apkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.4.0/app-release.apk",
+  "versionCode": 29,
+  "versionName": "1.5.0",
+  "tag": "v1.5.0",
+  "releaseNotes": "New native-feel Profile Explorer for public creators & post/reel browsing; vivid Desktop/Mobile hybrid media rendering with dark scrim & banner removal; fixed Reel MP4 URL extraction (HTTP 403) & honest save feedback; fixed selective carousel History merge, History card layout overlap, and OTA CI release pipeline.",
+  "apkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.5.0/InstaSave-v1.5.0.apk",
   "fallbackApkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
-  "fileSizeBytes": 6285089,
-  "sha256": "b77122d8a4c3f4d4787cfc23ce9ab17ddc730652723bc362dbaf85e352eff494",
-  "publishedAt": "2026-11-21T12:45:00Z"
+  "fileSizeBytes": 6309926,
+  "sizeBytes": 6309926,
+  "sha256": "61fea78a96da83e25cf86b9ea3cc034247b2f9a857bcda94e8c2107adcac214f",
+  "publishedAt": "2026-11-25T11:05:06Z"
 }

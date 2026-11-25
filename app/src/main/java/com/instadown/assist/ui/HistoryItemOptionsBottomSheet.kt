@@ -240,6 +240,19 @@ class HistoryItemOptionsBottomSheet : DialogFragment() {
                 }
             }
 
+            // Card: Explore Creator Profile
+            val cardExplore = view.findViewById<View>(R.id.cardExploreProfile)
+            val tvExploreTitle = view.findViewById<TextView>(R.id.tvExploreProfileTitle)
+            val author = loadedRecord.authorUsername
+            if (!author.isNullOrBlank()) {
+                tvExploreTitle.text = "Explore @$author"
+            }
+            cardExplore.setOnClickListener {
+                val target = if (!author.isNullOrBlank()) author else loadedRecord.targetDownloadUrl
+                ProfileExplorerActivity.start(requireContext(), target)
+                dismiss()
+            }
+
             // Card 2: Open in Instagram
             cardOpenInstagram.setOnClickListener {
                 val url = loadedRecord.targetDownloadUrl

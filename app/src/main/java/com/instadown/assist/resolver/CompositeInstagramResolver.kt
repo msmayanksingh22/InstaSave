@@ -71,6 +71,17 @@ class CompositeInstagramResolver(
         val step1Start = System.currentTimeMillis()
         val canonicalNormalized = UrlNormalizer.resolveCanonical(url)
         val targetUrl = canonicalNormalized?.canonicalUrl ?: url
+        // The tiers receive the canonical link. Keep the original share link associated
+        // with its resolved target so Browse can reuse the preview for a selective save.
+        fun bindInput(result: ResolveResult): ResolveResult {
+            if (result.originalInputUrl == url || canonicalNormalized == null) return result
+            return result.copy(
+                originalInputUrl = url,
+                identityVerified = result.identityVerified || (
+                    result.shortcode == canonicalNormalized.shortcode && result.canonicalUrl == targetUrl
+                )
+            )
+        }
         val step1Dur = System.currentTimeMillis() - step1Start
         val normSuccess = canonicalNormalized != null && canonicalNormalized.shortcode.isNotBlank()
         trace.add(
@@ -143,7 +154,7 @@ class CompositeInstagramResolver(
                 diagnosticTrace = trace
             )
             AppLogger.i(TAG, "Resolution completed successfully via Fast Embed in ${finalRes.totalResolutionTimeMs}ms:\n${finalRes.formattedTrace}")
-            return finalRes
+            return bindInput(finalRes)
         }
 
         // Step 3: Tier 0 Direct OkHttp GraphQL (Zero-WebView fallback if not tripped)
@@ -187,7 +198,7 @@ class CompositeInstagramResolver(
                     diagnosticTrace = trace
                 )
                 AppLogger.i(TAG, "Resolution completed successfully via GraphQL in ${finalRes.totalResolutionTimeMs}ms:\n${finalRes.formattedTrace}")
-                return finalRes
+                return bindInput(finalRes)
             }
         } else {
             trace.add(
@@ -237,7 +248,7 @@ class CompositeInstagramResolver(
                     diagnosticTrace = trace
                 )
                 AppLogger.i(TAG, "Resolution completed successfully via Web Bridge in ${finalRes.totalResolutionTimeMs}ms:\n${finalRes.formattedTrace}")
-                return finalRes
+                return bindInput(finalRes)
             }
         }
 
@@ -272,7 +283,7 @@ class CompositeInstagramResolver(
                 diagnosticTrace = trace
             )
             AppLogger.i(TAG, "Resolution completed successfully via SJS in ${finalRes.totalResolutionTimeMs}ms:\n${finalRes.formattedTrace}")
-            return finalRes
+            return bindInput(finalRes)
         }
 
         // Rescue Fallback: If Fast Embed had resolved items (even partial or single cover), rescue it!
@@ -292,7 +303,7 @@ class CompositeInstagramResolver(
                 diagnosticTrace = trace
             )
             AppLogger.w(TAG, "All downstream tiers failed; successfully rescued ${rescuedResult.items.size} item(s) via Fast Embed fallback:\n${rescuedResult.formattedTrace}")
-            return rescuedResult
+            return bindInput(rescuedResult)
         }
 
         // All tiers failed: compile comprehensive diagnostic trace

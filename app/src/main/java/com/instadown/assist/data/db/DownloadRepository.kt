@@ -39,133 +39,62 @@ class DownloadRepository private constructor(private val context: Context) {
         val db = dbHelper.writableDatabase
         db.beginTransaction()
         try {
-            // Check if a record with this shortcode already exists to prevent duplicate rows
-            var existingId: Long? = null
-            if (event.shortcode.isNotBlank()) {
-                val cursor = db.query(
-                    InstaSaveDatabaseHelper.TABLE_DOWNLOADS,
-                    arrayOf(InstaSaveDatabaseHelper.COL_DL_ID),
-                    "${InstaSaveDatabaseHelper.COL_DL_SHORTCODE} = ?",
-                    arrayOf(event.shortcode),
-                    null, null,
-                    "${InstaSaveDatabaseHelper.COL_DL_ID} DESC"
-                )
-                existingId = cursor.use { if (it.moveToFirst()) it.getLong(0) else null }
-            }
-
-            // Check if event.totalBytes is 0 (e.g. skipped duplicate), preserve existing bytes and metadata if available
-            var bytesToSave = event.totalBytes
-            var existingThumbnail: String? = null
-            var existingAuthor: String? = null
-            var existingCaption: String? = null
-            if (existingId != null) {
-                val prevCursor = db.query(
-                    InstaSaveDatabaseHelper.TABLE_DOWNLOADS,
-                    arrayOf(
-                        InstaSaveDatabaseHelper.COL_DL_TOTAL_BYTES,
-                        InstaSaveDatabaseHelper.COL_DL_THUMBNAIL_PATH,
-                        InstaSaveDatabaseHelper.COL_DL_AUTHOR,
-                        InstaSaveDatabaseHelper.COL_DL_CAPTION
-                    ),
-                    "${InstaSaveDatabaseHelper.COL_DL_ID} = ?",
-                    arrayOf(existingId.toString()),
-                    null, null, null
-                )
-                prevCursor.use {
-                    if (it.moveToFirst()) {
-                        if (bytesToSave == 0L) bytesToSave = it.getLong(0)
-                        existingThumbnail = if (!it.isNull(1)) it.getString(1) else null
-                        existingAuthor = if (!it.isNull(2)) it.getString(2) else null
-                        existingCaption = if (!it.isNull(3)) it.getString(3) else null
-                    }
+            val previous = if (event.shortcode.isBlank()) null else db.query(
+                InstaSaveDatabaseHelper.TABLE_DOWNLOADS, null,
+                "${InstaSaveDatabaseHelper.COL_DL_SHORTCODE} = ?", arrayOf(event.shortcode),
+                null, null, "${InstaSaveDatabaseHelper.COL_DL_ID} DESC", "1"
+            ).use { cursor ->
+                if (!cursor.moveToFirst()) null else {
+                    val record = parseDownloadRecord(cursor)
+                    record.copy(items = getItemsForDownload(db, record.id))
                 }
             }
-
-            val finalThumb = event.thumbnailPath ?: existingThumbnail
-            val finalAuthor = event.authorUsername ?: existingAuthor
-            val finalCaption = event.caption ?: existingCaption
-
+            val merged = event.mergeWith(previous)
             val dlValues = ContentValues().apply {
-                put(InstaSaveDatabaseHelper.COL_DL_TX_ID, event.transactionId)
-                put(InstaSaveDatabaseHelper.COL_DL_SHORTCODE, event.shortcode)
-                put(InstaSaveDatabaseHelper.COL_DL_POST_TYPE, event.postType)
-                if (event.sourceUrl.isNotBlank()) {
-                    put(InstaSaveDatabaseHelper.COL_DL_SOURCE_URL, event.sourceUrl)
-                }
-                put(InstaSaveDatabaseHelper.COL_DL_CREATED_AT, event.timestamp)
-                put(InstaSaveDatabaseHelper.COL_DL_CAROUSEL_COUNT, if (event.items.isNotEmpty()) event.items.size else 1)
-                put(InstaSaveDatabaseHelper.COL_DL_STATUS, event.status.name)
-                put(InstaSaveDatabaseHelper.COL_DL_TOTAL_BYTES, bytesToSave)
-                if (!finalAuthor.isNullOrBlank()) {
-                    put(InstaSaveDatabaseHelper.COL_DL_AUTHOR, finalAuthor.removePrefix("@"))
-                }
-                if (!finalCaption.isNullOrBlank()) {
-                    put(InstaSaveDatabaseHelper.COL_DL_CAPTION, finalCaption)
-                }
-                if (!finalThumb.isNullOrBlank()) {
-                    put(InstaSaveDatabaseHelper.COL_DL_THUMBNAIL_PATH, finalThumb)
-                }
+                put(InstaSaveDatabaseHelper.COL_DL_TX_ID, merged.transactionId)
+                put(InstaSaveDatabaseHelper.COL_DL_SHORTCODE, merged.shortcode)
+                put(InstaSaveDatabaseHelper.COL_DL_POST_TYPE, merged.postType)
+                put(InstaSaveDatabaseHelper.COL_DL_SOURCE_URL, merged.sourceUrl)
+                put(InstaSaveDatabaseHelper.COL_DL_CREATED_AT, merged.createdAt)
+                put(InstaSaveDatabaseHelper.COL_DL_CAROUSEL_COUNT, merged.carouselCount)
+                put(InstaSaveDatabaseHelper.COL_DL_STATUS, merged.status.name)
+                put(InstaSaveDatabaseHelper.COL_DL_TOTAL_BYTES, merged.totalBytes)
+                put(InstaSaveDatabaseHelper.COL_DL_AUTHOR, merged.authorUsername?.removePrefix("@"))
+                put(InstaSaveDatabaseHelper.COL_DL_CAPTION, merged.caption)
+                put(InstaSaveDatabaseHelper.COL_DL_THUMBNAIL_PATH, merged.thumbnailPath)
             }
-
-            val dlId: Long
-            if (existingId != null) {
-                // Delete any redundant duplicate rows for this shortcode
-                db.delete(
-                    InstaSaveDatabaseHelper.TABLE_DOWNLOADS,
-                    "${InstaSaveDatabaseHelper.COL_DL_SHORTCODE} = ? AND ${InstaSaveDatabaseHelper.COL_DL_ID} != ?",
-                    arrayOf(event.shortcode, existingId.toString())
-                )
-                // Update existing record
-                db.update(
-                    InstaSaveDatabaseHelper.TABLE_DOWNLOADS,
-                    dlValues,
-                    "${InstaSaveDatabaseHelper.COL_DL_ID} = ?",
-                    arrayOf(existingId.toString())
-                )
-                dlId = existingId
-                Log.i(TAG, "recordTransaction: Updated existing record rowId=$dlId for shortcode ${event.shortcode}")
+            val dlId = if (previous == null) {
+                db.insertOrThrow(InstaSaveDatabaseHelper.TABLE_DOWNLOADS, null, dlValues)
             } else {
-                // Insert new record
-                dlId = db.insertWithOnConflict(
-                    InstaSaveDatabaseHelper.TABLE_DOWNLOADS,
-                    null,
-                    dlValues,
-                    android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE
+                db.update(
+                    InstaSaveDatabaseHelper.TABLE_DOWNLOADS, dlValues,
+                    "${InstaSaveDatabaseHelper.COL_DL_ID} = ?", arrayOf(previous.id.toString())
                 )
-                Log.i(TAG, "recordTransaction: Inserted new record rowId=$dlId for shortcode ${event.shortcode}")
+                previous.id
             }
 
-            if (dlId != -1L && event.items.isNotEmpty()) {
-                val previousItems = if (existingId != null) getItemsForDownload(db, dlId) else emptyList()
-                val prevUriMap = previousItems.associate { it.itemIndex to it.mediaUri }
-
-                // Remove existing items for this download to refresh cleanly with new URIs
-                db.delete(
-                    InstaSaveDatabaseHelper.TABLE_DOWNLOAD_ITEMS,
-                    "${InstaSaveDatabaseHelper.COL_ITEM_DOWNLOAD_ID} = ?",
-                    arrayOf(dlId.toString())
-                )
-
-                for (item in event.items) {
-                    val finalUri = item.mediaUri ?: prevUriMap[item.itemIndex]
-                    val itemStatus = if (finalUri != null) ItemStatus.AVAILABLE else item.status
-                    val itemValues = ContentValues().apply {
-                        put(InstaSaveDatabaseHelper.COL_ITEM_DOWNLOAD_ID, dlId)
-                        put(InstaSaveDatabaseHelper.COL_ITEM_INDEX, item.itemIndex)
-                        put(InstaSaveDatabaseHelper.COL_ITEM_MEDIA_TYPE, item.mediaType)
-                        put(InstaSaveDatabaseHelper.COL_ITEM_MEDIA_URI, finalUri)
-                        put(InstaSaveDatabaseHelper.COL_ITEM_FILE_NAME, item.fileName)
-                        put(InstaSaveDatabaseHelper.COL_ITEM_WIDTH, item.width)
-                        put(InstaSaveDatabaseHelper.COL_ITEM_HEIGHT, item.height)
-                        put(InstaSaveDatabaseHelper.COL_ITEM_SIZE_BYTES, item.sizeBytes)
-                        put(InstaSaveDatabaseHelper.COL_ITEM_STATUS, itemStatus.name)
-                    }
-                    db.insertWithOnConflict(
-                        InstaSaveDatabaseHelper.TABLE_DOWNLOAD_ITEMS,
-                        null,
-                        itemValues,
-                        android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE
+            val previousItems = previous?.items.orEmpty().associateBy { it.itemIndex }
+            for (item in merged.items) {
+                if (previousItems[item.itemIndex] == item) continue
+                val itemValues = ContentValues().apply {
+                    put(InstaSaveDatabaseHelper.COL_ITEM_DOWNLOAD_ID, dlId)
+                    put(InstaSaveDatabaseHelper.COL_ITEM_INDEX, item.itemIndex)
+                    put(InstaSaveDatabaseHelper.COL_ITEM_MEDIA_TYPE, item.mediaType)
+                    put(InstaSaveDatabaseHelper.COL_ITEM_MEDIA_URI, item.mediaUri)
+                    put(InstaSaveDatabaseHelper.COL_ITEM_FILE_NAME, item.fileName)
+                    put(InstaSaveDatabaseHelper.COL_ITEM_WIDTH, item.width)
+                    put(InstaSaveDatabaseHelper.COL_ITEM_HEIGHT, item.height)
+                    put(InstaSaveDatabaseHelper.COL_ITEM_SIZE_BYTES, item.sizeBytes)
+                    put(InstaSaveDatabaseHelper.COL_ITEM_STATUS, item.status.name)
+                }
+                if (item.id != 0L) {
+                    db.update(
+                        InstaSaveDatabaseHelper.TABLE_DOWNLOAD_ITEMS, itemValues,
+                        "${InstaSaveDatabaseHelper.COL_ITEM_ID} = ?", arrayOf(item.id.toString())
                     )
+                } else {
+                    // A replacement file gets a new row ID so pending delete consent for the old file stays scoped.
+                    db.replaceOrThrow(InstaSaveDatabaseHelper.TABLE_DOWNLOAD_ITEMS, null, itemValues)
                 }
             }
 
@@ -185,10 +114,12 @@ class DownloadRepository private constructor(private val context: Context) {
         result: com.instadown.assist.download.model.DownloadResult,
         thumbnailPath: String? = null,
         authorUsername: String? = null,
-        caption: String? = null
+        caption: String? = null,
+        sourceItemCount: Int? = null
     ): Long = withContext(Dispatchers.IO) {
         if (result.transactionId.startsWith("AUTO_FAIL_") ||
             result.transactionId.startsWith("NO_A11Y") ||
+            result.errorCode == com.instadown.assist.download.model.DownloadErrorCode.SAME_POST_CURRENTLY_DOWNLOADING ||
             result.errorCode == com.instadown.assist.download.model.DownloadErrorCode.INSTAGRAM_URL_CAPTURE_FAILED ||
             result.errorCode == com.instadown.assist.download.model.DownloadErrorCode.TARGET_SELECTION_FAILED ||
             result.errorCode == com.instadown.assist.download.model.DownloadErrorCode.IDENTITY_VERIFICATION_FAILED ||
@@ -206,7 +137,7 @@ class DownloadRepository private constructor(private val context: Context) {
                 else -> TransactionStatus.FAILED
             }
 
-            val itemEvents = result.items.mapIndexed { idx, item ->
+            val itemEvents = result.items.map { item ->
                 val itemStatus = when {
                     item.localUri != null -> ItemStatus.AVAILABLE
                     isAlreadyOnDevice -> ItemStatus.AVAILABLE
@@ -253,7 +184,8 @@ class DownloadRepository private constructor(private val context: Context) {
                 items = itemEvents,
                 authorUsername = authorUsername,
                 caption = caption,
-                thumbnailPath = resolvedThumbPath
+                thumbnailPath = resolvedThumbPath,
+                sourceItemCount = sourceItemCount
             )
             val rowId = recordTransaction(event)
             com.instadown.assist.data.StorageAccountant.invalidateCache()

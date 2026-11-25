@@ -154,17 +154,23 @@
             app:barrierDirection="bottom"
             app:constraint_referenced_ids="flThumbnailContainer,layoutStatusBadge" />
 
-        <!-- Progress ViewStub (Inflated only on queued or downloading rows) -->
-        <ViewStub
-            android:id="@+id/stubDownloadProgress"
+        <!-- The action row needs a stable anchor after the ViewStub replaces itself. -->
+        <FrameLayout
+            android:id="@+id/historyProgressSlot"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:layout="@layout/view_stub_download_progress"
-            android:inflatedId="@+id/layoutDownloadProgress"
             app:layout_constraintTop_toBottomOf="@id/barrierTopSection"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <ViewStub
+                android:id="@+id/stubDownloadProgress"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:layout="@layout/view_stub_download_progress"
+                android:inflatedId="@+id/layoutDownloadProgress" />
+        </FrameLayout>
 
         <!-- Bottom Action Row -->
         <com.google.android.material.button.MaterialButton
@@ -181,7 +187,7 @@
             android:insetBottom="0dp"
             android:paddingStart="4dp"
             android:paddingEnd="8dp"
-            app:layout_constraintTop_toBottomOf="@id/stubDownloadProgress"
+            app:layout_constraintTop_toBottomOf="@id/historyProgressSlot"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent" />
 

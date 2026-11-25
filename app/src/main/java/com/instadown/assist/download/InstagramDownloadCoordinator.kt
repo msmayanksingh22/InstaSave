@@ -555,7 +555,8 @@ class InstagramDownloadCoordinator(
                 result = result,
                 thumbnailPath = thumbPath,
                 authorUsername = resolveResult.authorUsername,
-                caption = resolveResult.caption
+                caption = resolveResult.caption,
+                sourceItemCount = resolveResult.items.size
             )
 
             // Auto audio extraction for Reels if enabled in preferences

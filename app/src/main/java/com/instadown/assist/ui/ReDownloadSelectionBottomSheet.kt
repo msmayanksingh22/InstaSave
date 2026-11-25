@@ -45,9 +45,10 @@ class ReDownloadSelectionBottomSheet : DialogFragment() {
 
     data class VerifiedItem(
         val record: DownloadItemRecord,
-        val index: Int,
         val health: MediaItemHealth
-    )
+    ) {
+        val index: Int get() = record.itemIndex
+    }
 
     private var downloadId: Long = -1L
     private var downloadRecord: DownloadRecord? = null
@@ -188,9 +189,9 @@ class ReDownloadSelectionBottomSheet : DialogFragment() {
             }
             downloadRecord = record
 
-            val verified = record.items.mapIndexed { idx, item ->
+            val verified = record.items.map { item ->
                 val health = verifyItemHealth(requireContext(), item)
-                VerifiedItem(item, idx, health)
+                VerifiedItem(item, health)
             }
 
             withContext(Dispatchers.Main) {
