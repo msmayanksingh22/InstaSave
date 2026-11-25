@@ -3,11 +3,11 @@
   "versionCode": 32,
   "versionName": "1.6.2",
   "tag": "v1.6.2",
-  "releaseNotes": "Fixed Home Feed & Reels MP4 extraction via passive in-session media observer, blocked cover-image rescue on Reels, and replaced the bulky card with a minimalist 46dp single-row floating capsule.",
+  "releaseNotes": "Automated signed production release.",
   "apkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.6.2/InstaSave-v1.6.2.apk",
   "fallbackApkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
-  "fileSizeBytes": 6348162,
-  "sizeBytes": 6348162,
-  "sha256": "70cc51a0a1ecba4e9e1873958defecca1f2466323e68c82294ffab952e7ae847",
-  "publishedAt": "2026-11-25T12:56:00Z"
+  "fileSizeBytes": 6348166,
+  "sizeBytes": 6348166,
+  "sha256": "05da35cab89a80c1fedc562ebcd18880907b6a80d567ec330212e6ca2f1550b2",
+  "publishedAt": "2026-11-25T13:00:26Z"
 }
