@@ -559,8 +559,13 @@ class EmbedFallbackResolver(
             )
         }
 
-        // If Reel but only partial image found, return PARTIAL_MEDIA
-        if (videoUrl == null && isReelSource && imageUrl != null) {
+        val looksLikeVideo = isReelSource ||
+            html!!.contains("\"is_video\":true") ||
+            html!!.contains("\"is_video\": true") ||
+            html!!.contains("EmbeddedMediaVideo")
+
+        // If Video/Reel but only cover thumbnail found, mark partial rather than saving a cover JPG as fake photo
+        if (videoUrl == null && looksLikeVideo && imageUrl != null) {
             return@withContext ResolveResult(
                 success = false,
                 isPartial = true,
@@ -580,7 +585,7 @@ class EmbedFallbackResolver(
                         durationMs = null,
                         bitRate = null,
                         qualityClassification = "Embed thumbnail fallback",
-                        selectionReason = "Only thumbnail recovered from embed for Reel",
+                        selectionReason = "Only thumbnail recovered from embed for video/Reel",
                         candidates = emptyList()
                     )
                 ),
@@ -588,9 +593,11 @@ class EmbedFallbackResolver(
                 totalResolutionTimeMs = System.currentTimeMillis() - startTime,
                 initialHost = initialHost,
                 finalHost = finalHost,
+                authorUsername = authorUsername,
+                caption = caption,
                 error = ResolveError(
                     code = ResolveErrorCode.PARTIAL_MEDIA,
-                    message = "Embed page only provided a thumbnail image for this Reel, no playable video stream."
+                    message = "Embed page only provided a cover image for this video/Reel, no playable video stream."
                 )
             )
         }

@@ -64,8 +64,10 @@ class ProfileBrowserClient(
         super.onPageStarted(view, url, favicon)
         isLoadingMainFrame = true
         onPageLoadingChanged(true)
-        // DO NOT mutate DOM during onPageStarted: modifying DOM before or during initial render
-        // triggers React 18 SSR hydration error #418, which halts the timeline grid mount.
+        // Hook read-only network JSON observer immediately without mutating any DOM nodes (hydration safe)
+        if (view != null && !InstagramRouteParser.isAuthOrSafetyUrl(url)) {
+            ProfileSessionManager.attachPassiveMediaObserver(view)
+        }
     }
 
     override fun onPageFinished(view: WebView?, url: String?) {

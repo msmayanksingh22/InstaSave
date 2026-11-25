@@ -170,12 +170,257 @@ object ProfileSessionManager {
         webView.webViewClient = client
     }
 
+    private const val PASSIVE_MEDIA_OBSERVER_JS = """
+        (function() {
+            try {
+                if (!window.__instasave_media_cache) window.__instasave_media_cache = {};
+                if (!window.__instasave_cache_keys) window.__instasave_cache_keys = [];
+
+                function pkToShortcode(pkStr) {
+                    try {
+                        var pk = BigInt(String(pkStr).split('_')[0]);
+                        var alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+                        var out = '';
+                        while (pk > 0n) {
+                            var rem = Number(pk % 64n);
+                            pk = pk / 64n;
+                            out = alphabet[rem] + out;
+                        }
+                        return out;
+                    } catch (_) { return ''; }
+                }
+
+                function bestImg(node) {
+                    if (!node || typeof node !== 'object') return '';
+                    if (node.image_versions2 && Array.isArray(node.image_versions2.candidates) && node.image_versions2.candidates.length > 0) {
+                        var cands = node.image_versions2.candidates;
+                        var best = cands[0];
+                        var bestArea = (best.width || 0) * (best.height || 0);
+                        for (var i = 1; i < cands.length; i++) {
+                            var area = (cands[i].width || 0) * (cands[i].height || 0);
+                            if (area > bestArea && cands[i].url) { best = cands[i]; bestArea = area; }
+                        }
+                        if (best && best.url && best.url.indexOf('http') === 0) return best.url;
+                    }
+                    var direct = node.display_url || node.thumbnail_url || node.preview_image_url || '';
+                    return (typeof direct === 'string' && direct.indexOf('http') === 0) ? direct : '';
+                }
+
+                function bestVid(node) {
+                    if (!node || typeof node !== 'object') return '';
+                    if (Array.isArray(node.video_versions) && node.video_versions.length > 0) {
+                        var best = null;
+                        var bestScore = -1;
+                        for (var i = 0; i < node.video_versions.length; i++) {
+                            var vv = node.video_versions[i];
+                            if (!vv || typeof vv.url !== 'string' || vv.url.indexOf('http') !== 0) continue;
+                            var score = ((vv.width || 1) * (vv.height || 1)) + (vv.type === 101 || vv.type === 103 ? 10000000 : 0);
+                            if (score > bestScore) { bestScore = score; best = vv.url; }
+                        }
+                        if (best) return best;
+                    }
+                    var cand = node.video_url || node.playable_url_quality_hd || node.playable_url || '';
+                    if (typeof cand === 'string' && cand.indexOf('http') === 0) return cand;
+                    if (typeof node.video_dash_manifest === 'string') {
+                        var vm = node.video_dash_manifest.match(/<AdaptationSet[^>]*contentType="video"[\s\S]*?<BaseURL[^>]*>([^<]+)<\/BaseURL>/i) ||
+                                 node.video_dash_manifest.match(/<BaseURL[^>]*>([^<]+\.mp4[^<]*)<\/BaseURL>/i);
+                        if (vm && vm[1]) {
+                            return vm[1].replace(/&amp;/g, '&').trim();
+                        }
+                    }
+                    return '';
+                }
+
+                function extractRecord(obj) {
+                    if (!obj || typeof obj !== 'object') return null;
+                    var hasAny = !!(obj.video_versions || obj.video_url || obj.carousel_media || obj.edge_sidecar_to_children || obj.image_versions2 || obj.display_url);
+                    if (!hasAny) return null;
+
+                    var code = (typeof obj.code === 'string' && /^[A-Za-z0-9_-]{5,25}$/.test(obj.code)) ? obj.code : '';
+                    if (!code && obj.pk && (obj.video_versions || obj.carousel_media || obj.image_versions2)) {
+                        code = pkToShortcode(obj.pk);
+                    }
+                    if (!code) return null;
+
+                    var author = '';
+                    if (obj.user && typeof obj.user.username === 'string') author = obj.user.username;
+                    else if (obj.owner && typeof obj.owner.username === 'string') author = obj.owner.username;
+
+                    var items = [];
+                    var carousel = Array.isArray(obj.carousel_media) ? obj.carousel_media : null;
+                    var sidecar = (!carousel && obj.edge_sidecar_to_children && Array.isArray(obj.edge_sidecar_to_children.edges)) ? obj.edge_sidecar_to_children.edges : null;
+
+                    if (carousel && carousel.length > 0) {
+                        for (var ci = 0; ci < carousel.length; ci++) {
+                            var child = carousel[ci];
+                            if (!child) continue;
+                            var cIsVid = child.media_type === 2 || child.is_video || !!(child.video_versions && child.video_versions.length) || !!child.video_url;
+                            var cThumb = bestImg(child);
+                            if (cIsVid) {
+                                var cv = bestVid(child);
+                                if (cv) items.push({ url: cv, thumb: cThumb, isVideo: true, width: child.original_width || null, height: child.original_height || null });
+                            } else if (cThumb) {
+                                items.push({ url: cThumb, thumb: cThumb, isVideo: false, width: child.original_width || null, height: child.original_height || null });
+                            }
+                        }
+                    } else if (sidecar && sidecar.length > 0) {
+                        for (var si = 0; si < sidecar.length; si++) {
+                            var node = sidecar[si] && sidecar[si].node;
+                            if (!node) continue;
+                            var sIsVid = node.is_video || node.media_type === 2 || !!node.video_url || !!(node.video_versions && node.video_versions.length);
+                            var sThumb = bestImg(node);
+                            if (sIsVid) {
+                                var sv = bestVid(node);
+                                if (sv) items.push({ url: sv, thumb: sThumb, isVideo: true, width: null, height: null });
+                            } else if (sThumb) {
+                                items.push({ url: sThumb, thumb: sThumb, isVideo: false, width: null, height: null });
+                            }
+                        }
+                    } else {
+                        var isVid = obj.media_type === 2 || obj.is_video || obj.product_type === 'clips' || !!(obj.video_versions && obj.video_versions.length) || !!obj.video_url;
+                        var thumb = bestImg(obj);
+                        if (isVid) {
+                            var vu = bestVid(obj);
+                            if (vu) items.push({ url: vu, thumb: thumb, isVideo: true, width: obj.original_width || null, height: obj.original_height || null });
+                        } else if (thumb) {
+                            items.push({ url: thumb, thumb: thumb, isVideo: false, width: obj.original_width || null, height: obj.original_height || null });
+                        }
+                    }
+
+                    if (items.length === 0) return null;
+                    return { code: code, author: author, items: items };
+                }
+
+                window.__instasave_extract_media_record = extractRecord;
+
+                window.__instasave_store_record = function(rec) {
+                    if (!rec || !rec.code || !rec.items || rec.items.length === 0) return;
+                    var prev = window.__instasave_media_cache[rec.code];
+                    var prevHasVid = prev && prev.items && prev.items.some(function(it) { return it.isVideo; });
+                    var newHasVid = rec.items.some(function(it) { return it.isVideo; });
+                    if (!prev || (!prevHasVid && newHasVid) || rec.items.length > prev.items.length) {
+                        window.__instasave_media_cache[rec.code] = {
+                            author: (rec.author || (prev && prev.author) || ''),
+                            items: rec.items
+                        };
+                        if (window.__instasave_cache_keys.indexOf(rec.code) === -1) {
+                            window.__instasave_cache_keys.push(rec.code);
+                            if (window.__instasave_cache_keys.length > 160) {
+                                var oldKey = window.__instasave_cache_keys.shift();
+                                delete window.__instasave_media_cache[oldKey];
+                            }
+                        }
+                    } else if (rec.author && prev && !prev.author) {
+                        prev.author = rec.author;
+                    }
+                };
+
+                window.__instasave_ingest_json = function(root) {
+                    if (!root || typeof root !== 'object') return;
+                    var stack = [root];
+                    var steps = 0;
+                    while (stack.length > 0 && steps < 1800) {
+                        steps++;
+                        var curr = stack.pop();
+                        if (!curr || typeof curr !== 'object') continue;
+                        if (Array.isArray(curr)) {
+                            for (var i = curr.length - 1; i >= 0; i--) {
+                                if (curr[i] && typeof curr[i] === 'object') stack.push(curr[i]);
+                            }
+                            continue;
+                        }
+                        var rec = extractRecord(curr);
+                        if (rec) window.__instasave_store_record(rec);
+                        var keys = Object.keys(curr);
+                        for (var k = 0; k < keys.length; k++) {
+                            var val = curr[keys[k]];
+                            if (val && typeof val === 'object') stack.push(val);
+                        }
+                    }
+                };
+
+                window.__instasave_ingest_text = function(txt) {
+                    if (!txt || typeof txt !== 'string') return;
+                    var clean = txt.replace(/^for\s*\(;;\);\s*/, '').trim();
+                    if (!clean) return;
+                    var lines = clean.split('\n');
+                    for (var i = 0; i < lines.length; i++) {
+                        var line = lines[i].trim();
+                        if (!line || (line[0] !== '{' && line[0] !== '[')) continue;
+                        try { window.__instasave_ingest_json(JSON.parse(line)); } catch (_) {}
+                    }
+                };
+
+                window.__instasave_scan_scripts = function() {
+                    try {
+                        var scripts = document.querySelectorAll('script[type="application/json"], script[data-sjs]');
+                        for (var i = 0; i < scripts.length; i++) {
+                            var sc = scripts[i];
+                            if (sc.__instasave_parsed) continue;
+                            var txt = sc.textContent || '';
+                            if (txt.indexOf('video_versions') !== -1 || txt.indexOf('carousel_media') !== -1 || txt.indexOf('image_versions2') !== -1 || txt.indexOf('xdt_api') !== -1) {
+                                sc.__instasave_parsed = true;
+                                window.__instasave_ingest_text(txt);
+                            }
+                        }
+                    } catch (_) {}
+                };
+
+                if (!window.__instasave_net_hooked) {
+                    window.__instasave_net_hooked = true;
+                    var origFetch = window.fetch;
+                    if (origFetch) {
+                        window.fetch = function() {
+                            var args = arguments;
+                            var reqUrl = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url ? args[0].url : '');
+                            return origFetch.apply(this, args).then(function(resp) {
+                                try {
+                                    if (reqUrl && (reqUrl.indexOf('/graphql') !== -1 || reqUrl.indexOf('/api/v1/') !== -1)) {
+                                        resp.clone().text().then(function(bodyText) {
+                                            window.__instasave_ingest_text(bodyText);
+                                        }).catch(function() {});
+                                    }
+                                } catch (_) {}
+                                return resp;
+                            });
+                        };
+                    }
+
+                    var origOpen = XMLHttpRequest.prototype.open;
+                    var origSend = XMLHttpRequest.prototype.send;
+                    XMLHttpRequest.prototype.open = function(method, url) {
+                        this.__instasave_url = url;
+                        return origOpen.apply(this, arguments);
+                    };
+                    XMLHttpRequest.prototype.send = function() {
+                        this.addEventListener('load', function() {
+                            try {
+                                var u = this.__instasave_url || '';
+                                if (u && (u.indexOf('/graphql') !== -1 || u.indexOf('/api/v1/') !== -1)) {
+                                    window.__instasave_ingest_text(this.responseText);
+                                }
+                            } catch (_) {}
+                        });
+                        return origSend.apply(this, arguments);
+                    };
+                }
+
+                window.__instasave_scan_scripts();
+            } catch (_) {}
+        })();
+    """
+
+    fun attachPassiveMediaObserver(webView: WebView) {
+        webView.evaluateJavascript(PASSIVE_MEDIA_OBSERVER_JS, null)
+    }
+
     /**
      * Injects CSS and a MutationObserver JavaScript to strip web chrome,
      * annihilate "See full profile in the app" / "Get the full experience" popup modals and dim scrims,
      * and render a clean native-style grid below the creator bio when logged out.
      */
     fun injectNativeStyling(webView: WebView) {
+        attachPassiveMediaObserver(webView)
         val isLoggedIn = isInstagramLoggedIn()
         val cssToInject = if (isLoggedIn) LOGGED_IN_STYLING_CSS else LOGGED_OUT_STYLING_CSS
         val js = """
@@ -401,8 +646,16 @@ object ProfileSessionManager {
                                 if (!bestInfo) {
                                     bestInfo = findMediaMetaInFiber(bestArticle);
                                 }
-                                if (bestInfo && !bestInfo.author) {
-                                    bestInfo.author = extractAuthorFromContainer(bestArticle);
+                                if (bestInfo) {
+                                    if (!bestInfo.author) {
+                                        bestInfo.author = extractAuthorFromContainer(bestArticle);
+                                    }
+                                    // Mark feed videos accurately even if their permalink uses /p/{code}/
+                                    const cachedRec = window.__instasave_media_cache && window.__instasave_media_cache[bestInfo.shortcode];
+                                    const cacheIsVid = !!(cachedRec && cachedRec.items && cachedRec.items.length === 1 && cachedRec.items[0].isVideo);
+                                    if (cacheIsVid || (bestArticle.querySelector('video') && !bestArticle.querySelector('ul, [aria-label*="Carousel"], button[aria-label*="Next"]'))) {
+                                        bestInfo.isReel = true;
+                                    }
                                 }
                             }
 
@@ -822,16 +1075,35 @@ object ProfileSessionManager {
     }
 
     /**
-     * Read-only extraction of currently rendered post/carousel media URLs inside the visible WebView DOM.
-     * Used ONLY as a fallback when a user explicitly taps "Save" on a private/follow-only feed item
-     * that isolated anonymous resolvers cannot access. Zero network requests or cookie reads.
+     * Read-only extraction of cached / fiber-held / rendered media URLs inside the visible WebView.
+     * Prioritizes full MP4 streams (`video_versions`) and `carousel_media` captured passively from
+     * Instagram's own responses and React fiber in memory. NEVER falls back to random background `<img>`
+     * thumbnails when [isVideoExpected] is true (eliminating fake thumbnail `.jpg` downloads on Reels/Videos).
      */
-    fun buildVisibleDomMediaExtractorScript(targetShortcode: String): String {
+    fun buildVisibleDomMediaExtractorScript(targetShortcode: String, isVideoExpected: Boolean = false): String {
         val safeCode = targetShortcode.replace("\"", "").replace("'", "")
         return """
             (function() {
                 try {
                     const code = "$safeCode";
+                    const expectVideo = $isVideoExpected;
+                    if (window.__instasave_scan_scripts) window.__instasave_scan_scripts();
+
+                    // 1. Direct passive API / SSR cache lookup (contains full HD video_versions & carousel_media)
+                    if (code && window.__instasave_media_cache && window.__instasave_media_cache[code]) {
+                        const hit = window.__instasave_media_cache[code];
+                        if (hit.items && hit.items.length > 0) {
+                            const hasVid = hit.items.some(function(it) { return !!it.isVideo; });
+                            if (!expectVideo || hasVid) {
+                                return JSON.stringify({
+                                    author: hit.author || '',
+                                    urls: hit.items
+                                });
+                            }
+                        }
+                    }
+
+                    // 2. React Fiber lookup scoped specifically to target post/video node (zero extra network requests)
                     const vpH = window.innerHeight || 800;
                     let container = null;
                     if (code) {
@@ -846,13 +1118,68 @@ object ProfileSessionManager {
                         let bestScore = -1;
                         articles.forEach(function(art) {
                             const r = art.getBoundingClientRect();
-                            const vis = Math.min(r.bottom, vpH) - Math.max(r.top, 0);
+                            const vis = Math.min(r.bottom, vpH - 56) - Math.max(r.top, 0);
                             if (vis > bestScore) { bestScore = vis; container = art; }
                         });
                     }
-                    if (!container) container = document.querySelector('main') || document.body;
-                    if (!container) return JSON.stringify({urls: []});
+                    let activeVideoEl = null;
+                    const vids = Array.from(document.querySelectorAll('video'));
+                    let bestVidVis = 0;
+                    vids.forEach(function(v) {
+                        const r = v.getBoundingClientRect();
+                        const vis = Math.min(r.bottom, vpH) - Math.max(r.top, 0);
+                        if (vis > bestVidVis) { bestVidVis = vis; activeVideoEl = v; }
+                    });
 
+                    const fiberSeeds = [];
+                    if (container) {
+                        fiberSeeds.push(container);
+                        container.querySelectorAll('video, img, a').forEach(function(n) { if (fiberSeeds.length < 18) fiberSeeds.push(n); });
+                    }
+                    if (activeVideoEl) {
+                        fiberSeeds.push(activeVideoEl);
+                        if (activeVideoEl.parentElement) fiberSeeds.push(activeVideoEl.parentElement);
+                    }
+
+                    if (typeof window.__instasave_extract_media_record === 'function') {
+                        const seenFiberObj = new Set();
+                        let fallbackFiberRec = null;
+                        for (let si = 0; si < fiberSeeds.length; si++) {
+                            const el = fiberSeeds[si];
+                            const fk = Object.keys(el).find(function(k) { return k.indexOf('__reactFiber$') === 0 || k.indexOf('__reactProps$') === 0; });
+                            if (!fk) continue;
+                            let curr = el[fk];
+                            for (let hop = 0; hop < 18 && curr; hop++) {
+                                const props = curr.memoizedProps || curr;
+                                if (props && typeof props === 'object' && !seenFiberObj.has(props)) {
+                                    seenFiberObj.add(props);
+                                    const candidates = [props, props.media, props.post, props.item, props.clips, props.data];
+                                    for (let ci = 0; ci < candidates.length; ci++) {
+                                        const rec = window.__instasave_extract_media_record(candidates[ci]);
+                                        if (rec) {
+                                            window.__instasave_store_record(rec);
+                                            if (code && rec.code === code) {
+                                                const recHasVid = rec.items.some(function(it) { return !!it.isVideo; });
+                                                if (!expectVideo || recHasVid) {
+                                                    return JSON.stringify({ author: rec.author || '', urls: rec.items });
+                                                }
+                                            }
+                                            if (!fallbackFiberRec && (!code || expectVideo)) {
+                                                const rVid = rec.items.some(function(it) { return !!it.isVideo; });
+                                                if (expectVideo ? rVid : rec.items.length > 0) fallbackFiberRec = rec;
+                                            }
+                                        }
+                                    }
+                                }
+                                curr = curr.return || null;
+                            }
+                        }
+                        if (!code && fallbackFiberRec) {
+                            return JSON.stringify({ author: fallbackFiberRec.author || '', urls: fallbackFiberRec.items });
+                        }
+                    }
+
+                    // 3. Direct non-blob <video> src check (never steal random background <img> for Videos/Reels!)
                     const urls = [];
                     const seen = new Set();
                     function pushUrl(u, isVideo) {
@@ -860,18 +1187,30 @@ object ProfileSessionManager {
                         if (u.indexOf('http') !== 0 || u.indexOf('blob:') === 0) return;
                         if (!seen.has(u)) {
                             seen.add(u);
-                            urls.push({url: u, isVideo: !!isVideo});
+                            urls.push({url: u, thumb: isVideo ? '' : u, isVideo: !!isVideo});
                         }
                     }
 
-                    container.querySelectorAll('video').forEach(function(v) {
-                        const src = v.currentSrc || v.src || '';
-                        if (src && src.indexOf('blob:') !== 0) pushUrl(src, true);
-                        v.querySelectorAll('source').forEach(function(s) {
-                            if (s.src && s.src.indexOf('blob:') !== 0) pushUrl(s.src, true);
+                    const videoScope = container || (activeVideoEl && activeVideoEl.parentElement) || null;
+                    if (videoScope) {
+                        videoScope.querySelectorAll('video').forEach(function(v) {
+                            const src = v.currentSrc || v.src || '';
+                            if (src && src.indexOf('blob:') !== 0) pushUrl(src, true);
+                            v.querySelectorAll('source').forEach(function(s) {
+                                if (s.src && s.src.indexOf('blob:') !== 0) pushUrl(s.src, true);
+                            });
                         });
-                    });
+                    }
+                    if (urls.length > 0) {
+                        return JSON.stringify({urls: urls});
+                    }
 
+                    const hasVideoTag = !!(container && container.querySelector('video')) || expectVideo;
+                    if (hasVideoTag || !container) {
+                        return JSON.stringify({urls: []});
+                    }
+
+                    // 4. Photo-only strictly scoped to matched <article> (NEVER document.querySelector('main'))
                     container.querySelectorAll('img').forEach(function(img) {
                         const w = img.naturalWidth || img.width || 0;
                         const h = img.naturalHeight || img.height || 0;

@@ -53,7 +53,8 @@ class WebPageSjsResolver(
                 )
             )
 
-        val targetUrl = "https://www.instagram.com/p/${normalized.shortcode}/"
+        val targetSegment = if (normalized.sourcePathType.lowercase() in setOf("reel", "reels", "r")) "reel" else "p"
+        val targetUrl = "https://www.instagram.com/$targetSegment/${normalized.shortcode}/"
         val expectedMediaId = UrlNormalizer.shortcodeToMediaId(normalized.shortcode)
 
         var initialHost: String? = null
@@ -66,7 +67,7 @@ class WebPageSjsResolver(
 
             val request = Request.Builder()
                 .url(targetUrl)
-                .addHeader("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1")
+                .addHeader("User-Agent", NetworkPrewarmer.DESKTOP_UA)
                 .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
                 .addHeader("Accept-Language", "en-US,en;q=0.9")
                 .addHeader("Sec-Fetch-Dest", "document")

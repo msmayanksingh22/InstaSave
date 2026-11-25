@@ -1,13 +1,13 @@
 {
   "packageName": "com.instadown.assist",
-  "versionCode": 31,
-  "versionName": "1.6.1",
-  "tag": "v1.6.1",
-  "releaseNotes": "Automated signed production release.",
-  "apkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.6.1/InstaSave-v1.6.1.apk",
+  "versionCode": 32,
+  "versionName": "1.6.2",
+  "tag": "v1.6.2",
+  "releaseNotes": "Fixed Home Feed & Reels MP4 extraction via passive in-session media observer, blocked cover-image rescue on Reels, and replaced the bulky card with a minimalist 46dp single-row floating capsule.",
+  "apkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.6.2/InstaSave-v1.6.2.apk",
   "fallbackApkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
-  "fileSizeBytes": 6342405,
-  "sizeBytes": 6342405,
-  "sha256": "26775a30cfc4337cb26381e22bfb6c7607f1e37a873380a87f828d24a0b1993c",
-  "publishedAt": "2026-11-25T12:24:46Z"
+  "fileSizeBytes": 6348162,
+  "sizeBytes": 6348162,
+  "sha256": "70cc51a0a1ecba4e9e1873958defecca1f2466323e68c82294ffab952e7ae847",
+  "publishedAt": "2026-11-25T12:56:00Z"
 }

@@ -50,4 +50,32 @@ class CompositeReliabilityTest {
             assertEquals(0, downstreamCalls)
         }
     }
+
+    @Test fun neverRescuesCoverThumbnailForReelOrVideo() = runBlocking {
+        TierCircuitBreaker.resetAll()
+        val reelUrl = "https://www.instagram.com/reel/DgHZeMnpdUa/"
+        val partialThumbOnly = ResolveResult(
+            success = false,
+            isPartial = true,
+            originalInputUrl = reelUrl,
+            canonicalUrl = reelUrl,
+            shortcode = "DgHZeMnpdUa",
+            sourcePathType = "reel",
+            postType = PostType.REEL,
+            items = listOf(
+                ResolvedMedia(0, MediaType.IMAGE, "https://example.com/thumb.jpg", null,
+                    null, null, null, null, "thumb", "partial", emptyList())
+            ),
+            methodUsed = "EmbedFallbackResolver",
+            totalResolutionTimeMs = 10L
+        )
+        val composite = CompositeInstagramResolver(
+            fallbackResolver = resolver { partialThumbOnly },
+            directResolver = resolver { result() },
+            webBridgeResolver = resolver { result() },
+            primaryResolver = resolver { result() }
+        )
+        val finalResult = composite.resolve(reelUrl, false)
+        assertFalse("Must never fake success with a cover JPG when a Reel video stream failed", finalResult.success)
+    }
 }

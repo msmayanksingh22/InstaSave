@@ -286,8 +286,15 @@ class CompositeInstagramResolver(
             return bindInput(finalRes)
         }
 
-        // Rescue Fallback: If Fast Embed had resolved items (even partial or single cover), rescue it!
-        if (embedResult != null && embedResult.items.isNotEmpty()) {
+        // Rescue Fallback: Only rescue complete embed results (never rescue cover .jpg thumbnails for Reels/videos!)
+        val isReelTarget = canonicalNormalized?.sourcePathType in setOf("reel", "reels", "r") ||
+            embedResult?.postType == PostType.REEL
+        val hasPlayableVideo = embedResult?.items?.any { it.mediaType == com.instadown.assist.resolver.model.MediaType.VIDEO } == true
+        val canRescueEmbed = embedResult != null &&
+            embedResult.items.isNotEmpty() &&
+            !embedResult.isPartial &&
+            (!isReelTarget || hasPlayableVideo)
+        if (canRescueEmbed && embedResult != null) {
             trace.add(
                 com.instadown.assist.resolver.model.StepTrace(
                     stepIndex = stepIndex++,
