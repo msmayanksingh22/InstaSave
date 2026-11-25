@@ -62,6 +62,7 @@ class MainActivity : AppCompatActivity() {
     private val coordinator by lazy { com.instadown.assist.download.InstagramDownloadCoordinator(this) }
     private val clipboardCoordinator by lazy { ClipboardDownloadCoordinator(this) }
     private var hasCheckedUpdateThisSession = false
+    private var lastClipboardNoticeUrl: String? = null
 
     private val mediaStoreObserver by lazy {
         com.instadown.assist.data.MediaStoreSyncObserver(this, lifecycleScope)
@@ -78,6 +79,8 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_ACTIVE_TAB = "active_tab_id"
         const val REQUEST_SHARED_URL = "request_shared_url"
         const val KEY_SHARED_URL = "shared_url"
+        const val REQUEST_CLIPBOARD_URL = "request_clipboard_url"
+        const val KEY_CLIPBOARD_URL = "clipboard_url"
         const val EXTRA_TARGET_TAB = "extra_target_tab"
     }
 
@@ -306,33 +309,41 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkClipboardForInstagramLink() {
-        if (prefs.downloadMode != com.instadown.assist.overlay.DownloadMode.CLIPBOARD) {
-            return
-        }
-
         val clip = ClipboardReader.readCurrentClip(this)
         AppLogger.d(TAG, "checkClipboardForInstagramLink: valid=${clip.isValidInstagramUrl}, url='${clip.cleanUrl}'")
         if (!clip.isValidInstagramUrl) return
 
-        val decision = clipboardCoordinator.evaluateProcessDecision(
-            cleanUrl = clip.cleanUrl,
-            clipTimestamp = clip.timestamp,
-            prefs = prefs
-        )
+        // Only auto-start unattended downloads if user explicitly opted into instant clipboard auto-start
+        if (prefs.downloadMode == com.instadown.assist.overlay.DownloadMode.CLIPBOARD &&
+            prefs.isClipboardAutoStartEnabled
+        ) {
+            val decision = clipboardCoordinator.evaluateProcessDecision(
+                cleanUrl = clip.cleanUrl,
+                clipTimestamp = clip.timestamp,
+                prefs = prefs
+            )
+            AppLogger.i(TAG, "Clipboard instant auto-start decision: $decision for '${clip.cleanUrl}'")
+            when (decision) {
+                ClipboardDownloadCoordinator.ProcessDecision.ALLOW -> {
+                    clipboardCoordinator.startProcessing(clip.cleanUrl)
+                    Toast.makeText(this, "Auto-downloading copied link...", Toast.LENGTH_SHORT).show()
+                    executeManualDownload(clip.cleanUrl)
+                }
+                ClipboardDownloadCoordinator.ProcessDecision.DEFER_QUEUED -> {
+                    Toast.makeText(this, "Queued copied link for download", Toast.LENGTH_SHORT).show()
+                }
+                else -> {}
+            }
+            return
+        }
 
-        AppLogger.i(TAG, "Clipboard evaluation decision: $decision for '${clip.cleanUrl}'")
-        when (decision) {
-            ClipboardDownloadCoordinator.ProcessDecision.ALLOW -> {
-                clipboardCoordinator.startProcessing(clip.cleanUrl)
-                Toast.makeText(this, "Auto-downloading copied link...", Toast.LENGTH_SHORT).show()
-                executeManualDownload(clip.cleanUrl)
-            }
-            ClipboardDownloadCoordinator.ProcessDecision.DEFER_QUEUED -> {
-                Toast.makeText(this, "Queued copied link for download", Toast.LENGTH_SHORT).show()
-            }
-            else -> {
-                // Already processing or completed
-            }
+        // Default non-intrusive behavior: surface copied URL on Home so user can choose Explore Profile, Save, or Copy
+        if (clip.cleanUrl != lastClipboardNoticeUrl) {
+            lastClipboardNoticeUrl = clip.cleanUrl
+            supportFragmentManager.setFragmentResult(
+                REQUEST_CLIPBOARD_URL,
+                bundleOf(KEY_CLIPBOARD_URL to clip.cleanUrl)
+            )
         }
     }
 

@@ -68,7 +68,9 @@ class FloatingTriggerService : Service() {
 
     private val clipListener = ClipboardManager.OnPrimaryClipChangedListener {
         if (!isRunning) return@OnPrimaryClipChangedListener
-        if (preferences.downloadMode != com.instadown.assist.overlay.DownloadMode.CLIPBOARD) return@OnPrimaryClipChangedListener
+        if (preferences.downloadMode != com.instadown.assist.overlay.DownloadMode.CLIPBOARD ||
+            !preferences.isClipboardAutoStartEnabled
+        ) return@OnPrimaryClipChangedListener
 
         // Temporarily acquire focus to legally read clipboard on Android 10-14+
         acquireFocusForClipboard()

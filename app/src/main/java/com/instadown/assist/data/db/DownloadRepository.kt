@@ -262,6 +262,31 @@ class DownloadRepository private constructor(private val context: Context) {
         }
     }
 
+    suspend fun findAuthorByShortcode(shortcode: String): String? = withContext(Dispatchers.IO) {
+        if (shortcode.isBlank()) return@withContext null
+        return@withContext try {
+            val db = dbHelper.readableDatabase
+            db.query(
+                InstaSaveDatabaseHelper.TABLE_DOWNLOADS,
+                arrayOf(InstaSaveDatabaseHelper.COL_DL_AUTHOR),
+                "${InstaSaveDatabaseHelper.COL_DL_SHORTCODE} = ?",
+                arrayOf(shortcode),
+                null,
+                null,
+                "${InstaSaveDatabaseHelper.COL_DL_ID} DESC",
+                "1"
+            ).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    cursor.getString(0)?.removePrefix("@")?.trim()?.takeIf { it.isNotBlank() }
+                } else {
+                    null
+                }
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun getItemsForDownloads(
         db: android.database.sqlite.SQLiteDatabase,
         downloadIds: List<Long>

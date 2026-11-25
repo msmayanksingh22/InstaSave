@@ -620,7 +620,7 @@ class HistoryFragment : Fragment() {
             Toast.makeText(requireContext(), "Instagram URL not available", Toast.LENGTH_SHORT).show()
             return
         }
-        ProfileExplorerActivity.start(requireContext(), url)
+        ProfileExplorerActivity.start(requireContext(), url, preferCreatorProfile = false)
     }
 
     private fun showItemOptionsDialog(record: DownloadRecord) {

@@ -43,14 +43,18 @@
                     android:contentDescription="Back" />
             </FrameLayout>
 
-            <!-- Title & Subtitle Info -->
+            <!-- Title & Subtitle Info (Tappable when creator handle detected) -->
             <LinearLayout
+                android:id="@+id/layoutHeaderTitle"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="12dp"
                 android:layout_marginEnd="8dp"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true">
 
                 <TextView
                     android:id="@+id/tvProfileUsername"
@@ -96,7 +100,7 @@
                     android:contentDescription="Refresh" />
             </FrameLayout>
 
-            <!-- Clear Session / Privacy Button -->
+            <!-- Account & Local Session Safety Sheet Button -->
             <FrameLayout
                 android:id="@+id/btnClearSession"
                 android:layout_width="38dp"
@@ -107,12 +111,13 @@
                 android:focusable="true">
 
                 <ImageView
+                    android:id="@+id/ivAccountSafetyIcon"
                     android:layout_width="20dp"
                     android:layout_height="20dp"
                     android:layout_gravity="center"
                     android:src="@drawable/ic_shield_check"
                     app:tint="@color/status_green"
-                    android:contentDescription="Clear Session &amp; Cookies" />
+                    android:contentDescription="Instagram Account &amp; Safety" />
             </FrameLayout>
         </LinearLayout>
 
@@ -332,6 +337,30 @@
                     app:strokeColor="@color/primary"
                     app:strokeWidth="1.2dp"
                     app:cornerRadius="12dp" />
+
+                <!-- 1-Tap View Creator Profile -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnPillViewProfile"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="6dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:text="Profile"
+                    app:icon="@drawable/ic_person"
+                    app:iconGravity="textStart"
+                    app:iconPadding="4dp"
+                    app:iconSize="15dp"
+                    app:iconTint="@color/text_primary"
+                    android:textAllCaps="false"
+                    android:textSize="12.5sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_primary"
+                    app:strokeColor="@color/card_stroke_glow"
+                    app:strokeWidth="1dp"
+                    app:cornerRadius="12dp"
+                    android:visibility="gone" />
             </LinearLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>

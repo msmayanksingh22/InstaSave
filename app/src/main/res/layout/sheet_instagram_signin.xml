@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_bottom_sheet"
+    android:paddingHorizontal="20dp"
+    android:paddingBottom="26dp">
+
+    <!-- Drag Handle -->
+    <View
+        android:layout_width="38dp"
+        android:layout_height="4.5dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/card_background"
+        android:backgroundTint="#3D4664" />
+
+    <!-- Header Row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="14dp">
+
+        <FrameLayout
+            android:layout_width="46dp"
+            android:layout_height="46dp"
+            android:background="@drawable/card_background"
+            android:backgroundTint="@color/surface_elevated">
+
+            <ImageView
+                android:id="@+id/ivSheetShieldIcon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_shield_check"
+                app:tint="@color/primary"
+                android:importantForAccessibility="no" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="14dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvSignInSheetTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Instagram Account"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvSignInSheetStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="Optional • 100% Local Web Sandbox"
+                android:textColor="@color/primary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Safety & Benefit Details Card -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="18dp"
+        app:cardCornerRadius="16dp"
+        app:cardBackgroundColor="@color/surface_inset"
+        app:strokeColor="@color/card_stroke"
+        app:strokeWidth="1dp"
+        app:cardElevation="0dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="15dp">
+
+            <TextView
+                android:id="@+id/tvSafetyHeadline"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Why it's safe &amp; helpful"
+                android:textColor="@color/text_primary"
+                android:textSize="13.5sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/tvSafetyBullet1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="• Full Instagram Flow: Scroll full creator profiles, reels, and carousels without Instagram's 12-post anonymous limit."
+                android:textColor="@color/text_secondary"
+                android:textSize="12.5sp"
+                android:lineSpacingExtra="2dp"
+                android:layout_marginBottom="7dp" />
+
+            <TextView
+                android:id="@+id/tvSafetyBullet2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="• Authentic Browser Identity: Uses Instagram's official login page with your device's real mobile fingerprint—zero spoofing or bot API bursts."
+                android:textColor="@color/text_secondary"
+                android:textSize="12.5sp"
+                android:lineSpacingExtra="2dp"
+                android:layout_marginBottom="7dp" />
+
+            <TextView
+                android:id="@+id/tvSafetyBullet3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="• Strict Local Privacy: Passwords never touch InstaSave, and session cookies never leave Android's WebView sandbox."
+                android:textColor="@color/text_secondary"
+                android:textSize="12.5sp"
+                android:lineSpacingExtra="2dp" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Primary CTA Button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnSheetPrimaryAction"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:text="Sign In Safely"
+        android:textAllCaps="false"
+        android:textSize="14.5sp"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:background="@drawable/btn_hero_gradient"
+        app:backgroundTint="@null"
+        app:cornerRadius="14dp" />
+
+    <!-- Secondary Action Button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnSheetSecondaryAction"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:layout_marginTop="10dp"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:text="Continue Anonymously (Public Preview)"
+        android:textAllCaps="false"
+        android:textSize="13sp"
+        android:textColor="@color/text_secondary"
+        app:strokeColor="@color/card_stroke"
+        app:strokeWidth="1dp"
+        app:cornerRadius="14dp" />
+
+</LinearLayout>

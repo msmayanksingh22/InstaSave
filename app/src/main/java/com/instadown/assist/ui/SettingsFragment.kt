@@ -82,6 +82,7 @@ class SettingsFragment : Fragment() {
             heading.setOnClickListener { expand(panel.visibility != View.VISIBLE) }
         }
         setupWatchdogCard()
+        setupInstagramAccountCard()
         setupDownloadPreferences()
         setupFloatingControls()
         setupMediaAndStorage()
@@ -101,8 +102,59 @@ class SettingsFragment : Fragment() {
         super.onResume()
         isSyncingUi = true
         binding.switchEnableButton.isChecked = FloatingTriggerService.isRunning
+        binding.switchClipboardAutoStart.isChecked = prefs.isClipboardAutoStartEnabled
         isSyncingUi = false
+        refreshInstagramAccountCard()
         refreshStorageAndWatchdog()
+    }
+
+    private fun setupInstagramAccountCard() {
+        binding.btnIgBrowseFeed.setOnClickListener {
+            ProfileExplorerActivity.start(requireContext(), "https://www.instagram.com/", preferCreatorProfile = false)
+        }
+        binding.btnIgSignInOut.setOnClickListener {
+            if (com.instadown.assist.browser.ProfileSessionManager.isInstagramLoggedIn()) {
+                InstagramSignInSheet.newInstance(
+                    onSessionChanged = {
+                        refreshInstagramAccountCard()
+                    }
+                ).show(childFragmentManager, InstagramSignInSheet.TAG)
+            } else {
+                InstagramSignInSheet.newInstance(
+                    onSessionChanged = {
+                        refreshInstagramAccountCard()
+                    }
+                ).show(childFragmentManager, InstagramSignInSheet.TAG)
+            }
+        }
+        refreshInstagramAccountCard()
+    }
+
+    private fun refreshInstagramAccountCard() {
+        val ctx = context ?: return
+        val loggedIn = com.instadown.assist.browser.ProfileSessionManager.isInstagramLoggedIn()
+        val colorRes = if (loggedIn) R.color.status_green else R.color.text_muted
+        val colorInt = ContextCompat.getColor(ctx, colorRes)
+
+        binding.dotIgSessionStatus.backgroundTintList = ContextCompat.getColorStateList(ctx, colorRes)
+        binding.tvIgSessionStatusBadge.text = if (loggedIn) "Signed In" else "Anonymous"
+        binding.tvIgSessionStatusBadge.setTextColor(colorInt)
+
+        if (loggedIn) {
+            binding.tvIgSessionDetails.text =
+                "Signed in locally inside WebView sandbox using your phone's authentic profile. Downloaders remain isolated and anonymous."
+            binding.btnIgBrowseFeed.visibility = View.VISIBLE
+            binding.btnIgSignInOut.text = "Account & Sign Out"
+            binding.btnIgSignInOut.setTextColor(ContextCompat.getColor(ctx, R.color.status_green))
+            binding.btnIgSignInOut.strokeColor = ContextCompat.getColorStateList(ctx, R.color.status_green)
+        } else {
+            binding.tvIgSessionDetails.text =
+                "Optional: Sign in safely on Instagram's official page to unlock unlimited profile scrolling. Cookies never leave WebView."
+            binding.btnIgBrowseFeed.visibility = View.GONE
+            binding.btnIgSignInOut.text = "Sign In Safely"
+            binding.btnIgSignInOut.setTextColor(ContextCompat.getColor(ctx, R.color.primary))
+            binding.btnIgSignInOut.strokeColor = ContextCompat.getColorStateList(ctx, R.color.primary)
+        }
     }
 
     private fun setupWatchdogCard() {
@@ -174,13 +226,26 @@ class SettingsFragment : Fragment() {
             if (binding.toggleDownloadMode.checkedButtonId != checkId) {
                 binding.toggleDownloadMode.check(checkId)
             }
+            binding.switchClipboardAutoStart.visibility = if (mode == DownloadMode.CLIPBOARD) View.VISIBLE else View.GONE
             binding.tvModeDescription.text = if (mode == DownloadMode.AUTOMATIC) {
                 "Automatic: Tap the floating button in Instagram to save"
+            } else if (prefs.isClipboardAutoStartEnabled) {
+                "Clipboard: Instant auto-download starts automatically when links are copied"
             } else {
-                "Clipboard: Auto-downloads copied links when you open InstaSave"
+                "Clipboard: Readies copied links on Home so you can Explore Creator Profile or Save"
             }
         }
         updateModeSelection(prefs.downloadMode)
+
+        binding.switchClipboardAutoStart.isChecked = prefs.isClipboardAutoStartEnabled
+        binding.switchClipboardAutoStart.setOnCheckedChangeListener { _, isChecked ->
+            if (isSyncingUi) return@setOnCheckedChangeListener
+            prefs.isClipboardAutoStartEnabled = isChecked
+            updateModeSelection(prefs.downloadMode)
+            if (FloatingTriggerService.isRunning) {
+                FloatingTriggerService.updatePreferences(requireContext())
+            }
+        }
 
         binding.toggleDownloadMode.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked) return@addOnButtonCheckedListener

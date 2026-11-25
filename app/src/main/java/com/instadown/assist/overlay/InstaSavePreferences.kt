@@ -61,6 +61,8 @@ class InstaSavePreferences(context: Context) {
         private const val KEY_SERVICE_RUNNING_DESIRED = "service_running_desired"
         private const val KEY_FLOATING_HUD_ENABLED = "floating_hud_enabled"
         private const val KEY_AUDIO_EXTRACTION_ENABLED = "audio_extraction_enabled"
+        private const val KEY_CLIPBOARD_AUTO_START = "clipboard_auto_start_enabled"
+        private const val KEY_SIGN_IN_PROMPT_DISMISSED = "sign_in_prompt_dismissed"
 
         const val DEFAULT_SAVE_LOCATION = "Pictures/InstaSave/"
 
@@ -142,4 +144,13 @@ class InstaSavePreferences(context: Context) {
     var isAudioExtractionEnabled: Boolean
         get() = prefs.getBoolean(KEY_AUDIO_EXTRACTION_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_AUDIO_EXTRACTION_ENABLED, value).apply()
+
+    // Opt-in only: prevents unwanted auto-download / auto-selection when user copies a link just to view the creator profile
+    var isClipboardAutoStartEnabled: Boolean
+        get() = prefs.getBoolean(KEY_CLIPBOARD_AUTO_START, false)
+        set(value) = prefs.edit().putBoolean(KEY_CLIPBOARD_AUTO_START, value).apply()
+
+    var hasDismissedSignInPrompt: Boolean
+        get() = prefs.getBoolean(KEY_SIGN_IN_PROMPT_DISMISSED, false)
+        set(value) = prefs.edit().putBoolean(KEY_SIGN_IN_PROMPT_DISMISSED, value).apply()
 }

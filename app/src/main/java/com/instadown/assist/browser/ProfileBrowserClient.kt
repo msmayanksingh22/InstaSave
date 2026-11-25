@@ -15,7 +15,8 @@ import com.instadown.assist.util.AppLogger
 class ProfileBrowserClient(
     private val onRouteChanged: (DetectedRoute) -> Unit,
     private val onPageLoadingChanged: (Boolean) -> Unit,
-    private val onErrorReceived: (String) -> Unit
+    private val onErrorReceived: (String) -> Unit,
+    private val onSessionStateChanged: (Boolean) -> Unit = {}
 ) : WebViewClient() {
 
     companion object {
@@ -24,6 +25,9 @@ class ProfileBrowserClient(
 
     @Volatile
     private var isLoadingMainFrame: Boolean = false
+
+    @Volatile
+    private var lastKnownLoggedIn: Boolean = ProfileSessionManager.isInstagramLoggedIn()
 
     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
         val url = request?.url?.toString() ?: return true
@@ -48,6 +52,14 @@ class ProfileBrowserClient(
         return false
     }
 
+    private fun checkAndNotifySessionState() {
+        val loggedIn = ProfileSessionManager.isInstagramLoggedIn()
+        if (loggedIn != lastKnownLoggedIn) {
+            lastKnownLoggedIn = loggedIn
+            onSessionStateChanged(loggedIn)
+        }
+    }
+
     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
         super.onPageStarted(view, url, favicon)
         isLoadingMainFrame = true
@@ -60,6 +72,7 @@ class ProfileBrowserClient(
         super.onPageFinished(view, url)
         isLoadingMainFrame = false
         onPageLoadingChanged(false)
+        checkAndNotifySessionState()
         if (view != null) {
             // Re-run cleanly after React hydration completes (350ms + 1000ms safety pass)
             view.postDelayed({
@@ -83,6 +96,7 @@ class ProfileBrowserClient(
      */
     override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
         super.doUpdateVisitedHistory(view, url, isReload)
+        checkAndNotifySessionState()
         if (view != null && !isLoadingMainFrame) {
             view.postDelayed({
                 if (view.isAttachedToWindow && !isLoadingMainFrame) {

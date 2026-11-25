@@ -26,7 +26,17 @@ object InstagramRouteParser {
     private val ALLOWED_HOSTS = setOf(
         "instagram.com",
         "www.instagram.com",
-        "m.instagram.com"
+        "m.instagram.com",
+        "i.instagram.com",
+        "accountscenter.instagram.com"
+    )
+
+    private val AUTH_PATH_PREFIXES = listOf(
+        "/accounts/",
+        "/challenge/",
+        "/two_factor",
+        "/consent/",
+        "/oauth/"
     )
 
     // Matches /p/{code}, /reel/{code}, /reels/{code}, /share/r/{code}, /share/p/{code}
@@ -45,6 +55,21 @@ object InstagramRouteParser {
     private val PROFILE_PATH_REGEX = Regex(
         pattern = "^/([A-Za-z0-9._]+)/?$"
     )
+
+    fun isAuthOrSafetyUrl(url: String?): Boolean {
+        if (url.isNullOrBlank()) return false
+        val path = try {
+            URI(url.trim()).path?.lowercase()
+        } catch (_: Exception) {
+            null
+        } ?: return false
+        return AUTH_PATH_PREFIXES.any { path.contains(it) }
+    }
+
+    fun isMediaPostInput(input: String): Boolean {
+        val resolved = resolveProfileUrl(input)
+        return parse(resolved) is DetectedRoute.MediaPost
+    }
 
     fun isAllowedHost(url: String?): Boolean {
         if (url.isNullOrBlank()) return false

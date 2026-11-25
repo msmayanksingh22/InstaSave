@@ -69,4 +69,38 @@ class InstagramRouteParserTest {
         assertFalse(InstagramRouteParser.isValidProfileInput("https://anonyig.com/en2/"))
         assertFalse(InstagramRouteParser.isValidProfileInput("https://google.com/search"))
     }
+
+    @Test
+    fun authSafetyAndSessionUserAgentConsistency() {
+        assertTrue(InstagramRouteParser.isAuthOrSafetyUrl("https://www.instagram.com/accounts/login/"))
+        assertTrue(InstagramRouteParser.isAuthOrSafetyUrl("https://www.instagram.com/two_factor/login/"))
+        assertTrue(InstagramRouteParser.isAuthOrSafetyUrl("https://www.instagram.com/challenge/12345/"))
+        assertFalse(InstagramRouteParser.isAuthOrSafetyUrl("https://www.instagram.com/anjaliandsnehal/"))
+
+        assertTrue(InstagramRouteParser.isAllowedHost("https://accountscenter.instagram.com/"))
+        assertTrue(InstagramRouteParser.isAllowedHost("https://i.instagram.com/"))
+        assertFalse(InstagramRouteParser.isAllowedHost("https://evil.example.com/accounts/login/"))
+
+        assertTrue(InstagramRouteParser.isMediaPostInput("https://www.instagram.com/reel/DfrZdrKS04k/"))
+        assertTrue(InstagramRouteParser.isMediaPostInput("https://www.instagram.com/share/r/Abc123/"))
+        assertFalse(InstagramRouteParser.isMediaPostInput("@anjaliandsnehal"))
+
+        val mobileUa = ProfileSessionManager.resolveAuthenticMobileUa(null)
+        assertEquals(
+            mobileUa,
+            ProfileSessionManager.optimalUserAgentFor(
+                url = "https://www.instagram.com/p/DfrZdrKS04k/",
+                context = null,
+                loggedIn = true
+            )
+        )
+        assertEquals(
+            mobileUa,
+            ProfileSessionManager.optimalUserAgentFor(
+                url = "https://www.instagram.com/accounts/login/",
+                context = null,
+                loggedIn = false
+            )
+        )
+    }
 }

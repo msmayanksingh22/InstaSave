@@ -1,6 +1,7 @@
 package com.instadown.assist.browser
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.graphics.Color
 import android.webkit.CookieManager
 import android.webkit.WebSettings
@@ -10,23 +11,61 @@ import com.instadown.assist.util.AppLogger
 
 /**
  * Manages sandboxed WebView configuration, privacy hygiene, and native styling injection.
- * Strips Instagram web promotion banners and "See full profile in app" modals
- * to deliver a clean, native app feel.
+ * Uses the device's genuine mobile browser User-Agent for authenticated flows and profiles
+ * so Instagram sessions remain 100% authentic and free of device-switching anomalies.
  */
 object ProfileSessionManager {
 
     private const val TAG = "ProfileSessionManager"
 
-    // Standard Android Chrome Mobile User-Agent for crisp profile layout & logged-in mobile infinite scroll
-    private const val MOBILE_UA =
+    // Fallback Android Mobile Chrome UA only if WebSettings.getDefaultUserAgent fails
+    private const val FALLBACK_MOBILE_UA =
         "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
 
-    // Desktop Chrome User-Agent for post/reel routes so Instagram serves playable media instead of logged-out mobile upsells
+    // Desktop Chrome User-Agent ONLY for anonymous/logged-out post/reel preview routes
     private const val DESKTOP_UA =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
-    private val NATIVE_APP_STYLING_CSS = """
-        /* Hide intrusive 'Use the app' / 'Get app' sticky banners, web top bars, login modals and signup footers */
+    @Volatile
+    private var cachedAuthenticMobileUa: String? = null
+
+    fun resolveAuthenticMobileUa(context: Context?): String {
+        cachedAuthenticMobileUa?.let { return it }
+        val resolved = try {
+            if (context != null) {
+                WebSettings.getDefaultUserAgent(context)
+                    .replace("; wv)", ")")
+                    .replace("; wv;", ";")
+                    .ifBlank { FALLBACK_MOBILE_UA }
+            } else {
+                FALLBACK_MOBILE_UA
+            }
+        } catch (_: Throwable) {
+            FALLBACK_MOBILE_UA
+        }
+        cachedAuthenticMobileUa = resolved
+        return resolved
+    }
+
+    /**
+     * Checks CookieManager locally in memory to detect an active Instagram login session.
+     * NEVER copies, persists, logs, or forwards cookie values outside Android's WebView sandbox.
+     */
+    fun isInstagramLoggedIn(): Boolean {
+        return try {
+            val cookies = CookieManager.getInstance()
+                ?.getCookie("https://www.instagram.com")
+                ?: return false
+            val match = Regex("""(?:^|;\s*)sessionid=([^;]+)""").find(cookies)
+            val valStr = match?.groupValues?.getOrNull(1)?.trim().orEmpty()
+            valStr.isNotEmpty() && valStr != "\"\"" && valStr != "deleted"
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private val LOGGED_OUT_STYLING_CSS = """
+        /* Hide intrusive 'Use the app' / 'Get app' sticky banners, web top bars, login modals and signup footers when logged out */
         [role="banner"],
         div[data-testid="mobile-nav-bar"],
         footer,
@@ -42,33 +81,59 @@ object ProfileSessionManager {
             display: none !important;
         }
 
-        /* Seamless dark theme integration */
         html, body, main, #mount_0_0_ {
             background-color: #0B0813 !important;
             color: #FFFFFF !important;
         }
 
-        /* Prevent ugly text selection callouts so it feels like a native app */
-        * {
+        body *:not(input):not(textarea):not([contenteditable="true"]) {
             -webkit-touch-callout: none !important;
             -webkit-user-select: none !important;
         }
 
-        /* Smooth scrollbars */
         ::-webkit-scrollbar {
             display: none !important;
         }
     """.trimIndent().replace("\n", " ").replace("\"", "\\\"")
 
-    fun optimalUserAgentFor(url: String?): String {
+    private val LOGGED_IN_STYLING_CSS = """
+        /* Gentle native polish when logged in: keep native modals, dialogs, comments, and infinite scroll intact */
+        div:has(> a[href*="itunes.apple.com"]),
+        div:has(> a[href*="play.google.com"]) {
+            display: none !important;
+        }
+
+        html, body, #mount_0_0_ {
+            background-color: #0B0813 !important;
+        }
+
+        body *:not(input):not(textarea):not([contenteditable="true"]) {
+            -webkit-touch-callout: none !important;
+        }
+
+        ::-webkit-scrollbar {
+            display: none !important;
+        }
+    """.trimIndent().replace("\n", " ").replace("\"", "\\\"")
+
+    fun optimalUserAgentFor(
+        url: String?,
+        context: Context? = null,
+        loggedIn: Boolean = isInstagramLoggedIn()
+    ): String {
+        val mobileUa = resolveAuthenticMobileUa(context)
+        // Strict authenticity rule: NEVER swap fingerprints when logged in or inside login/2FA/challenge flows.
+        if (loggedIn || InstagramRouteParser.isAuthOrSafetyUrl(url)) {
+            return mobileUa
+        }
         return when (InstagramRouteParser.parse(url)) {
             is DetectedRoute.MediaPost -> DESKTOP_UA
-            else -> MOBILE_UA
+            else -> mobileUa
         }
     }
 
     fun applyOptimalUserAgent(webView: WebView, url: String?): Boolean {
-        val desired = optimalUserAgentFor(url)
+        val desired = optimalUserAgentFor(url, webView.context)
         if (webView.settings.userAgentString != desired) {
             webView.settings.userAgentString = desired
             return true
@@ -89,7 +154,7 @@ object ProfileSessionManager {
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         settings.allowFileAccess = false
         settings.allowContentAccess = false
-        settings.userAgentString = MOBILE_UA
+        settings.userAgentString = resolveAuthenticMobileUa(webView.context)
         settings.setSupportZoom(false)
         settings.builtInZoomControls = false
         settings.displayZoomControls = false
@@ -111,34 +176,105 @@ object ProfileSessionManager {
      * and render a clean native-style grid below the creator bio when logged out.
      */
     fun injectNativeStyling(webView: WebView) {
+        val isLoggedIn = isInstagramLoggedIn()
+        val cssToInject = if (isLoggedIn) LOGGED_IN_STYLING_CSS else LOGGED_OUT_STYLING_CSS
         val js = """
             (function() {
                 try {
+                    const isLoggedIn = $isLoggedIn;
                     const currentPath = window.location.pathname || '/';
                     const isAuthRoute = currentPath.indexOf('/accounts/') !== -1 ||
                         currentPath.indexOf('/challenge/') !== -1 ||
-                        currentPath.indexOf('/two_factor') !== -1;
+                        currentPath.indexOf('/two_factor') !== -1 ||
+                        currentPath.indexOf('/consent/') !== -1 ||
+                        currentPath.indexOf('/oauth/') !== -1;
 
                     if (isAuthRoute) {
                         const prevStyle = document.getElementById('instasave-native-style');
                         if (prevStyle) prevStyle.remove();
                         const prevGrid = document.getElementById('instasave-injected-grid');
                         if (prevGrid) prevGrid.remove();
-                        if (document.body) document.body.style.backgroundColor = '#0B0813';
                         return;
                     }
 
-                    // 1. Inject Stylesheet
-                    if (!document.getElementById('instasave-native-style')) {
-                        let style = document.createElement('style');
+                    // 1. Inject Stylesheet (update if logged-in mode changed)
+                    let style = document.getElementById('instasave-native-style');
+                    const desiredMode = isLoggedIn ? 'in' : 'out';
+                    if (!style) {
+                        style = document.createElement('style');
                         style.id = 'instasave-native-style';
                         style.type = 'text/css';
-                        style.innerHTML = "$NATIVE_APP_STYLING_CSS";
+                        style.setAttribute('data-session-mode', desiredMode);
+                        style.innerHTML = "$cssToInject";
                         (document.head || document.documentElement).appendChild(style);
+                    } else if (style.getAttribute('data-session-mode') !== desiredMode) {
+                        style.setAttribute('data-session-mode', desiredMode);
+                        style.innerHTML = "$cssToInject";
+                    }
+
+                    // Report post creator handle back to native toolbar/pill when viewing any post/reel
+                    function reportPostAuthor() {
+                        try {
+                            if (!window.InstaSaveBridge || !window.InstaSaveBridge.onPostAuthorDetected) return;
+                            const isPost = currentPath.indexOf('/p/') !== -1 ||
+                                currentPath.indexOf('/reel/') !== -1 ||
+                                currentPath.indexOf('/reels/') !== -1;
+                            if (!isPost) return;
+
+                            let foundAuthor = '';
+                            const reserved = ['p','reel','reels','tv','share','explore','accounts','direct','stories','about','legal','developer','terms','privacy','static','api'];
+                            const headerLinks = document.querySelectorAll('article header a[href^="/"], main a[href^="/"]');
+                            for (let i = 0; i < headerLinks.length; i++) {
+                                const href = headerLinks[i].getAttribute('href') || '';
+                                const seg = href.split('?')[0].split('/').filter(Boolean);
+                                if (seg.length === 1) {
+                                    const candidate = seg[0].toLowerCase();
+                                    if (reserved.indexOf(candidate) === -1 && /^[a-z0-9._]{1,30}$/.test(candidate)) {
+                                        foundAuthor = candidate;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (!foundAuthor) {
+                                const scripts = document.querySelectorAll('script');
+                                for (let i = 0; i < scripts.length; i++) {
+                                    const txt = scripts[i].textContent || '';
+                                    if (txt.indexOf('xig_polaris_media') !== -1 || txt.indexOf('"owner"') !== -1) {
+                                        const m = txt.match(/"username"\s*:\s*"([A-Za-z0-9._]{1,30})"/);
+                                        if (m && reserved.indexOf(m[1].toLowerCase()) === -1) {
+                                            foundAuthor = m[1];
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            if (foundAuthor && window.__instasave_last_author !== currentPath + ':' + foundAuthor) {
+                                window.__instasave_last_author = currentPath + ':' + foundAuthor;
+                                window.InstaSaveBridge.onPostAuthorDetected(foundAuthor);
+                            }
+
+                            // Give post view bottom scroll clearance above floating pill
+                            const mainEl = document.querySelector('main') || document.querySelector('article');
+                            if (mainEl) {
+                                mainEl.style.setProperty('padding-bottom', '140px', 'important');
+                            }
+                        } catch(e) {}
                     }
 
                     // 2. Dismiss Instagram App Promotion Modals, Backdrop Scrims & Signup Bars
                     function cleanupModals() {
+                        // Neutralize native-app / Play Store deep links so clicks inside profile/posts stay safely inside WebView
+                        document.querySelectorAll('a[href^="intent:"], a[href^="instagram:"], a[href*="play.google.com"]').forEach(function(a) {
+                            a.setAttribute('data-blocked-href', a.getAttribute('href') || '');
+                            a.removeAttribute('href');
+                            a.style.pointerEvents = 'none';
+                        });
+
+                        if (isLoggedIn) {
+                            // Keep native logged-in modals, comments, save prompts & scroll untouched!
+                            return;
+                        }
+
                         // Remove 70% dark backdrop scrims & their fixed overlay wrappers (never touch carousel media wrappers inside article!)
                         document.querySelectorAll('div.x1ey2m1c').forEach(function(scrim) {
                             if (scrim.closest && scrim.closest('article')) return;
@@ -236,9 +372,15 @@ object ProfileSessionManager {
                     }
 
                     cleanupModals();
+                    reportPostAuthor();
 
                     // 3. Build & Render Native Post Grid directly below bio when logged out
                     function renderProfileGrid() {
+                        const existingGrid = document.getElementById('instasave-injected-grid');
+                        if (isLoggedIn) {
+                            if (existingGrid) existingGrid.remove();
+                            return;
+                        }
                         const path = window.location.pathname || '/';
                         const isPostOrNonProfile = path.indexOf('/p/') !== -1 ||
                             path.indexOf('/reel/') !== -1 ||
@@ -247,7 +389,6 @@ object ProfileSessionManager {
                             path.indexOf('/explore') !== -1 ||
                             path.indexOf('/accounts/') !== -1;
 
-                        const existingGrid = document.getElementById('instasave-injected-grid');
                         if (isPostOrNonProfile) {
                             if (existingGrid) existingGrid.remove();
                             return;
@@ -431,6 +572,7 @@ object ProfileSessionManager {
                         window.__instasave_observer_set = true;
                         const observer = new MutationObserver(function(mutations) {
                             cleanupModals();
+                            reportPostAuthor();
                             renderProfileGrid();
                         });
                         observer.observe(document.documentElement || document.body, {
@@ -462,6 +604,24 @@ object ProfileSessionManager {
             }
         } catch (e: Exception) {
             AppLogger.w(TAG, "Error clearing session: ${e.message}")
+            onCleared?.invoke()
+        }
+    }
+
+    /**
+     * Signs out cleanly from non-WebView screens (Settings / Home / Account Sheet) without creating a WebView.
+     */
+    fun clearCookiesOnly(onCleared: (() -> Unit)? = null) {
+        AppLogger.i(TAG, "Signing out of local Instagram WebView session...")
+        try {
+            WebStorage.getInstance().deleteAllData()
+            val cookieManager = CookieManager.getInstance()
+            cookieManager.removeAllCookies {
+                cookieManager.flush()
+                onCleared?.invoke()
+            }
+        } catch (e: Exception) {
+            AppLogger.w(TAG, "Error clearing cookies: ${e.message}")
             onCleared?.invoke()
         }
     }

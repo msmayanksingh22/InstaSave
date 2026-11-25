@@ -41,6 +41,9 @@ class HomeFragment : Fragment() {
     private val viewModel: HomeViewModel by viewModels()
     private var recentAdapter: RecentDownloadsAdapter? = null
     private var permissionsBannerBinding: BannerPermissionsAlertBinding? = null
+    private var lastAutoFilledClipUrl: String? = null
+    private var creatorHintJob: kotlinx.coroutines.Job? = null
+    private var detectedAuthorForCurrentInput: String? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -68,17 +71,101 @@ class HomeFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         viewModel.refreshState()
+        renderAccountPillState()
         checkAndAutoFillClipboard()
     }
 
+    private fun renderAccountPillState() {
+        val ctx = context ?: return
+        val loggedIn = com.instadown.assist.browser.ProfileSessionManager.isInstagramLoggedIn()
+        val colorRes = if (loggedIn) R.color.status_green else R.color.text_muted
+        val iconTintRes = if (loggedIn) R.color.status_green else R.color.text_secondary
+        binding.dotHomeAccount.backgroundTintList = ContextCompat.getColorStateList(ctx, colorRes)
+        binding.ivHomeAccountIcon.setColorFilter(ContextCompat.getColor(ctx, iconTintRes))
+        binding.tvHomeAccountBadge.text = if (loggedIn) "Signed in" else "Sign in"
+        binding.tvHomeAccountBadge.setTextColor(
+            ContextCompat.getColor(ctx, if (loggedIn) R.color.status_green else R.color.text_secondary)
+        )
+    }
+
     private fun checkAndAutoFillClipboard() {
-        if (!binding.etInstagramUrl.text.isNullOrBlank()) return
         val clip = ClipboardReader.readCurrentClip(requireContext())
-        if (clip.isValidInstagramUrl) {
-            binding.etInstagramUrl.setText(clip.cleanUrl)
-            binding.etInstagramUrl.setSelection(clip.cleanUrl.length)
-            viewModel.clearUrlError()
-            com.instadown.assist.util.AppLogger.d("HomeFragment", "Auto-filled clipboard URL: ${clip.cleanUrl}")
+        if (!clip.isValidInstagramUrl) return
+        val currentText = binding.etInstagramUrl.text?.toString()?.trim().orEmpty()
+        if (currentText.isBlank() || (currentText == lastAutoFilledClipUrl && clip.cleanUrl != lastAutoFilledClipUrl)) {
+            applyClipboardLinkToInput(clip.cleanUrl, showBannerHint = false)
+        } else if (currentText == clip.cleanUrl && binding.tvDetectedCreatorBanner.visibility != View.VISIBLE) {
+            updateCreatorHintForInput(clip.cleanUrl)
+        }
+    }
+
+    private fun applyClipboardLinkToInput(cleanUrl: String, showBannerHint: Boolean) {
+        lastAutoFilledClipUrl = cleanUrl
+        binding.etInstagramUrl.setText(cleanUrl)
+        binding.etInstagramUrl.setSelection(cleanUrl.length)
+        viewModel.clearUrlError()
+        if (showBannerHint) {
+            binding.tvDetectedCreatorBanner.text = "Copied link ready • Tap Explore Profile or Save"
+            binding.tvDetectedCreatorBanner.visibility = View.VISIBLE
+        }
+        updateCreatorHintForInput(cleanUrl)
+        com.instadown.assist.util.AppLogger.d("HomeFragment", "Auto-filled clipboard URL: $cleanUrl")
+    }
+
+    private fun updateCreatorHintForInput(rawInput: String) {
+        creatorHintJob?.cancel()
+        val directUser = com.instadown.assist.browser.InstagramRouteParser.extractUsername(rawInput)
+        if (directUser.isNotBlank()) {
+            detectedAuthorForCurrentInput = directUser
+            binding.btnExploreProfile.text = "Explore @$directUser Profile"
+            binding.tvDetectedCreatorBanner.text = "Creator: @$directUser • Tap below to browse"
+            binding.tvDetectedCreatorBanner.visibility = View.VISIBLE
+            return
+        }
+
+        if (!com.instadown.assist.browser.InstagramRouteParser.isMediaPostInput(rawInput)) {
+            detectedAuthorForCurrentInput = null
+            binding.btnExploreProfile.text = "Explore Creator Profile"
+            binding.tvDetectedCreatorBanner.visibility = View.GONE
+            return
+        }
+
+        val appCtx = requireContext().applicationContext
+        creatorHintJob = viewLifecycleOwner.lifecycleScope.launch {
+            val author = com.instadown.assist.browser.InstagramCreatorResolver.resolveAuthorOnly(appCtx, rawInput)
+            if (_binding == null || !isAdded) return@launch
+            if (binding.etInstagramUrl.text?.toString()?.trim() != rawInput.trim()) return@launch
+            if (!author.isNullOrBlank()) {
+                detectedAuthorForCurrentInput = author
+                binding.btnExploreProfile.text = "Explore @$author Profile"
+                binding.tvDetectedCreatorBanner.text = "Post by @$author • Tap to view profile or save"
+                binding.tvDetectedCreatorBanner.visibility = View.VISIBLE
+            } else {
+                detectedAuthorForCurrentInput = null
+                binding.btnExploreProfile.text = "Explore Creator Profile"
+            }
+        }
+    }
+
+    private fun launchProfileExplorerWithOptionalSignIn(rawTarget: String) {
+        val ctx = requireContext()
+        val resolvedTarget = detectedAuthorForCurrentInput?.takeIf {
+            com.instadown.assist.browser.InstagramRouteParser.isMediaPostInput(rawTarget)
+        } ?: rawTarget
+        val prefs = com.instadown.assist.overlay.InstaSavePreferences(ctx)
+        if (!com.instadown.assist.browser.ProfileSessionManager.isInstagramLoggedIn() &&
+            !prefs.hasDismissedSignInPrompt &&
+            childFragmentManager.findFragmentByTag(InstagramSignInSheet.TAG) == null
+        ) {
+            InstagramSignInSheet.newInstance(
+                pendingTarget = resolvedTarget,
+                onContinueAnonymously = {
+                    ProfileExplorerActivity.start(ctx, resolvedTarget, preferCreatorProfile = true)
+                },
+                onSessionChanged = { renderAccountPillState() }
+            ).show(childFragmentManager, InstagramSignInSheet.TAG)
+        } else {
+            ProfileExplorerActivity.start(ctx, resolvedTarget, preferCreatorProfile = true)
         }
     }
 
@@ -127,13 +214,36 @@ class HomeFragment : Fragment() {
             }
         }
 
-        // Clear error as user types
+        // Safe Account / Optional Sign-In Pill
+        binding.pillIgAccount.setOnClickListener {
+            if (childFragmentManager.findFragmentByTag(InstagramSignInSheet.TAG) == null) {
+                InstagramSignInSheet.newInstance(
+                    onSessionChanged = { renderAccountPillState() }
+                ).show(childFragmentManager, InstagramSignInSheet.TAG)
+            }
+        }
+
+        // Detected Creator Banner 1-tap open
+        binding.tvDetectedCreatorBanner.setOnClickListener {
+            binding.btnExploreProfile.performClick()
+        }
+
+        // Clear error & refresh creator hint as user types or pastes
         binding.etInstagramUrl.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 viewModel.clearUrlError()
             }
-            override fun afterTextChanged(s: Editable?) {}
+            override fun afterTextChanged(s: Editable?) {
+                val txt = s?.toString()?.trim().orEmpty()
+                if (txt.isBlank()) {
+                    detectedAuthorForCurrentInput = null
+                    binding.btnExploreProfile.text = "Explore Creator Profile"
+                    binding.tvDetectedCreatorBanner.visibility = View.GONE
+                } else if (txt != lastAutoFilledClipUrl) {
+                    updateCreatorHintForInput(txt)
+                }
+            }
         })
 
         // Soft Keyboard "Done" action triggers download
@@ -171,7 +281,7 @@ class HomeFragment : Fragment() {
             if (raw.isNotBlank()) {
                 if (com.instadown.assist.browser.InstagramRouteParser.isValidProfileInput(raw)) {
                     viewModel.clearUrlError()
-                    ProfileExplorerActivity.start(requireContext(), raw)
+                    launchProfileExplorerWithOptionalSignIn(raw)
                 } else {
                     viewModel.setUrlError("Enter a valid Instagram link or @username")
                 }
@@ -182,7 +292,7 @@ class HomeFragment : Fragment() {
             val clipText = clip.text.trim()
             if (clip.isValidInstagramUrl || com.instadown.assist.browser.InstagramRouteParser.isValidProfileInput(clipText)) {
                 viewModel.clearUrlError()
-                ProfileExplorerActivity.start(requireContext(), clipText)
+                launchProfileExplorerWithOptionalSignIn(if (clip.isValidInstagramUrl) clip.cleanUrl else clipText)
             } else {
                 showExploreProfilePrompt()
             }
@@ -211,9 +321,17 @@ class HomeFragment : Fragment() {
             if (!sharedUrl.isNullOrBlank()) {
                 val normalized = UrlNormalizer.normalize(sharedUrl)
                 val target = normalized?.originalUrl ?: sharedUrl
+                lastAutoFilledClipUrl = target
                 binding.etInstagramUrl.setText(target)
                 binding.etInstagramUrl.setSelection(target.length)
                 (activity as? MainActivity)?.executeManualDownload(target)
+            }
+        }
+
+        setFragmentResultListener(MainActivity.REQUEST_CLIPBOARD_URL) { _, bundle ->
+            val clipUrl = bundle.getString(MainActivity.KEY_CLIPBOARD_URL)
+            if (!clipUrl.isNullOrBlank()) {
+                applyClipboardLinkToInput(clipUrl, showBannerHint = true)
             }
         }
     }
@@ -320,7 +438,7 @@ class HomeFragment : Fragment() {
             .setPositiveButton("Open") { _, _ ->
                 val text = input.text?.toString()?.trim().orEmpty()
                 if (com.instadown.assist.browser.InstagramRouteParser.isValidProfileInput(text)) {
-                    ProfileExplorerActivity.start(ctx, text)
+                    launchProfileExplorerWithOptionalSignIn(text)
                 } else {
                     Toast.makeText(ctx, "Enter a valid @username or Instagram link", Toast.LENGTH_SHORT).show()
                 }
@@ -434,6 +552,7 @@ class HomeFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        creatorHintJob?.cancel()
         binding.rvRecentDownloads.adapter = null
         recentAdapter = null
         permissionsBannerBinding = null
