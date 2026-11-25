@@ -1,0 +1,62 @@
+name: Bug Report
+description: Report a crash, failed download, UI overlap, or unexpected behavior in InstaSave.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Thanks for reporting an issue! Checking **Settings -> Check for Updates** and exporting
+        logs via **Settings -> Diagnostic Logs** helps diagnose issues quickly without a PC.
+  - type: input
+    id: app_version
+    attributes:
+      label: InstaSave Version & Build
+      description: Found in Settings -> Check for Updates (e.g. Version 1.6.3 (Build 33)).
+      placeholder: "v1.6.3 (Build 33)"
+    validations:
+      required: true
+  - type: input
+    id: device_info
+    attributes:
+      label: Device Model & Android Version
+      placeholder: "e.g. Pixel 8 / OPPO K13 Turbo, Android 15 / 16"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected Area
+      options:
+        - Home Feed Videos / Reels Tab
+        - Carousels / Multi-Item Selection
+        - Browse Feed / Profile Explorer
+        - Floating Pill / Overlay Assistant
+        - Gallery / History & Restore
+        - Self-Updater (OTA) / UI Layout
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What Happened?
+      description: Clear description of the bug and what you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      placeholder: |
+        1. Open ...
+        2. Tap ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Diagnostic Logs (Optional)
+      description: Paste logs from Settings -> Diagnostic Logs -> Copy (redact any personal URLs if needed).
+      render: text

@@ -1,0 +1,38 @@
+name: Android CI Checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '*.gradle.kts'
+      - 'gradle/**'
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '*.gradle.kts'
+      - 'gradle/**'
+
+jobs:
+  test-and-lint:
+    name: Unit Tests & Release Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run Unit Tests & Release Lint
+        run: |
+          chmod +x ./gradlew
+          ./gradlew testReleaseUnitTest lintVitalRelease --no-daemon

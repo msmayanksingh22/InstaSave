@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Releases & Latest APK
+    url: https://github.com/msmayanksingh22/InstaSave/releases/latest
+    about: Download the latest signed APK build or verify your installed version first.
+  - name: Security Advisory
+    url: https://github.com/msmayanksingh22/InstaSave/security/advisories/new
+    about: Report a security or privacy vulnerability privately.

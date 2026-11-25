@@ -1,176 +1,181 @@
+<div align="center">
+
+<img src="docs/images/logo.png" width="96" height="96" alt="InstaSave Icon" />
+
 # InstaSave
 
-> **"Save What Inspires You"**  
-> An ultra-reliable, private, high-speed on-device Android utility engineered to save Instagram media directly to your device storage with zero remote dependencies, instant 1-second link resolution, in-app self-updates, and universal persistent thumbnails.
+**Fast, private, 100% free Android utility to browse and save Instagram photos, HD Reels, and 15+ item carousels directly to your device.**
+
+[![Latest Release](https://img.shields.io/github/v/release/msmayanksingh22/InstaSave?style=for-the-badge&color=8A67FF&label=Release)](https://github.com/msmayanksingh22/InstaSave/releases/latest)
+[![Android](https://img.shields.io/badge/Android-8.0%20--%2016%20(API%2026--36)-10B981?style=for-the-badge&logo=android&logoColor=white)](https://developer.android.com)
+[![Kotlin](https://img.shields.io/badge/Kotlin-1.9%2B-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Release Workflow](https://img.shields.io/github/actions/workflow/status/msmayanksingh22/InstaSave/release.yml?style=for-the-badge&label=OTA%20Build)](https://github.com/msmayanksingh22/InstaSave/actions/workflows/release.yml)
+[![License](https://img.shields.io/github/license/msmayanksingh22/InstaSave?style=for-the-badge&color=38BDF8)](LICENSE)
+
+[Download Latest APK](https://github.com/msmayanksingh22/InstaSave/releases/latest) · [All Releases](https://github.com/msmayanksingh22/InstaSave/releases) · [OTA Manifest](release-manifest.json) · [Report a Bug](https://github.com/msmayanksingh22/InstaSave/issues/new/choose)
+
+</div>
 
 ---
 
-## 🔗 Official Repository & Download Links
-- **GitHub Repository**: [https://github.com/msmayanksingh22/InstaSave](https://github.com/msmayanksingh22/InstaSave)
-- **Direct Release APK (v1.1.4 Build 6)**: [Download app-release.apk](https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk)
-- **Release Manifest (OTA Updates)**: [release-manifest.json](https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/release-manifest.json)
-- **GitHub Releases Page**: [https://github.com/msmayanksingh22/InstaSave/releases](https://github.com/msmayanksingh22/InstaSave/releases)
+## Interface Preview
+
+Verified on retail Android hardware (`360dp` compact width, dark Material 3 Obsidian theme):
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/screen-home.png" alt="Home and 5-Slot Navigation Dock" width="260" /><br />
+      <sub><b>Home &amp; 5-Slot Navigation Dock</b><br />Quick save, clipboard paste, creator lookup, and 1-tap Feed launcher</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/screen-settings.png" alt="Settings and OTA Updates" width="260" /><br />
+      <sub><b>Settings, Storage &amp; Signed OTA Updates</b><br />Local sandbox session controls, diagnostics, and in-app updater</sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
-## 📖 Table of Contents
-- [Overview](#-overview)
-- [What's New in v1.1.4 (Build 6)](#-whats-new-in-v114-build-6)
-- [Core Philosophy & Guarantees](#-core-philosophy--guarantees)
-- [System Architecture](#-system-architecture)
-- [Key Subsystems & Features](#-key-subsystems--features)
-  - [1. Instant 1-Second Link Resolution Engine](#1-instant-1-second-link-resolution-engine)
-  - [2. Multi-Item Carousel Extraction (15+ Items)](#2-multi-item-carousel-extraction-15-items)
-  - [3. Interactive Media Selection & Background Saving](#3-interactive-media-selection--background-saving)
-  - [4. Universal Persistent Thumbnails (Even for Deleted Posts)](#4-universal-persistent-thumbnails-even-for-deleted-posts)
-  - [5. In-App Self-Updating System (OTA without PC / USB Debugging)](#5-in-app-self-updating-system-ota-without-pc--usb-debugging)
-  - [6. In-App Diagnostics & Log Exporter (Debugging without ADB)](#6-in-app-diagnostics--log-exporter-debugging-without-adb)
-  - [7. Production Signing & Security Hardening](#7-production-signing--security-hardening)
-- [Project Directory Structure](#-project-directory-structure)
-- [Building & Installation](#-building--installation)
-- [Verification & Documentation Suite](#-verification--documentation-suite)
+## What's New in `v1.6.3` (Build 33)
+
+- **Direct `Feed` Launcher in Lower Dock**: Redesigned the bottom navigation bar into a 5-slot Obsidian glass dock (`Home`, `Gallery`, highlighted **Feed**, `History`, `Settings`) so Instagram Feed & Reels are always one tap away.
+- **Movable Floating Save Pill**: Replaced the static overlay with `DraggableFloatingPillView` — tap buttons normally or drag the capsule anywhere vertically across Feed and Reels; your preferred vertical offset persists across posts.
+- **One-Tap Header Exit in Browse Feed**: Tapping the top-left back button exits Browse Feed straight back to InstaSave immediately, while Android system/gesture Back continues stepping back inside Instagram history.
+- **Non-Blank History Swipe**: Upgraded History swipe gestures (`Share` right, `Options` left) to a clamped spring-back peek gesture so cancelling or closing dialogs never leaves blank gaps in the list.
+- **Reliable Feed Video & Reels MP4 Extraction**: Passive in-session WebView stream observer (`PASSIVE_MEDIA_OBSERVER_JS`) and strict cover-image rescue guards ensure videos in Home Feed and the Reels tab download crisp `.mp4` streams instead of cover `.jpg` thumbnails.
 
 ---
 
-## 🌟 Overview
+## Core Capabilities
 
-**InstaSave** is an advanced Android utility built for modern Android operating systems (Android 14 through Android 16 / API 34–36). It bridges Instagram links and on-screen posts with a high-performance, login-free extraction engine, saving high-resolution photos, 15+ item carousels, and HD reels directly into user-accessible `MediaStore` storage (`Pictures/InstaSave/` by default).
-
-InstaSave operates entirely locally on your physical hardware, eliminating paid APIs, third-party backend servers, analytics tracking, and account logins.
-
----
-
-## 🚀 What's New in v1.1.4 (Build 6)
-
-- ⚡ **Ultra-Fast 1-Second Link Resolution**: Persistent pre-warmed background WebView engine initializes upon app startup; resolves links and extracts media URLs in under 1 second without cold network page loads.
-- 🖼️ **Full 15+ Carousel Extraction**: Deep Vue 3 state inspection (`comp.props?.data`) and DOM expansion auto-load all carousel items without capping at 6.
-- ⚡ **Instant Media Selection Sheet**: Passing pre-resolved results directly between activities completely eliminates the previous 10–15s re-resolution freeze (0ms sheet launch).
-- 📲 **Detached Background Saving**: Tapping "Download Selected" closes the sheet instantly; downloads run in the background with real-time notification bar progress.
-- 🖼️ **Universal Persistent Thumbnails in History**: Low-resolution (~20 KB) cover thumbnails are permanently saved to internal private storage (`filesDir/thumbnails/${shortcode}.jpg`). Posts deleted from device storage maintain their thumbnails; missing thumbnails are backfilled concurrently in 2–3 seconds.
-- 🔄 **In-App Self-Updating (OTA)**: Automatic update checks against `release-manifest.json` with one-tap background download and install without requiring USB debugging or a PC.
-- 🩺 **In-App Diagnostic Logs**: Built-in rolling log viewer and one-tap clipboard/file sharing allows comprehensive debugging without terminal ADB.
-- 🛡️ **Production Release Signing**: Signed with a dedicated 2048-bit RSA production key (`instasave-release.jks`) using APK Signature Scheme V2 and V3; hardened manifest with private component export controls.
+| Category | Highlights |
+| :--- | :--- |
+| **Zero-Cost & Local** | 100% free with zero subscriptions, zero paid third-party APIs, zero analytics, and zero external proxy servers. |
+| **In-App Feed & Profile Explorer** | Browse creators, Home Feed, and Reels inside a sandboxed WebView (`CookieManager` stays strictly on-device — never extracted or uploaded) with automatic post/reel focus detection. |
+| **4-Tier Composite Resolver** | Pre-warmed socket & GraphQL probing, passive WebView stream observer, captioned embed fallback, and headless Vue/DOM expansion protected by fast-fail `TierCircuitBreaker` cooldowns. |
+| **Full 15+ Carousel Selection** | Pre-resolved items pass straight into `MediaSelectionActivity` with 0 ms grid launch and selective parallel downloads (`3–4x` concurrent streams). |
+| **Zero-Copy MediaStore Pipeline** | Off-heap direct NIO buffer streaming writes directly into `MediaStore` (`Pictures/InstaSave/` or user-selected folder) with atomic rollback on failure. |
+| **Persistent Offline Archive** | Stores lightweight cover thumbnails (`filesDir/thumbnails/<shortcode>.jpg`) privately so History keeps rich previews and offers 1-tap differential restore if device files are deleted. |
+| **Lossless Reel Audio** | Built-in `ReelAudioExtractor` demuxes native AAC audio from saved MP4 Reels into `MediaStore.Audio.Media` (`.m4a`) with zero transcoding loss. |
+| **Hardened In-App OTA Updates** | `DualSourceUpdateResolver` + `HardenedApkInstaller` verify APK signing certificates and SHA-256 digests before launching Android's PackageInstaller. |
+| **ADB-Free Diagnostics** | Rolling 1,000-entry circular ring buffer (`AppLogger`) viewable inside Settings with one-tap copy and log file sharing. |
 
 ---
 
-## 🛡️ Core Philosophy & Guarantees
+## Architecture Overview
 
-1. **100% Free & Local Execution**: Zero paid APIs, zero subscriptions, zero remote servers.
-2. **MediaStore Authority**: SQLite stores logical history records, while system `MediaStore` is the physical source of truth with automatic background reconciliation.
-3. **Decoupled Architecture**: Extraction, download execution, storage writing, and UI layers operate completely asynchronously.
-4. **Persistent Private Caches**: Thumbnails are stored in internal private app storage, surviving gallery deletions and device cleanup utilities.
-
----
-
-## 🏗️ System Architecture
-
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                                 ENTRY & INTERACTION LAYER                              │
-│                                                                                        │
-│   ┌───────────────────────────┐    ┌──────────────────────────┐    ┌────────────────┐  │
-│   │ MainActivity              │    │ FloatingTriggerService   │    │ System Share   │  │
-│   │ • Clipboard Auto-Capture  │    │ • Movable Overlay Widget │    │ • Direct URL   │  │
-│   │ • Manual Link Paste       │    │ • specialUse Foreground  │    │   Intent Send  │  │
-│   └─────────────┬─────────────┘    └────────────┬─────────────┘    └────────┬───────┘  │
-└─────────────────┼───────────────────────────────┼───────────────────────────┼──────────┘
-                  ▼                               ▼                           ▼
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                              COMPOSITE RESOLUTION PIPELINE                             │
-│                                                                                        │
-│   ┌────────────────────────────────────────────────────────────────────────────────┐   │
-│   │ Tier 1: HeadlessWebBridgeResolver (Instant Pre-Warmed Engine)                   │   │
-│   │ • Persistent Background WebView in memory from app start                       │   │
-│   │ • Desktop Chrome UA (suppresses mobile app installation banners)               │   │
-│   │ • Vue 3 Reactive State Inspection + Prototype Event Dispatch                   │   │
-│   │ • Auto-Clicks .load-more-trigger to extract 15+ carousel items                 │   │
-│   │ • Resolution Time: ~800ms - 1200ms                                             │   │
-│   └───────────────────────────────────────┬────────────────────────────────────────┘   │
-│                                           │ (Fallback only if Tier 1 empty)            │
-│   ┌───────────────────────────────────────▼────────────────────────────────────────┐   │
-│   │ Tier 2 & 3: Embed & WebPage SJS Fallbacks (Secondary Tiers)                    │   │
-│   └────────────────────────────────────────────────────────────────────────────────┘   │
-└───────────────────────────────────────────┬────────────────────────────────────────────┘
-                                            ▼
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                             DOWNLOAD & STORAGE SUBSYSTEM                               │
-│                                                                                        │
-│   ┌────────────────────────────────┐            ┌──────────────────────────────────┐   │
-│   │ MediaSelectionActivity         │            │ InstagramDownloadCoordinator     │   │
-│   │ • 0ms sheet launch             │            │ • Bypasses re-resolution         │   │
-│   │ • Multi-select item grid       │───────────►│ • Parallel OkHttp streams (3-4x) │   │
-│   │ • Background job dispatch      │            │ • MediaStore scoped storage write│   │
-│   └────────────────────────────────┘            └─────────────────┬────────────────┘   │
-│                                                                   ▼                     │
-│                                                 ┌──────────────────────────────────┐   │
-│                                                 │ DownloadRepository & SQLite      │   │
-│                                                 │ • Permanent private thumbnail    │   │
-│                                                 │   filesDir/thumbnails/[id].jpg   │   │
-│                                                 │ • MediaStore reconciliation      │   │
-│                                                 └──────────────────────────────────┘   │
-└────────────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    UI["MainActivity (5-Slot Floating Dock)\nHome - Gallery - Feed - History - Settings"] --> Explorer["ProfileExplorerActivity\nSandboxed WebView + DraggableFloatingPillView"]
+    UI --> Share["Share Intent / Clipboard / Manual Link"]
+    Explorer -->|"Passive JS Observer + React Fiber"| Cache["In-Session Stream Cache (HD MP4 & Carousels)"]
+    Share --> Composite["CompositeInstagramResolver\nTier 0-3 + Circuit Breakers"]
+    Explorer -->|"Fallback when needed"| Composite
+    Cache --> Coordinator["InstagramDownloadCoordinator"]
+    Composite --> Coordinator
+    Coordinator -->|"Optional multi-item pick"| Picker["MediaSelectionActivity (0 ms preloaded grid)"]
+    Picker --> Coordinator
+    Coordinator --> Pipeline["ZeroAllocMediaPipeline + MediaStoreWriter"]
+    Pipeline --> MediaStore["Android MediaStore (Pictures / Movies / Music)"]
+    Pipeline --> Repo["DownloadRepository (SQLite + Private Thumbnails)"]
 ```
 
 ---
 
-## 📱 Key Subsystems & Features
+## Installation
 
-### 1. Instant 1-Second Link Resolution Engine
-- **Pre-Warmed Headless Engine**: Initialized inside `InstaSaveApp.onCreate()`. The background WebView is fully rendered, hydrated, and ready in memory.
-- **Desktop User-Agent**: Configured with `Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0 Safari/537.36`. Eliminates mobile app promotion popups.
-- **Automated Popup Dismissal**: JavaScript proactively strips any modals, overlays, or ads before query injection.
+### Option 1: Direct APK Install (Recommended)
+1. Download `InstaSave-v1.6.3.apk` from the [**Latest Release**](https://github.com/msmayanksingh22/InstaSave/releases/latest).
+2. Open the APK on your Android device (Android 8.0 / API 26 or newer) and allow installation.
+3. Future releases update automatically inside the app via **Settings -> Check for Updates**.
 
-### 2. Multi-Item Carousel Extraction (15+ Items)
-- Inspects Vue 3 component proxy state (`comp.props?.data`, `comp.proxy?.data`) and auto-triggers `.load-more-trigger` clicks, ensuring full carousels with 10–15+ items extract completely.
-
-### 3. Interactive Media Selection & Background Saving
-- **Single-Flight Resolution**: `MainActivity` passes pre-resolved metadata to `MediaSelectionActivity`, rendering the preview grid in 0 ms.
-- **Background Execution**: Tapping "Download Selected" launches downloads via `InstaSaveApp.applicationScope` and immediately closes the sheet (`finish()`). Real-time progress is streamed via Android's notification drawer.
-
-### 4. Universal Persistent Thumbnails (Even for Deleted Posts)
-- Lightweight previews (~20 KB) are permanently stored in internal app-private storage: `context.filesDir/thumbnails/${shortcode}.jpg`.
-- When photos or reels are deleted from the device gallery, `DownloadHistoryActivity` retains and renders their cover thumbnails offline.
-- Missing thumbnails are backfilled using bounded 3-worker parallel coroutines in 2–3 seconds.
-
-### 5. In-App Self-Updating System (OTA without PC)
-- Queries `https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/release-manifest.json`.
-- Compares remote `versionCode` against the installed version.
-- Downloads the release APK in the background and prompts native package installation with one tap.
-
-### 6. In-App Diagnostics & Log Exporter
-- In-memory circular log ring buffer capturing up to 1,000 log events.
-- In-app log dialog with real-time level filtering (`VERBOSE`, `DEBUG`, `INFO`, `WARN`, `ERROR`).
-- One-tap "Copy to Clipboard" and "Share Logs via File" actions for instant debugging without USB debugging or ADB commands.
-
-### 7. Production Signing & Security Hardening
-- Signed with official dedicated RSA-2048 production keystore (`instasave-release.jks`) with 10,000 days validity.
-- Full APK Signature Scheme V2 and V3 enabled.
-- Hardened manifest with `android:exported="false"` on all private activities and receivers.
-
----
-
-## 🛠️ Building & Installation
-
-### Building the Release APK
-```powershell
-# Run Unit Test Suite
-rtk ./gradlew test
-
-# Assemble Release APK (signed with instasave-release.jks)
-rtk ./gradlew assembleRelease
+### Option 2: Install via ADB
+```bash
+adb install -r InstaSave-v1.6.3.apk
 ```
 
-### Installation
-- **Direct Sideload**: Download [app-release.apk](https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk) directly on your Android phone and install.
-- **Via ADB**:
-  ```powershell
-  adb install -r app-release.apk
-  ```
+---
+
+## Building from Source
+
+### Prerequisites
+- **JDK 17** (Temurin / OpenJDK 17)
+- **Android SDK** with `compileSdk = 36` and Android 8.0+ (`minSdk = 26`)
+- **Gradle Wrapper** (included: Gradle `8.14.3` / AGP `8.7.x`)
+
+### Build & Test Commands
+```bash
+# Run full unit test suite (all 14 JUnit test suites)
+./gradlew testReleaseUnitTest
+
+# Run Android lint checks on release variant
+./gradlew lintVitalRelease
+
+# Assemble debug APK
+./gradlew assembleDebug
+
+# Assemble signed release APK (output: app/build/outputs/apk/release/app-release.apk)
+./gradlew assembleRelease
+```
 
 ---
 
-## 📚 Documentation Suite
-- 📐 **[Architecture Blueprint](docs/ARCHITECTURE.md)**: Deep dive into the headless pre-warmed bridge, parallel downloader, and thumbnail cache.
-- 📋 **[Technical Specifications](docs/SPECIFICATIONS.md)**: Formal specifications for background services, database schema, and OTA manifest schema.
-- 🔬 **[Verification & Testing Guide](docs/VERIFICATION_AND_TESTING.md)**: Test suites and hardware validation matrix.
-- 🤖 **[Master AI Agent Dossier](AGENTS.md)**: Comprehensive consolidated task prompt and engineering guide for AI agents.
+## Permissions & Privacy
+
+| Permission | Why It Is Requested |
+| :--- | :--- |
+| `INTERNET` / `ACCESS_NETWORK_STATE` | Resolving Instagram media streams and checking GitHub release manifests. |
+| `POST_NOTIFICATIONS` | Displaying real-time background download progress and completion status. |
+| `SYSTEM_ALERT_WINDOW` / `FOREGROUND_SERVICE_SPECIAL_USE` | Optional floating download assistant over Instagram when toggled on by the user. |
+| `BIND_ACCESSIBILITY_SERVICE` | Optional accessibility helper (`InstaAccessibilityService`) used only if you enable 1-tap automated link copy inside Instagram. |
+| `REQUEST_INSTALL_PACKAGES` | Enabling 1-tap self-updates directly inside **Settings -> Check for Updates**. |
+| `WRITE_EXTERNAL_STORAGE` (`maxSdkVersion="28"`) | Legacy storage compatibility on Android 8–9; Android 10–16 uses Scoped `MediaStore` and `MediaStore.createDeleteRequest`. |
+
+> **Privacy Guarantee:** Instagram sign-in inside Browse Feed uses Android's built-in `WebView` `CookieManager` sandbox locally on your device. Session cookies are never exported, logged, or transmitted to any external server.
+
+---
+
+## Project Structure
+
+```text
+InstaSave/
+├── .github/
+│   ├── ISSUE_TEMPLATE/        # Bug report & feature request YAML forms
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   └── workflows/
+│       ├── ci.yml             # Automated PR unit-test & lint checks
+│       └── release.yml        # Signed APK release + manifest automation
+├── app/
+│   └── src/
+│       ├── main/java/com/instadown/assist/
+│       │   ├── browser/       # Sandboxed SPA client, route parser & passive media observer
+│       │   ├── data/          # SQLite repository, MediaStore reconciliation & storage tools
+│       │   ├── download/      # Parallel zero-alloc downloader & lossless .m4a extractor
+│       │   ├── engine/        # Accessibility state machine & dynamic locator
+│       │   ├── overlay/       # Dynamic Island HUD, spring dock & preferences
+│       │   ├── resolver/      # 4-tier composite resolver & circuit breakers
+│       │   └── ui/            # MainActivity, fragments, draggable pill & viewers
+│       └── test/              # JUnit unit tests (resolvers, concurrency, updates, parser)
+├── docs/
+│   ├── images/                # App icon and verified phone screenshots
+│   ├── ARCHITECTURE.md        # Subsystem architecture blueprint
+│   ├── SPECIFICATIONS.md      # Technical specs & state machines
+│   └── VERIFICATION_AND_TESTING.md
+├── release-manifest.json      # Live OTA manifest read by AppUpdateManager
+├── CONTRIBUTING.md
+├── SECURITY.md
+└── LICENSE
+```
+
+---
+
+## Documentation & Community
+
+- [Architecture Blueprint](docs/ARCHITECTURE.md)
+- [Technical Specifications](docs/SPECIFICATIONS.md)
+- [Verification & Physical Testing Guide](docs/VERIFICATION_AND_TESTING.md)
+- [Contributing Guidelines](CONTRIBUTING.md)
+- [Security & Privacy Policy](SECURITY.md)
+- [AI Agent Dossier](AGENTS.md)
+- Licensed under the [MIT License](LICENSE).

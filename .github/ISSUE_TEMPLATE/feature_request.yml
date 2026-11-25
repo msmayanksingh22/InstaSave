@@ -1,0 +1,25 @@
+name: Feature Request
+description: Suggest an enhancement, UX refinement, or new capability for InstaSave.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Workflow Friction
+      description: Describe the workflow gap or UI limitation you ran into.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: How should the feature look or behave? Screenshots or rough sketches are welcome.
+    validations:
+      required: true
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Compatibility & Principles
+      options:
+        - label: Works locally / 100% free (no paid APIs or external proxy servers required)
