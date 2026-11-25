@@ -3,11 +3,11 @@
   "versionCode": 29,
   "versionName": "1.5.0",
   "tag": "v1.5.0",
-  "releaseNotes": "New native-feel Profile Explorer for public creators & post/reel browsing; vivid Desktop/Mobile hybrid media rendering with dark scrim & banner removal; fixed Reel MP4 URL extraction (HTTP 403) & honest save feedback; fixed selective carousel History merge, History card layout overlap, and OTA CI release pipeline.",
+  "releaseNotes": "Automated signed production release.",
   "apkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.5.0/InstaSave-v1.5.0.apk",
   "fallbackApkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
-  "fileSizeBytes": 6309926,
-  "sizeBytes": 6309926,
-  "sha256": "61fea78a96da83e25cf86b9ea3cc034247b2f9a857bcda94e8c2107adcac214f",
-  "publishedAt": "2026-11-25T11:05:06Z"
+  "fileSizeBytes": 6309988,
+  "sizeBytes": 6309988,
+  "sha256": "2bf22350c1d01756054926343f38df44725e603205b986a91eec2ffaa4e3bab7",
+  "publishedAt": "2026-11-25T11:08:59Z"
 }
