@@ -3,11 +3,11 @@
   "versionCode": 33,
   "versionName": "1.6.3",
   "tag": "v1.6.3",
-  "releaseNotes": "Added Browse Feed launcher directly in redesigned 5-slot floating dock, fixed History swipe blank-row bug, made header back button exit Browse Feed immediately, and made the floating action capsule draggable.",
+  "releaseNotes": "Automated signed production release.",
   "apkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.6.3/InstaSave-v1.6.3.apk",
   "fallbackApkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
-  "fileSizeBytes": 6360502,
-  "sizeBytes": 6360502,
-  "sha256": "0375581a9be3785d4f688879de17825d073bf4972080affb1339916496882a60",
-  "publishedAt": "2026-11-25T13:18:00Z"
+  "fileSizeBytes": 6360488,
+  "sizeBytes": 6360488,
+  "sha256": "de58e9d4bbf4b526dd598f9f2bc376433e74481c0f9173a924b1fd28b4d6ee72",
+  "publishedAt": "2026-11-25T13:21:12Z"
 }
