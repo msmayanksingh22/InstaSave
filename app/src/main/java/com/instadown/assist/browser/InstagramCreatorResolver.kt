@@ -33,8 +33,11 @@ object InstagramCreatorResolver {
         preferCreatorProfile: Boolean
     ): ResolvedExplorerTarget = withContext(Dispatchers.IO) {
         val trimmed = input.trim()
+        val parsedRoute = InstagramRouteParser.parse(trimmed)
+        val isMediaInput = InstagramRouteParser.isMediaPostInput(trimmed)
         val directUsername = InstagramRouteParser.extractUsername(trimmed)
-        if (directUsername.isNotBlank()) {
+
+        if (!isMediaInput && directUsername.isNotBlank()) {
             return@withContext ResolvedExplorerTarget(
                 loadUrl = "https://www.instagram.com/$directUsername/",
                 creatorUsername = directUsername,
@@ -47,9 +50,19 @@ object InstagramCreatorResolver {
         if (!preferCreatorProfile) {
             return@withContext ResolvedExplorerTarget(
                 loadUrl = initialUrl,
-                creatorUsername = null,
-                sourcePostUrl = if (InstagramRouteParser.isMediaPostInput(trimmed)) initialUrl else null,
+                creatorUsername = (parsedRoute as? DetectedRoute.MediaPost)?.authorHint ?: directUsername.ifBlank { null },
+                sourcePostUrl = if (isMediaInput) initialUrl else null,
                 resolvedFromPost = false
+            )
+        }
+
+        if (isMediaInput && directUsername.isNotBlank()) {
+            return@withContext ResolvedExplorerTarget(
+                loadUrl = "https://www.instagram.com/$directUsername/",
+                creatorUsername = directUsername,
+                sourcePostUrl = initialUrl,
+                sourceShortcode = (parsedRoute as? DetectedRoute.MediaPost)?.shortcode,
+                resolvedFromPost = true
             )
         }
 

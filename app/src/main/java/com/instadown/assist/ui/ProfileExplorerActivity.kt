@@ -85,6 +85,11 @@ class ProfileExplorerActivity : AppCompatActivity() {
     private var isSignInMode: Boolean = false
     private var pendingAfterSignInTarget: String? = null
     private var pendingAutoRedirectToAuthor: Boolean = false
+    private var isOnDedicatedPostRoute: Boolean = false
+    private var dismissedShortcode: String? = null
+    private var igNavBarVisible: Boolean = false
+    private var igNavBarHeightCssPx: Int = 0
+    private var lastInsetNavBottomPx: Int = 0
 
     private inner class InstaSaveJsBridge {
         @JavascriptInterface
@@ -95,17 +100,80 @@ class ProfileExplorerActivity : AppCompatActivity() {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 currentPostAuthor = clean
                 if (currentPostUrl != null) {
-                    binding.tvProfileUsername.text = "@$clean"
-                    binding.tvProfileStatus.text = "Tap here to open @$clean's profile"
+                    if (isOnDedicatedPostRoute) {
+                        binding.tvProfileUsername.text = "@$clean"
+                        binding.tvProfileStatus.text = "Tap to open @$clean's profile"
+                    }
                     binding.btnPillViewProfile.text = "Profile"
                     binding.btnPillViewProfile.visibility = View.VISIBLE
                     currentPostShortcode?.let { sc ->
-                        binding.tvPillSubtitle.text = "@$clean • Shortcode: $sc"
+                        binding.tvPillSubtitle.text = "@$clean • $sc"
                     }
                 }
                 if (pendingAutoRedirectToAuthor) {
                     pendingAutoRedirectToAuthor = false
                     openCreatorProfileUrl(clean)
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun onRouteDetected(url: String?) {
+            if (url.isNullOrBlank()) return
+            val route = InstagramRouteParser.parse(url)
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                handleRouteChanged(route)
+            }
+        }
+
+        @JavascriptInterface
+        fun onFocusedMediaDetected(url: String?, shortcode: String?, author: String?, isReel: Boolean) {
+            val cleanCode = shortcode?.trim().orEmpty()
+            val cleanUrl = url?.trim().orEmpty()
+            val cleanAuthor = author?.removePrefix("@")?.trim()?.lowercase()?.ifBlank { null }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (isOnDedicatedPostRoute) return@runOnUiThread
+
+                if (cleanCode.isBlank() || cleanUrl.isBlank()) {
+                    currentPostUrl = null
+                    currentPostShortcode = null
+                    dismissedShortcode = null
+                    hideFloatingPill()
+                    return@runOnUiThread
+                }
+
+                if (cleanCode == dismissedShortcode) {
+                    return@runOnUiThread
+                }
+
+                dismissedShortcode = null
+                currentPostUrl = cleanUrl
+                currentPostShortcode = cleanCode
+                if (cleanAuthor != null) {
+                    currentPostAuthor = cleanAuthor
+                }
+                showFloatingPill(
+                    media = DetectedRoute.MediaPost(
+                        canonicalUrl = cleanUrl,
+                        shortcode = cleanCode,
+                        isReel = isReel,
+                        authorHint = cleanAuthor ?: currentPostAuthor
+                    ),
+                    isFeedHighlight = true
+                )
+            }
+        }
+
+        @JavascriptInterface
+        fun onNavBarStateChanged(visible: Boolean, heightCssPx: Int) {
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (igNavBarVisible != visible || igNavBarHeightCssPx != heightCssPx) {
+                    igNavBarVisible = visible
+                    igNavBarHeightCssPx = heightCssPx
+                    applyFloatingPillBottomMargin()
                 }
             }
         }
@@ -200,17 +268,27 @@ class ProfileExplorerActivity : AppCompatActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(binding.rootProfileExplorer) { _, insets ->
             val statusBars = insets.getInsets(WindowInsetsCompat.Type.statusBars())
             val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
+            lastInsetNavBottomPx = navBars.bottom
 
             binding.layoutTopHeader.setPadding(0, statusBars.top, 0, 0)
-            binding.cardFloatingPostAction.let { pill ->
-                val params = pill.layoutParams as? androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
-                if (params != null) {
-                    params.bottomMargin = navBars.bottom + 24
-                    pill.layoutParams = params
-                }
-            }
+            applyFloatingPillBottomMargin()
             insets
         }
+    }
+
+    private fun applyFloatingPillBottomMargin() {
+        val pill = binding.cardFloatingPostAction
+        val params = pill.layoutParams as? androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams ?: return
+        val density = resources.displayMetrics.density
+        val clearanceDp = if (igNavBarVisible && igNavBarHeightCssPx > 0) {
+            igNavBarHeightCssPx + 10
+        } else if (ProfileSessionManager.isInstagramLoggedIn() && !isSignInMode) {
+            64
+        } else {
+            16
+        }
+        params.bottomMargin = lastInsetNavBottomPx + (clearanceDp * density).toInt()
+        pill.layoutParams = params
     }
 
     private fun setupHeader(initialUsername: String) {
@@ -324,20 +402,29 @@ class ProfileExplorerActivity : AppCompatActivity() {
     }
 
     private fun handleRouteChanged(route: DetectedRoute) {
+        applyFloatingPillBottomMargin()
         when (route) {
             is DetectedRoute.MediaPost -> {
+                val previousCode = currentPostShortcode
+                val previousAuthor = if (currentProfileUsername != null) currentProfileUsername else if (previousCode == route.shortcode) currentPostAuthor else null
+                isOnDedicatedPostRoute = true
+                dismissedShortcode = null
                 currentPostUrl = route.canonicalUrl
                 currentPostShortcode = route.shortcode
-                val knownAuthor = currentPostAuthor
-                if (!knownAuthor.isNullOrBlank()) {
-                    binding.tvProfileUsername.text = "@$knownAuthor"
-                    binding.tvProfileStatus.text = "Tap here to view @$knownAuthor's profile"
+                val resolvedAuthor = route.authorHint ?: previousAuthor
+                currentPostAuthor = resolvedAuthor
+                if (!resolvedAuthor.isNullOrBlank()) {
+                    binding.tvProfileUsername.text = "@$resolvedAuthor"
+                    binding.tvProfileStatus.text = "Tap to open @$resolvedAuthor's profile"
                 } else {
-                    binding.tvProfileStatus.text = "Viewing Post: ${route.shortcode}"
+                    binding.tvProfileUsername.text = if (route.isReel) "Instagram Reel" else "Instagram Post"
+                    binding.tvProfileStatus.text = "Viewing ${if (route.isReel) "Reel" else "Post"} • ${route.shortcode}"
                 }
-                showFloatingPill(route)
+                showFloatingPill(route, isFeedHighlight = false)
             }
             is DetectedRoute.Profile -> {
+                isOnDedicatedPostRoute = false
+                dismissedShortcode = null
                 currentPostUrl = null
                 currentPostShortcode = null
                 currentProfileUsername = route.username
@@ -347,7 +434,27 @@ class ProfileExplorerActivity : AppCompatActivity() {
                 binding.tvProfileStatus.text = "Profile Explorer • $modeSuffix"
                 hideFloatingPill()
             }
+            is DetectedRoute.Feed -> {
+                isOnDedicatedPostRoute = false
+                currentProfileUsername = null
+                currentPostAuthor = null
+                if (isSignInMode) {
+                    binding.tvProfileUsername.text = "Instagram Sign In"
+                    binding.tvProfileStatus.text = "Official Login • 100% Local Sandbox"
+                    hideFloatingPill()
+                } else {
+                    binding.tvProfileUsername.text = if (route.isReelsTab) "Instagram Reels" else "Instagram"
+                    binding.tvProfileStatus.text = if (route.isReelsTab) {
+                        "Reels Feed • Scroll to save"
+                    } else {
+                        "Home Feed • Scroll to save posts"
+                    }
+                    // Keep any currently focused feed pill visible until scroll scanner updates it
+                    if (currentPostUrl == null) hideFloatingPill()
+                }
+            }
             is DetectedRoute.Other -> {
+                isOnDedicatedPostRoute = false
                 currentPostUrl = null
                 currentPostShortcode = null
                 if (isSignInMode) {
@@ -359,16 +466,21 @@ class ProfileExplorerActivity : AppCompatActivity() {
         }
     }
 
-    private fun showFloatingPill(media: DetectedRoute.MediaPost) {
-        binding.tvPillTitle.text = if (media.isReel) "Instagram Reel" else "Instagram Post"
-        val authorPrefix = currentPostAuthor?.let { "@$it • " }.orEmpty()
-        binding.tvPillSubtitle.text = "${authorPrefix}Shortcode: ${media.shortcode}"
+    private fun showFloatingPill(media: DetectedRoute.MediaPost, isFeedHighlight: Boolean = false) {
+        val label = if (media.isReel) "Instagram Reel" else "Instagram Post"
+        binding.tvPillTitle.text = if (isFeedHighlight) "$label in view" else label
+        val effectiveAuthor = media.authorHint ?: currentPostAuthor
+        binding.tvPillSubtitle.text = if (!effectiveAuthor.isNullOrBlank()) {
+            "@$effectiveAuthor • ${media.shortcode}"
+        } else {
+            media.shortcode
+        }
         binding.ivPillMediaIcon.setImageResource(
             if (media.isReel) R.drawable.ic_video else R.drawable.ic_download_arrow
         )
-        binding.btnPillSavePost.text = "⬇️ Save Post"
+        binding.btnPillSavePost.text = if (media.isReel) "Save Reel" else "Save Post"
         binding.btnPillSavePost.isEnabled = true
-        binding.btnPillViewProfile.visibility = if (!currentPostAuthor.isNullOrBlank()) View.VISIBLE else View.GONE
+        binding.btnPillViewProfile.visibility = if (!effectiveAuthor.isNullOrBlank()) View.VISIBLE else View.GONE
 
         if (binding.cardFloatingPostAction.visibility != View.VISIBLE) {
             binding.cardFloatingPostAction.alpha = 0f
@@ -377,7 +489,7 @@ class ProfileExplorerActivity : AppCompatActivity() {
             binding.cardFloatingPostAction.animate()
                 .alpha(1f)
                 .translationY(0f)
-                .setDuration(240)
+                .setDuration(220)
                 .start()
         }
     }
@@ -397,23 +509,29 @@ class ProfileExplorerActivity : AppCompatActivity() {
 
     private fun setupPillActions() {
         binding.btnPillDismiss.setOnClickListener {
+            dismissedShortcode = currentPostShortcode
             hideFloatingPill()
         }
 
         binding.btnPillSavePost.setOnClickListener {
             val url = currentPostUrl ?: return@setOnClickListener
+            val targetCode = currentPostShortcode.orEmpty()
             it.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-            binding.btnPillSavePost.text = "✓ Saving..."
+            binding.btnPillSavePost.text = "Saving..."
             binding.btnPillSavePost.isEnabled = false
 
             Toast.makeText(this, "Saving media to Gallery in background...", Toast.LENGTH_SHORT).show()
 
-            // Dispatch download in background application scope
+            // Dispatch download cleanly via isolated anonymous resolver, with read-only rendered DOM fallback for private feed items
             InstaSaveApp.applicationScope.launch {
                 try {
                     val coordinator = InstagramDownloadCoordinator(applicationContext)
-                    val resolveResult = withContext(Dispatchers.IO) {
+                    var resolveResult = withContext(Dispatchers.IO) {
                         coordinator.resolver.resolve(url, validateCdn = false)
+                    }
+
+                    if ((!resolveResult.success || resolveResult.items.isEmpty()) && !isFinishing && !isDestroyed) {
+                        resolveResult = extractRenderedDomFallback(url, targetCode, currentPostAuthor) ?: resolveResult
                     }
 
                     if (resolveResult.success && resolveResult.items.isNotEmpty()) {
@@ -423,8 +541,9 @@ class ProfileExplorerActivity : AppCompatActivity() {
                             preResolvedResult = resolveResult
                         )
                         withContext(Dispatchers.Main) {
+                            if (isFinishing || isDestroyed) return@withContext
                             if (downloadResult.success) {
-                                binding.btnPillSavePost.text = "✓ Saved!"
+                                binding.btnPillSavePost.text = "Saved!"
                             } else {
                                 binding.btnPillSavePost.text = "Retry Save"
                                 binding.btnPillSavePost.isEnabled = true
@@ -437,11 +556,12 @@ class ProfileExplorerActivity : AppCompatActivity() {
                         }
                     } else {
                         withContext(Dispatchers.Main) {
+                            if (isFinishing || isDestroyed) return@withContext
                             binding.btnPillSavePost.text = "Retry Save"
                             binding.btnPillSavePost.isEnabled = true
                             Toast.makeText(
                                 this@ProfileExplorerActivity,
-                                "Resolution failed: ${resolveResult.error?.message ?: "Unknown"}",
+                                "Resolution failed: ${resolveResult.error?.message ?: "Private/protected video stream"}",
                                 Toast.LENGTH_LONG
                             ).show()
                         }
@@ -449,6 +569,7 @@ class ProfileExplorerActivity : AppCompatActivity() {
                 } catch (e: Exception) {
                     AppLogger.w(TAG, "Save failed: ${e.message}")
                     withContext(Dispatchers.Main) {
+                        if (isFinishing || isDestroyed) return@withContext
                         binding.btnPillSavePost.text = "Retry Save"
                         binding.btnPillSavePost.isEnabled = true
                     }
@@ -466,6 +587,89 @@ class ProfileExplorerActivity : AppCompatActivity() {
             val author = currentPostAuthor ?: return@setOnClickListener
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             openCreatorProfileUrl(author)
+        }
+    }
+
+    private suspend fun extractRenderedDomFallback(
+        url: String,
+        shortcode: String,
+        author: String?
+    ): com.instadown.assist.resolver.model.ResolveResult? = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+        runOnUiThread {
+            if (isFinishing || isDestroyed) {
+                if (cont.isActive) cont.resumeWith(Result.success(null))
+                return@runOnUiThread
+            }
+            val script = ProfileSessionManager.buildVisibleDomMediaExtractorScript(shortcode)
+            binding.webViewProfile.evaluateJavascript(script) { raw ->
+                try {
+                    val decoded = org.json.JSONTokener(raw ?: "\"\"").nextValue()?.toString().orEmpty()
+                    val obj = org.json.JSONObject(decoded)
+                    val arr = obj.optJSONArray("urls")
+                    val items = mutableListOf<com.instadown.assist.resolver.model.ResolvedMedia>()
+                    if (arr != null) {
+                        for (i in 0 until arr.length()) {
+                            val entry = arr.optJSONObject(i) ?: continue
+                            val mediaUrl = entry.optString("url")
+                            if (mediaUrl.startsWith("http")) {
+                                val isVid = entry.optBoolean("isVideo")
+                                val mediaType = if (isVid) {
+                                    com.instadown.assist.resolver.model.MediaType.VIDEO
+                                } else {
+                                    com.instadown.assist.resolver.model.MediaType.IMAGE
+                                }
+                                items.add(
+                                    com.instadown.assist.resolver.model.ResolvedMedia(
+                                        index = i,
+                                        mediaType = mediaType,
+                                        mediaUrl = mediaUrl,
+                                        thumbnailUrl = if (!isVid) mediaUrl else null,
+                                        width = null,
+                                        height = null,
+                                        durationMs = null,
+                                        bitRate = null,
+                                        qualityClassification = "Rendered",
+                                        selectionReason = "Visible WebView DOM",
+                                        candidates = listOf(
+                                            com.instadown.assist.resolver.model.MediaCandidate(
+                                                url = mediaUrl,
+                                                width = null,
+                                                height = null,
+                                                isSelected = true
+                                            )
+                                        )
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    val postType = when {
+                        items.size > 1 -> com.instadown.assist.resolver.model.PostType.CAROUSEL
+                        items.firstOrNull()?.mediaType == com.instadown.assist.resolver.model.MediaType.VIDEO ->
+                            com.instadown.assist.resolver.model.PostType.REEL
+                        else -> com.instadown.assist.resolver.model.PostType.PHOTO
+                    }
+                    val res = if (items.isNotEmpty()) {
+                        com.instadown.assist.resolver.model.ResolveResult(
+                            success = true,
+                            originalInputUrl = url,
+                            canonicalUrl = url,
+                            shortcode = shortcode.ifBlank { null },
+                            sourcePathType = if (postType == com.instadown.assist.resolver.model.PostType.REEL) "REEL" else "POST",
+                            postType = postType,
+                            identityVerified = true,
+                            identityVerificationMethod = "WebViewDOM",
+                            items = items,
+                            methodUsed = "WebViewDomFallback",
+                            totalResolutionTimeMs = 10L,
+                            authorUsername = author
+                        )
+                    } else null
+                    if (cont.isActive) cont.resumeWith(Result.success(res))
+                } catch (_: Exception) {
+                    if (cont.isActive) cont.resumeWith(Result.success(null))
+                }
+            }
         }
     }
 

@@ -84,6 +84,7 @@ class ProfileBrowserClient(
         }
         if (url != null) {
             val route = InstagramRouteParser.parse(url)
+            AppLogger.d(TAG, "onPageFinished route=$route url=$url")
             onRouteChanged(route)
         }
     }
@@ -106,6 +107,7 @@ class ProfileBrowserClient(
         }
         if (url != null) {
             val route = InstagramRouteParser.parse(url)
+            AppLogger.d(TAG, "onPageFinished route=$route url=$url")
             onRouteChanged(route)
         }
     }

@@ -6,12 +6,18 @@ sealed interface DetectedRoute {
     data class MediaPost(
         val canonicalUrl: String,
         val shortcode: String,
-        val isReel: Boolean
+        val isReel: Boolean,
+        val authorHint: String? = null
     ) : DetectedRoute
 
     data class Profile(
         val username: String,
         val canonicalUrl: String
+    ) : DetectedRoute
+
+    data class Feed(
+        val canonicalUrl: String,
+        val isReelsTab: Boolean = false
     ) : DetectedRoute
 
     data object Other : DetectedRoute
@@ -39,11 +45,21 @@ object InstagramRouteParser {
         "/oauth/"
     )
 
-    // Matches /p/{code}, /reel/{code}, /reels/{code}, /share/r/{code}, /share/p/{code}
-    private val MEDIA_PATH_REGEX = Regex(
-        pattern = "^/(?:p|reel|reels|share/r|share/p)/([A-Za-z0-9_-]+)(?:/.*)?$",
+    // Matches /share/r/{code} or /share/p/{code}
+    private val SHARE_MEDIA_PATH_REGEX = Regex(
+        pattern = "^/(share/(?:r|p))/([A-Za-z0-9_-]+)(?:/.*)?$",
         option = RegexOption.IGNORE_CASE
     )
+
+    // Matches /p/{code}, /reel/{code}, /reels/{code}, /tv/{code}, /reels/videos/{code},
+    // as well as logged-in creator-prefixed /{username}/p/{code} & /{username}/reel/{code}
+    private val MEDIA_PATH_REGEX = Regex(
+        pattern = "^/(?:([A-Za-z0-9._]+)/)?(p|reel|reels/videos|reels|tv)/([A-Za-z0-9_-]+)(?:/.*)?$",
+        option = RegexOption.IGNORE_CASE
+    )
+
+    // Reserved subpaths under /reels/ that are pages, not shortcodes
+    private val RESERVED_MEDIA_SHORTCODES = setOf("audio", "videos", "effects", "camera")
 
     // Reserved path prefixes that are NOT usernames
     val RESERVED_PATHS = setOf(
@@ -92,26 +108,55 @@ object InstagramRouteParser {
         }
 
         val path = uri.path?.trim() ?: return DetectedRoute.Other
+        val lowerPath = path.lowercase()
 
-        // 1. Check for media post/reel route
-        val mediaMatch = MEDIA_PATH_REGEX.find(path)
-        if (mediaMatch != null) {
-            val shortcode = mediaMatch.groupValues[1]
-            val lowerPath = path.lowercase()
-            val isReel = lowerPath.contains("/reel") || lowerPath.startsWith("/share/r/")
-            val canonicalUrl = when {
-                lowerPath.startsWith("/share/") -> "https://www.instagram.com${path.trimEnd('/')}/"
-                isReel -> "https://www.instagram.com/reel/$shortcode/"
-                else -> "https://www.instagram.com/p/$shortcode/"
-            }
+        // 1. Check /share/r/{token} and /share/p/{token}
+        val shareMatch = SHARE_MEDIA_PATH_REGEX.find(path)
+        if (shareMatch != null) {
+            val token = shareMatch.groupValues[2]
+            val isReel = lowerPath.startsWith("/share/r/")
             return DetectedRoute.MediaPost(
-                canonicalUrl = canonicalUrl,
-                shortcode = shortcode,
-                isReel = isReel
+                canonicalUrl = "https://www.instagram.com${path.trimEnd('/')}/",
+                shortcode = token,
+                isReel = isReel,
+                authorHint = null
             )
         }
 
-        // 2. Check for profile route
+        // 2. Check /p/{code}, /reel/{code}, /reels/{code}, /{user}/p/{code}, /{user}/reel/{code}
+        val mediaMatch = MEDIA_PATH_REGEX.find(path)
+        if (mediaMatch != null) {
+            val possibleUser = mediaMatch.groupValues[1].trim().lowercase()
+            val kind = mediaMatch.groupValues[2].lowercase()
+            val shortcode = mediaMatch.groupValues[3]
+            val authorHint = possibleUser.takeIf { it.isNotBlank() && it !in RESERVED_PATHS }
+            if ((possibleUser !in RESERVED_PATHS || possibleUser == "") &&
+                shortcode.lowercase() !in RESERVED_MEDIA_SHORTCODES
+            ) {
+                val isReel = kind.startsWith("reel")
+                val canonicalUrl = if (isReel) {
+                    "https://www.instagram.com/reel/$shortcode/"
+                } else {
+                    "https://www.instagram.com/p/$shortcode/"
+                }
+                return DetectedRoute.MediaPost(
+                    canonicalUrl = canonicalUrl,
+                    shortcode = shortcode,
+                    isReel = isReel,
+                    authorHint = authorHint
+                )
+            }
+        }
+
+        // 3. Check Home Feed / Reels tab / Explore multi-post feeds
+        if (lowerPath == "/" || lowerPath.isBlank()) {
+            return DetectedRoute.Feed("https://www.instagram.com/", isReelsTab = false)
+        }
+        if (lowerPath == "/reels" || lowerPath == "/reels/" || lowerPath.startsWith("/explore")) {
+            return DetectedRoute.Feed("https://www.instagram.com${path.trimEnd('/')}/", isReelsTab = lowerPath.startsWith("/reels"))
+        }
+
+        // 4. Check for profile route
         val profileMatch = PROFILE_PATH_REGEX.find(path)
         if (profileMatch != null) {
             val username = profileMatch.groupValues[1].lowercase()
@@ -162,7 +207,18 @@ object InstagramRouteParser {
             // Preserve /reel/{code} vs /p/{code}
             if (segments.size >= 2 && segments[0].lowercase() in setOf("p", "reel", "reels", "tv")) {
                 val targetPrefix = if (segments[0].lowercase() in setOf("reel", "reels")) "reel" else "p"
-                return "https://www.instagram.com/$targetPrefix/${segments[1]}/"
+                val code = if (segments[0].lowercase() == "reels" && segments[1].lowercase() == "videos" && segments.size >= 3) {
+                    segments[2]
+                } else {
+                    segments[1]
+                }
+                return "https://www.instagram.com/$targetPrefix/$code/"
+            }
+
+            // Preserve logged-in creator-prefixed /{username}/p/{code} or /{username}/reel/{code}
+            if (segments.size >= 3 && segments[1].lowercase() in setOf("p", "reel", "reels", "tv")) {
+                val targetPrefix = if (segments[1].lowercase() in setOf("reel", "reels")) "reel" else "p"
+                return "https://www.instagram.com/$targetPrefix/${segments[2]}/"
             }
 
             // If it's a profile URL (/{username}/)

@@ -472,9 +472,9 @@ class HomeFragment : Fragment() {
         )
         binding.dotServicePill.backgroundTintList = ColorStateList.valueOf(pillDotColor)
         binding.tvServicePillText.text = when {
-            isRunning && isA11y -> "Assistant: ON"
-            isRunning -> "Setup needed"
-            else -> "Assistant: OFF"
+            isRunning && isA11y -> "Assist: ON"
+            isRunning -> "Setup"
+            else -> "Assist: OFF"
         }
         binding.tvServicePillText.setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0)
         binding.pillServiceToggle.contentDescription =

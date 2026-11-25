@@ -13,32 +13,37 @@
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
         android:paddingTop="8dp"
-        android:paddingBottom="100dp">
+        android:paddingBottom="96dp">
 
-        <!-- Top Header: Logo, Title, Live Service Status Pill -->
+        <!-- Top Header: Logo, Title, Compact Account Pill, Live Assistant Pill -->
         <ImageView
             android:id="@+id/ivHomeLogo"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:src="@drawable/ic_app_logo"
             android:contentDescription="@string/app_name"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            android:layout_marginTop="6dp" />
+            android:layout_marginTop="4dp" />
 
         <TextView
             android:id="@+id/tvHomeTitle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:maxLines="1"
+            android:singleLine="true"
             android:ellipsize="end"
-            android:layout_marginStart="10dp"
-            android:layout_marginEnd="8dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="6dp"
             android:text="@string/app_name"
-            android:textSize="20sp"
+            android:textSize="18sp"
+            app:autoSizeTextType="uniform"
+            app:autoSizeMinTextSize="14sp"
+            app:autoSizeMaxTextSize="18sp"
+            app:autoSizeStepGranularity="0.5sp"
             android:textStyle="bold"
             android:letterSpacing="-0.02"
             android:textColor="@color/text_primary"
@@ -51,11 +56,11 @@
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/pillIgAccount"
             android:layout_width="wrap_content"
-            android:layout_height="34dp"
-            android:layout_marginEnd="8dp"
+            android:layout_height="30dp"
+            android:layout_marginEnd="6dp"
             android:clickable="true"
             android:focusable="true"
-            app:cardCornerRadius="17dp"
+            app:cardCornerRadius="15dp"
             app:cardBackgroundColor="@color/card_bg"
             app:strokeColor="@color/card_stroke"
             app:strokeWidth="1dp"
@@ -70,31 +75,33 @@
                 android:layout_height="match_parent"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:paddingStart="9dp"
-                android:paddingEnd="10dp">
+                android:paddingStart="7dp"
+                android:paddingEnd="8dp">
 
                 <ImageView
                     android:id="@+id/ivHomeAccountIcon"
-                    android:layout_width="15dp"
-                    android:layout_height="15dp"
+                    android:layout_width="13dp"
+                    android:layout_height="13dp"
                     android:src="@drawable/ic_person"
                     app:tint="@color/text_secondary"
                     android:importantForAccessibility="no" />
 
                 <View
                     android:id="@+id/dotHomeAccount"
-                    android:layout_width="6dp"
-                    android:layout_height="6dp"
-                    android:layout_marginStart="5dp"
+                    android:layout_width="5dp"
+                    android:layout_height="5dp"
+                    android:layout_marginStart="4dp"
                     android:background="@drawable/dot_indicator" />
 
                 <TextView
                     android:id="@+id/tvHomeAccountBadge"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="5dp"
+                    android:layout_marginStart="4dp"
+                    android:maxLines="1"
+                    android:singleLine="true"
                     android:text="Sign in"
-                    android:textSize="11sp"
+                    android:textSize="10.5sp"
                     android:textStyle="bold"
                     android:textColor="@color/text_secondary" />
             </LinearLayout>
@@ -104,10 +111,10 @@
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/pillServiceToggle"
             android:layout_width="wrap_content"
-            android:layout_height="34dp"
+            android:layout_height="30dp"
             android:clickable="true"
             android:focusable="true"
-            app:cardCornerRadius="17dp"
+            app:cardCornerRadius="15dp"
             app:cardBackgroundColor="@color/card_bg"
             app:strokeColor="@color/card_stroke"
             app:strokeWidth="1dp"
@@ -122,24 +129,26 @@
                 android:layout_height="match_parent"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:paddingStart="10dp"
-                android:paddingEnd="12dp">
+                android:paddingStart="8dp"
+                android:paddingEnd="9dp">
 
                 <View
                     android:id="@+id/dotServicePill"
-                    android:layout_width="8dp"
-                    android:layout_height="8dp"
+                    android:layout_width="6dp"
+                    android:layout_height="6dp"
                     android:background="@drawable/dot_indicator" />
 
                 <TextView
                     android:id="@+id/tvServicePillText"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Start assistant"
-                    android:textSize="11.5sp"
+                    android:maxLines="1"
+                    android:singleLine="true"
+                    android:text="Assist: OFF"
+                    android:textSize="10.5sp"
                     android:textStyle="bold"
                     android:textColor="@color/text_primary"
-                    android:layout_marginStart="7dp" />
+                    android:layout_marginStart="5dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -181,7 +190,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:background="@drawable/bg_hero_card"
-                android:padding="16dp">
+                android:padding="14dp">
 
                 <!-- Title & Art Horizontal Row -->
                 <LinearLayout
@@ -269,7 +278,7 @@
                         android:padding="10dp" />
                 </com.google.android.material.textfield.TextInputLayout>
 
-                <!-- Action Row: Save Media (Primary) + Copy Image (Secondary) — Exact Mathematical 50/50 Symmetry -->
+                <!-- Action Row: Save Media (Primary) + Copy Image (Secondary) — Adaptive Symmetry -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -280,17 +289,26 @@
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnQuickDownload"
                         android:layout_width="0dp"
-                        android:layout_height="44dp"
+                        android:layout_height="42dp"
                         android:layout_weight="1"
                         android:layout_marginEnd="4dp"
+                        android:minWidth="0dp"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
                         android:text="Save media"
                         app:icon="@drawable/ic_download_arrow"
                         app:iconGravity="textStart"
-                        app:iconPadding="6dp"
+                        app:iconPadding="5dp"
+                        app:iconSize="16dp"
                         android:textSize="13sp"
+                        app:autoSizeTextType="uniform"
+                        app:autoSizeMinTextSize="10.5sp"
+                        app:autoSizeMaxTextSize="13sp"
+                        app:autoSizeStepGranularity="0.5sp"
                         android:textStyle="bold"
+                        android:maxLines="1"
                         android:singleLine="true"
                         android:ellipsize="end"
                         android:textAllCaps="false"
@@ -304,17 +322,26 @@
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnCopyImage"
                         android:layout_width="0dp"
-                        android:layout_height="44dp"
+                        android:layout_height="42dp"
                         android:layout_weight="1"
                         android:layout_marginStart="4dp"
+                        android:minWidth="0dp"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
                         android:text="Copy image"
                         app:icon="@drawable/ic_copy_link"
                         app:iconGravity="textStart"
-                        app:iconPadding="6dp"
+                        app:iconPadding="5dp"
+                        app:iconSize="16dp"
                         android:textSize="13sp"
+                        app:autoSizeTextType="uniform"
+                        app:autoSizeMinTextSize="10.5sp"
+                        app:autoSizeMaxTextSize="13sp"
+                        app:autoSizeStepGranularity="0.5sp"
                         android:textStyle="bold"
+                        android:maxLines="1"
                         android:singleLine="true"
                         android:ellipsize="end"
                         android:textAllCaps="false"
@@ -333,7 +360,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:paddingHorizontal="10dp"
-                    android:paddingVertical="6dp"
+                    android:paddingVertical="5dp"
                     android:background="@drawable/card_background"
                     android:backgroundTint="@color/surface_inset"
                     android:text="Creator detected: @username"
@@ -349,16 +376,25 @@
                     android:id="@+id/btnExploreProfile"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="match_parent"
-                    android:layout_height="40dp"
+                    android:layout_height="39dp"
                     android:layout_marginTop="8dp"
+                    android:minWidth="0dp"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
                     android:insetTop="0dp"
                     android:insetBottom="0dp"
                     android:text="Explore Creator Profile"
                     app:icon="@drawable/ic_explore_grid"
                     app:iconGravity="textStart"
-                    app:iconPadding="8dp"
+                    app:iconPadding="7dp"
+                    app:iconSize="16dp"
                     android:textSize="12.5sp"
+                    app:autoSizeTextType="uniform"
+                    app:autoSizeMinTextSize="10.5sp"
+                    app:autoSizeMaxTextSize="12.5sp"
+                    app:autoSizeStepGranularity="0.5sp"
                     android:textStyle="bold"
+                    android:maxLines="1"
                     android:singleLine="true"
                     android:ellipsize="end"
                     android:textAllCaps="false"
@@ -406,14 +442,8 @@
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/rvRecentDownloads"
             android:layout_width="0dp"
-            android:layout_height="172dp"
+            android:layout_height="168dp"
             android:layout_marginTop="8dp"
-            android:orientation="horizontal"
-            android:overScrollMode="never"
-            android:clipToPadding="false"
-            app:layout_constraintTop_toBottomOf="@id/tvRecentHeader"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
             android:orientation="horizontal"
             android:overScrollMode="never"
             android:clipToPadding="false"

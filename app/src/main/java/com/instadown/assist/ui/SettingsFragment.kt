@@ -144,7 +144,7 @@ class SettingsFragment : Fragment() {
             binding.tvIgSessionDetails.text =
                 "Signed in locally inside WebView sandbox using your phone's authentic profile. Downloaders remain isolated and anonymous."
             binding.btnIgBrowseFeed.visibility = View.VISIBLE
-            binding.btnIgSignInOut.text = "Account & Sign Out"
+            binding.btnIgSignInOut.text = "Sign Out"
             binding.btnIgSignInOut.setTextColor(ContextCompat.getColor(ctx, R.color.status_green))
             binding.btnIgSignInOut.strokeColor = ContextCompat.getColorStateList(ctx, R.color.status_green)
         } else {

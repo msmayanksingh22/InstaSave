@@ -213,27 +213,102 @@ object ProfileSessionManager {
                     }
 
                     // Report post creator handle back to native toolbar/pill when viewing any post/reel
+                    function extractMediaFromHref(href) {
+                        if (!href) return null;
+                        const cleanPath = href.replace(/^https?:\/\/[^/]+/i, '').split('?')[0];
+                        const m = cleanPath.match(/^\/(?:([A-Za-z0-9._]+)\/)?(p|reel|reels\/videos|reels|tv)\/([A-Za-z0-9_-]+)(?:\/|$)/i);
+                        if (!m) return null;
+                        const code = m[3];
+                        if (!code || ['audio','videos','effects','camera'].indexOf(code.toLowerCase()) !== -1) return null;
+                        const kind = m[2].toLowerCase();
+                        const isReel = kind.indexOf('reel') === 0;
+                        const prefixUser = (m[1] || '').toLowerCase();
+                        const reserved = ['p','reel','reels','tv','share','explore','accounts','direct','stories','about','legal','developer','terms','privacy','static','api'];
+                        const author = (prefixUser && reserved.indexOf(prefixUser) === -1) ? prefixUser : '';
+                        return {
+                            url: 'https://www.instagram.com/' + (isReel ? 'reel' : 'p') + '/' + code + '/',
+                            shortcode: code,
+                            isReel: isReel,
+                            author: author
+                        };
+                    }
+
+                    function extractAuthorFromContainer(rootEl) {
+                        if (!rootEl) return '';
+                        const reserved = ['p','reel','reels','tv','share','explore','accounts','direct','stories','about','legal','developer','terms','privacy','static','api'];
+                        const links = rootEl.querySelectorAll('header a[href^="/"], a[href^="/"]');
+                        for (let i = 0; i < links.length; i++) {
+                            const href = links[i].getAttribute('href') || '';
+                            const seg = href.split('?')[0].split('/').filter(Boolean);
+                            if (seg.length === 1) {
+                                const candidate = seg[0].toLowerCase();
+                                if (reserved.indexOf(candidate) === -1 && /^[a-z0-9._]{1,30}$/.test(candidate)) {
+                                    return candidate;
+                                }
+                            }
+                        }
+                        return '';
+                    }
+
+                    function findMediaMetaInFiber(el) {
+                        try {
+                            if (!el) return null;
+                            const visited = new Set();
+                            const nodes = [el].concat(Array.from(el.querySelectorAll('a, time, video, img')).slice(0, 12));
+                            for (let ni = 0; ni < nodes.length; ni++) {
+                                const node = nodes[ni];
+                                const key = Object.keys(node).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactProps$'));
+                                if (!key) continue;
+                                let curr = node[key];
+                                for (let step = 0; step < 12 && curr; step++) {
+                                    const props = curr.memoizedProps || curr;
+                                    if (props && typeof props === 'object' && !visited.has(props)) {
+                                        visited.add(props);
+                                        const media = props.media || props.post || props.item || (props.code && props.pk ? props : null);
+                                        if (media && typeof media === 'object' && typeof media.code === 'string' && media.code.length >= 5) {
+                                            const isReel = media.media_type === 2 || media.product_type === 'clips' || !!media.video_versions;
+                                            const u = media.user && media.user.username ? media.user.username : '';
+                                            return {
+                                                url: 'https://www.instagram.com/' + (isReel ? 'reel' : 'p') + '/' + media.code + '/',
+                                                shortcode: media.code,
+                                                isReel: isReel,
+                                                author: u
+                                            };
+                                        }
+                                    }
+                                    curr = curr.return || null;
+                                }
+                            }
+                        } catch(e) {}
+                        return null;
+                    }
+
                     function reportPostAuthor() {
                         try {
                             if (!window.InstaSaveBridge || !window.InstaSaveBridge.onPostAuthorDetected) return;
-                            const isPost = currentPath.indexOf('/p/') !== -1 ||
-                                currentPath.indexOf('/reel/') !== -1 ||
-                                currentPath.indexOf('/reels/') !== -1;
-                            if (!isPost) return;
+                            const livePath = window.location.pathname || '/';
+                            const pathMedia = extractMediaFromHref(livePath);
+                            if (!pathMedia) return;
 
-                            let foundAuthor = '';
+                            let foundAuthor = pathMedia.author || '';
                             const reserved = ['p','reel','reels','tv','share','explore','accounts','direct','stories','about','legal','developer','terms','privacy','static','api'];
-                            const headerLinks = document.querySelectorAll('article header a[href^="/"], main a[href^="/"]');
-                            for (let i = 0; i < headerLinks.length; i++) {
-                                const href = headerLinks[i].getAttribute('href') || '';
-                                const seg = href.split('?')[0].split('/').filter(Boolean);
-                                if (seg.length === 1) {
-                                    const candidate = seg[0].toLowerCase();
-                                    if (reserved.indexOf(candidate) === -1 && /^[a-z0-9._]{1,30}$/.test(candidate)) {
-                                        foundAuthor = candidate;
-                                        break;
+                            if (!foundAuthor && pathMedia.isReel) {
+                                // Scope strictly to the currently centered active <video> slide so hidden feed tabs don't leak prior authors
+                                const vpH = window.innerHeight || 800;
+                                const vids = Array.from(document.querySelectorAll('video'));
+                                for (let vi = 0; vi < vids.length && !foundAuthor; vi++) {
+                                    const r = vids[vi].getBoundingClientRect();
+                                    if (r.height > vpH * 0.35 && r.top < vpH * 0.65 && r.bottom > vpH * 0.35) {
+                                        let box = vids[vi].parentElement;
+                                        for (let d = 0; d < 7 && box && !foundAuthor; d++) {
+                                            foundAuthor = extractAuthorFromContainer(box);
+                                            box = box.parentElement;
+                                        }
                                     }
                                 }
+                            }
+                            if (!foundAuthor) {
+                                foundAuthor = extractAuthorFromContainer(document.querySelector('article')) || extractAuthorFromContainer(document.querySelector('main'));
                             }
                             if (!foundAuthor) {
                                 const scripts = document.querySelectorAll('script');
@@ -248,17 +323,160 @@ object ProfileSessionManager {
                                     }
                                 }
                             }
-                            if (foundAuthor && window.__instasave_last_author !== currentPath + ':' + foundAuthor) {
-                                window.__instasave_last_author = currentPath + ':' + foundAuthor;
+                            if (foundAuthor && window.__instasave_last_author !== livePath + ':' + foundAuthor) {
+                                window.__instasave_last_author = livePath + ':' + foundAuthor;
                                 window.InstaSaveBridge.onPostAuthorDetected(foundAuthor);
                             }
 
-                            // Give post view bottom scroll clearance above floating pill
                             const mainEl = document.querySelector('main') || document.querySelector('article');
                             if (mainEl) {
-                                mainEl.style.setProperty('padding-bottom', '140px', 'important');
+                                mainEl.style.setProperty('padding-bottom', '145px', 'important');
                             }
                         } catch(e) {}
+                    }
+
+                    function reportBottomNavState() {
+                        try {
+                            if (!window.InstaSaveBridge || !window.InstaSaveBridge.onNavBarStateChanged) return;
+                            let navHeight = 0;
+                            const candidates = document.querySelectorAll('nav, div[role="tablist"], div');
+                            for (let i = 0; i < candidates.length; i++) {
+                                const el = candidates[i];
+                                const rect = el.getBoundingClientRect();
+                                if (rect.height >= 42 && rect.height <= 90 && rect.width >= window.innerWidth * 0.85 &&
+                                    rect.bottom >= window.innerHeight - 16 && rect.top >= window.innerHeight - 110) {
+                                    const hasNavLinks = el.querySelector('a[href="/"], a[href="/explore/"], a[href="/reels/"]');
+                                    if (hasNavLinks) {
+                                        navHeight = Math.max(navHeight, Math.round(rect.height));
+                                    }
+                                }
+                            }
+                            const key = (navHeight > 0 ? '1:' : '0:') + navHeight;
+                            if (window.__instasave_last_nav_state !== key) {
+                                window.__instasave_last_nav_state = key;
+                                window.InstaSaveBridge.onNavBarStateChanged(navHeight > 0, navHeight);
+                            }
+                        } catch(e) {}
+                    }
+
+                    function scanVisibleFeedMedia() {
+                        try {
+                            if (!window.InstaSaveBridge || !window.InstaSaveBridge.onFocusedMediaDetected) return;
+                            const path = window.location.pathname || '/';
+                            if (extractMediaFromHref(path)) return;
+                            if (path.indexOf('/accounts/') !== -1 || path.indexOf('/direct/') !== -1) {
+                                window.InstaSaveBridge.onFocusedMediaDetected('', '', '', false);
+                                return;
+                            }
+
+                            const vpH = window.innerHeight || 800;
+                            const focusY = vpH * 0.42;
+                            let bestInfo = null;
+
+                            // 1. Check active feed <article> cards (Home Feed / Profile Feed)
+                            const articles = Array.from(document.querySelectorAll('article'));
+                            let bestArticle = null;
+                            let bestScore = -1;
+                            for (let i = 0; i < articles.length; i++) {
+                                const r = articles[i].getBoundingClientRect();
+                                const visibleH = Math.min(r.bottom, vpH - 56) - Math.max(r.top, 0);
+                                if (visibleH < 120) continue;
+                                const dist = Math.abs((r.top + r.bottom) / 2 - focusY);
+                                const score = visibleH - dist * 0.45;
+                                if (score > bestScore) {
+                                    bestScore = score;
+                                    bestArticle = articles[i];
+                                }
+                            }
+
+                            if (bestArticle) {
+                                const links = bestArticle.querySelectorAll('a[href]');
+                                for (let i = 0; i < links.length; i++) {
+                                    const parsed = extractMediaFromHref(links[i].getAttribute('href') || '');
+                                    if (parsed) {
+                                        bestInfo = parsed;
+                                        break;
+                                    }
+                                }
+                                if (!bestInfo) {
+                                    bestInfo = findMediaMetaInFiber(bestArticle);
+                                }
+                                if (bestInfo && !bestInfo.author) {
+                                    bestInfo.author = extractAuthorFromContainer(bestArticle);
+                                }
+                            }
+
+                            // 2. Check active fullscreen Reel on /reels/ when <article> isn't used
+                            if (!bestInfo && path.indexOf('/reels') === 0) {
+                                const vids = Array.from(document.querySelectorAll('video'));
+                                for (let i = 0; i < vids.length; i++) {
+                                    const r = vids[i].getBoundingClientRect();
+                                    if (r.height > vpH * 0.35 && r.top < vpH * 0.65 && r.bottom > vpH * 0.35) {
+                                        let box = vids[i].parentElement;
+                                        for (let depth = 0; depth < 8 && box && !bestInfo; depth++) {
+                                            const links = box.querySelectorAll('a[href]');
+                                            for (let li = 0; li < links.length; li++) {
+                                                const parsed = extractMediaFromHref(links[li].getAttribute('href') || '');
+                                                if (parsed) { bestInfo = parsed; break; }
+                                            }
+                                            if (!bestInfo) bestInfo = findMediaMetaInFiber(box);
+                                            if (bestInfo && !bestInfo.author) {
+                                                bestInfo.author = extractAuthorFromContainer(box);
+                                            }
+                                            box = box.parentElement;
+                                        }
+                                        if (bestInfo) break;
+                                    }
+                                }
+                            }
+
+                            const sig = bestInfo ? (bestInfo.shortcode + ':' + (bestInfo.author || '')) : 'NONE';
+                            if (window.__instasave_last_focused !== sig) {
+                                window.__instasave_last_focused = sig;
+                                if (bestInfo) {
+                                    window.InstaSaveBridge.onFocusedMediaDetected(bestInfo.url, bestInfo.shortcode, bestInfo.author || '', !!bestInfo.isReel);
+                                } else {
+                                    window.InstaSaveBridge.onFocusedMediaDetected('', '', '', false);
+                                }
+                            }
+                        } catch(e) {}
+                    }
+
+                    // Hook SPA history transitions (pushState, replaceState, popstate) once for instant route capture
+                    if (!window.__instasave_history_hooked) {
+                        window.__instasave_history_hooked = true;
+                        const notifyRoute = function() {
+                            try {
+                                if (window.InstaSaveBridge && window.InstaSaveBridge.onRouteDetected) {
+                                    window.InstaSaveBridge.onRouteDetected(window.location.href);
+                                }
+                                setTimeout(function() {
+                                    reportBottomNavState();
+                                    reportPostAuthor();
+                                    scanVisibleFeedMedia();
+                                }, 180);
+                            } catch(e) {}
+                        };
+                        const origPush = history.pushState;
+                        const origReplace = history.replaceState;
+                        history.pushState = function() {
+                            const ret = origPush.apply(this, arguments);
+                            notifyRoute();
+                            return ret;
+                        };
+                        history.replaceState = function() {
+                            const ret = origReplace.apply(this, arguments);
+                            notifyRoute();
+                            return ret;
+                        };
+                        window.addEventListener('popstate', notifyRoute);
+                        window.addEventListener('scroll', function() {
+                            clearTimeout(window.__instasave_scroll_timer);
+                            window.__instasave_scroll_timer = setTimeout(function() {
+                                reportBottomNavState();
+                                scanVisibleFeedMedia();
+                            }, 180);
+                        }, { passive: true });
                     }
 
                     // 2. Dismiss Instagram App Promotion Modals, Backdrop Scrims & Signup Bars
@@ -271,7 +489,17 @@ object ProfileSessionManager {
                         });
 
                         if (isLoggedIn) {
-                            // Keep native logged-in modals, comments, save prompts & scroll untouched!
+                            // Hide only Instagram's sticky "Use the app" promo banner at the bottom; keep native modals/nav untouched
+                            document.querySelectorAll('div, section').forEach(function(el) {
+                                if (el.closest && (el.closest('nav') || el.closest('article') || el.closest('[role="dialog"]'))) return;
+                                if (el.querySelector && el.querySelector('article, nav, video')) return;
+                                const r = el.getBoundingClientRect();
+                                if (r.height < 28 || r.height > 84 || r.top < window.innerHeight - 170) return;
+                                const t = (el.innerText || '').trim().toLowerCase();
+                                if (t === 'use the app' || t.indexOf('use the app') === 0 || t === 'open app' || t === 'open instagram') {
+                                    el.style.setProperty('display', 'none', 'important');
+                                }
+                            });
                             return;
                         }
 
@@ -372,7 +600,9 @@ object ProfileSessionManager {
                     }
 
                     cleanupModals();
+                    reportBottomNavState();
                     reportPostAuthor();
+                    scanVisibleFeedMedia();
 
                     // 3. Build & Render Native Post Grid directly below bio when logged out
                     function renderProfileGrid() {
@@ -573,6 +803,11 @@ object ProfileSessionManager {
                         const observer = new MutationObserver(function(mutations) {
                             cleanupModals();
                             reportPostAuthor();
+                            clearTimeout(window.__instasave_mut_timer);
+                            window.__instasave_mut_timer = setTimeout(function() {
+                                reportBottomNavState();
+                                scanVisibleFeedMedia();
+                            }, 320);
                             renderProfileGrid();
                         });
                         observer.observe(document.documentElement || document.body, {
@@ -584,6 +819,88 @@ object ProfileSessionManager {
             })();
         """.trimIndent()
         webView.evaluateJavascript(js, null)
+    }
+
+    /**
+     * Read-only extraction of currently rendered post/carousel media URLs inside the visible WebView DOM.
+     * Used ONLY as a fallback when a user explicitly taps "Save" on a private/follow-only feed item
+     * that isolated anonymous resolvers cannot access. Zero network requests or cookie reads.
+     */
+    fun buildVisibleDomMediaExtractorScript(targetShortcode: String): String {
+        val safeCode = targetShortcode.replace("\"", "").replace("'", "")
+        return """
+            (function() {
+                try {
+                    const code = "$safeCode";
+                    const vpH = window.innerHeight || 800;
+                    let container = null;
+                    if (code) {
+                        const links = document.querySelectorAll('a[href*="' + code + '"]');
+                        for (let i = 0; i < links.length; i++) {
+                            const art = links[i].closest('article');
+                            if (art) { container = art; break; }
+                        }
+                    }
+                    if (!container) {
+                        const articles = Array.from(document.querySelectorAll('article'));
+                        let bestScore = -1;
+                        articles.forEach(function(art) {
+                            const r = art.getBoundingClientRect();
+                            const vis = Math.min(r.bottom, vpH) - Math.max(r.top, 0);
+                            if (vis > bestScore) { bestScore = vis; container = art; }
+                        });
+                    }
+                    if (!container) container = document.querySelector('main') || document.body;
+                    if (!container) return JSON.stringify({urls: []});
+
+                    const urls = [];
+                    const seen = new Set();
+                    function pushUrl(u, isVideo) {
+                        if (!u || typeof u !== 'string') return;
+                        if (u.indexOf('http') !== 0 || u.indexOf('blob:') === 0) return;
+                        if (!seen.has(u)) {
+                            seen.add(u);
+                            urls.push({url: u, isVideo: !!isVideo});
+                        }
+                    }
+
+                    container.querySelectorAll('video').forEach(function(v) {
+                        const src = v.currentSrc || v.src || '';
+                        if (src && src.indexOf('blob:') !== 0) pushUrl(src, true);
+                        v.querySelectorAll('source').forEach(function(s) {
+                            if (s.src && s.src.indexOf('blob:') !== 0) pushUrl(s.src, true);
+                        });
+                    });
+
+                    container.querySelectorAll('img').forEach(function(img) {
+                        const w = img.naturalWidth || img.width || 0;
+                        const h = img.naturalHeight || img.height || 0;
+                        if (w < 280 || h < 280) return;
+                        if (Math.abs(w - h) <= 4 && w <= 320 && img.closest && img.closest('header')) return;
+                        let bestUrl = img.currentSrc || img.src || '';
+                        const ss = img.getAttribute('srcset') || '';
+                        if (ss) {
+                            let maxW = 0;
+                            ss.split(',').forEach(function(part) {
+                                const seg = part.trim().split(/\s+/);
+                                if (seg.length >= 2) {
+                                    const pw = parseInt(seg[1], 10) || 0;
+                                    if (pw > maxW && seg[0].indexOf('http') === 0) {
+                                        maxW = pw;
+                                        bestUrl = seg[0];
+                                    }
+                                }
+                            });
+                        }
+                        pushUrl(bestUrl, false);
+                    });
+
+                    return JSON.stringify({urls: urls});
+                } catch(e) {
+                    return JSON.stringify({urls: []});
+                }
+            })();
+        """.trimIndent()
     }
 
     /**

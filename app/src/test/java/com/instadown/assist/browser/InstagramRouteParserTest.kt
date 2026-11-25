@@ -33,6 +33,17 @@ class InstagramRouteParserTest {
         assertTrue(profile is DetectedRoute.Profile)
         assertEquals("anjaliandsnehal", (profile as DetectedRoute.Profile).username)
 
+        val profilePost = InstagramRouteParser.parse("https://www.instagram.com/shirleysetia/reel/DfcINfctGJj/")
+        assertTrue(profilePost is DetectedRoute.MediaPost)
+        profilePost as DetectedRoute.MediaPost
+        assertEquals("DfcINfctGJj", profilePost.shortcode)
+        assertTrue(profilePost.isReel)
+        assertEquals("shirleysetia", profilePost.authorHint)
+        assertEquals("https://www.instagram.com/reel/DfcINfctGJj/", profilePost.canonicalUrl)
+
+        val feed = InstagramRouteParser.parse("https://www.instagram.com/")
+        assertTrue(feed is DetectedRoute.Feed)
+
         val login = InstagramRouteParser.parse("https://www.instagram.com/accounts/login/")
         assertEquals(DetectedRoute.Other, login)
     }
