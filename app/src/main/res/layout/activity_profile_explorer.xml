@@ -40,7 +40,7 @@
                     android:layout_gravity="center"
                     android:src="@drawable/ic_arrow_back"
                     app:tint="@color/text_primary"
-                    android:contentDescription="Back" />
+                    android:contentDescription="Exit to InstaSave" />
             </FrameLayout>
 
             <!-- Title & Subtitle Info (Tappable when creator handle detected) -->
@@ -201,8 +201,8 @@
             app:cornerRadius="12dp" />
     </LinearLayout>
 
-    <!-- Minimalist Floating Action Capsule Pill -->
-    <com.google.android.material.card.MaterialCardView
+    <!-- Minimalist Movable Floating Action Capsule Pill -->
+    <com.instadown.assist.ui.DraggableFloatingPillView
         android:id="@+id/cardFloatingPostAction"
         android:layout_width="match_parent"
         android:layout_height="46dp"
@@ -222,8 +222,18 @@
             android:layout_height="match_parent"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:paddingStart="10dp"
+            android:paddingStart="8dp"
             android:paddingEnd="6dp">
+
+            <!-- Subtle Drag Handle Indicator -->
+            <ImageView
+                android:id="@+id/ivPillDragHandle"
+                android:layout_width="14dp"
+                android:layout_height="24dp"
+                android:layout_marginEnd="2dp"
+                android:src="@drawable/ic_drag_grip"
+                app:tint="#78809B"
+                android:contentDescription="Drag to move floating bar" />
 
             <!-- Compact Clickable Creator / Media Context Chip -->
             <LinearLayout
@@ -339,6 +349,6 @@
                     android:importantForAccessibility="no" />
             </FrameLayout>
         </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
+    </com.instadown.assist.ui.DraggableFloatingPillView>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

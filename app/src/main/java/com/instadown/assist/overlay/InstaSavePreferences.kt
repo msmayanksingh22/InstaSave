@@ -63,6 +63,7 @@ class InstaSavePreferences(context: Context) {
         private const val KEY_AUDIO_EXTRACTION_ENABLED = "audio_extraction_enabled"
         private const val KEY_CLIPBOARD_AUTO_START = "clipboard_auto_start_enabled"
         private const val KEY_SIGN_IN_PROMPT_DISMISSED = "sign_in_prompt_dismissed"
+        private const val KEY_FLOATING_PILL_OFFSET_DP = "explorer_floating_pill_offset_dp"
 
         const val DEFAULT_SAVE_LOCATION = "Pictures/InstaSave/"
 
@@ -153,4 +154,8 @@ class InstaSavePreferences(context: Context) {
     var hasDismissedSignInPrompt: Boolean
         get() = prefs.getBoolean(KEY_SIGN_IN_PROMPT_DISMISSED, false)
         set(value) = prefs.edit().putBoolean(KEY_SIGN_IN_PROMPT_DISMISSED, value).apply()
+
+    var floatingPillOffsetDp: Float
+        get() = prefs.getFloat(KEY_FLOATING_PILL_OFFSET_DP, 0f)
+        set(value) = prefs.edit().putFloat(KEY_FLOATING_PILL_OFFSET_DP, value).apply()
 }

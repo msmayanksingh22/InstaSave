@@ -110,7 +110,7 @@ class SettingsFragment : Fragment() {
 
     private fun setupInstagramAccountCard() {
         binding.btnIgBrowseFeed.setOnClickListener {
-            ProfileExplorerActivity.start(requireContext(), "https://www.instagram.com/", preferCreatorProfile = false)
+            ProfileExplorerActivity.openFeed(requireContext())
         }
         binding.btnIgSignInOut.setOnClickListener {
             if (com.instadown.assist.browser.ProfileSessionManager.isInstagramLoggedIn()) {

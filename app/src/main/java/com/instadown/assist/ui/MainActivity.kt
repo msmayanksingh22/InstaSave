@@ -139,14 +139,10 @@ class MainActivity : AppCompatActivity() {
         } else {
             activeTabId = savedInstanceState.getInt(KEY_ACTIVE_TAB, R.id.nav_home)
             backToHomeCallback.isEnabled = (activeTabId != R.id.nav_home)
+            updateBottomDockSelection(activeTabId)
         }
 
-        binding.bottomNavigation.setOnItemSelectedListener { item ->
-            if (item.itemId != activeTabId) {
-                switchTab(item.itemId)
-            }
-            true
-        }
+        setupBottomDock()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -187,7 +183,7 @@ class MainActivity : AppCompatActivity() {
             // Hide Floating Nav Deck while typing so URL box and button stay visible
             binding.floatingNavContainer.isVisible = !isKeyboardOpen
             val density = resources.displayMetrics.density
-            val baseBottomMargin = (16 * density).toInt()
+            val baseBottomMargin = (12 * density).toInt()
             val navParams = binding.floatingNavContainer.layoutParams as? androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
             if (navParams != null) {
                 navParams.bottomMargin = baseBottomMargin + sysBars.bottom
@@ -206,8 +202,93 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun setupBottomDock() {
+        val tabMap = listOf(
+            R.id.nav_home to binding.navHome,
+            R.id.nav_gallery to binding.navGallery,
+            R.id.nav_history to binding.navHistory,
+            R.id.nav_settings to binding.navSettings
+        )
+        tabMap.forEach { (tabId, container) ->
+            container.setOnClickListener { view ->
+                view.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                if (tabId != activeTabId) {
+                    switchTab(tabId)
+                }
+            }
+        }
+        binding.navFeed.setOnClickListener { view ->
+            view.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+            view.animate().scaleX(0.94f).scaleY(0.94f).setDuration(80).withEndAction {
+                view.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+            }.start()
+            launchBrowseFeed()
+        }
+        updateBottomDockSelection(activeTabId)
+    }
+
+    private fun launchBrowseFeed() {
+        val loggedIn = com.instadown.assist.browser.ProfileSessionManager.isInstagramLoggedIn()
+        if (!loggedIn &&
+            !prefs.hasDismissedSignInPrompt &&
+            supportFragmentManager.findFragmentByTag(InstagramSignInSheet.TAG) == null
+        ) {
+            InstagramSignInSheet.newInstance(
+                pendingTarget = "https://www.instagram.com/",
+                onContinueAnonymously = {
+                    if (!isFinishing && !isDestroyed) {
+                        ProfileExplorerActivity.openFeed(this)
+                    }
+                }
+            ).show(supportFragmentManager, InstagramSignInSheet.TAG)
+        } else {
+            ProfileExplorerActivity.openFeed(this)
+        }
+    }
+
+    private fun updateBottomDockSelection(selectedTabId: Int) {
+        val activeColor = androidx.core.content.ContextCompat.getColor(this, R.color.insta_pink)
+        val activeLabelColor = androidx.core.content.ContextCompat.getColor(this, R.color.text_primary)
+        val inactiveColor = androidx.core.content.ContextCompat.getColor(this, R.color.text_muted)
+
+        fun applyTabState(
+            isSelected: Boolean,
+            pill: View,
+            icon: android.widget.ImageView,
+            label: TextView
+        ) {
+            if (isSelected) {
+                pill.setBackgroundResource(R.drawable.bg_nav_active_pill)
+                icon.setColorFilter(activeColor)
+                label.setTextColor(activeLabelColor)
+                label.setTypeface(null, android.graphics.Typeface.BOLD)
+                pill.animate().scaleX(1.04f).scaleY(1.04f).setDuration(110).withEndAction {
+                    pill.animate().scaleX(1f).scaleY(1f).setDuration(110).start()
+                }.start()
+            } else {
+                pill.background = null
+                icon.setColorFilter(inactiveColor)
+                label.setTextColor(inactiveColor)
+                label.setTypeface(null, android.graphics.Typeface.NORMAL)
+            }
+        }
+
+        applyTabState(selectedTabId == R.id.nav_home, binding.pillNavHome, binding.iconNavHome, binding.labelNavHome)
+        applyTabState(selectedTabId == R.id.nav_gallery, binding.pillNavGallery, binding.iconNavGallery, binding.labelNavGallery)
+        applyTabState(selectedTabId == R.id.nav_history, binding.pillNavHistory, binding.iconNavHistory, binding.labelNavHistory)
+        applyTabState(selectedTabId == R.id.nav_settings, binding.pillNavSettings, binding.iconNavSettings, binding.labelNavSettings)
+    }
+
     fun navigateToTab(tabId: Int) {
-        binding.bottomNavigation.selectedItemId = tabId
+        if (tabId == R.id.nav_feed) {
+            launchBrowseFeed()
+            return
+        }
+        if (tabId != activeTabId) {
+            switchTab(tabId)
+        } else {
+            updateBottomDockSelection(tabId)
+        }
     }
 
     private fun switchTab(targetTabId: Int) {
@@ -234,6 +315,7 @@ class MainActivity : AppCompatActivity() {
         }.commit()
 
         activeTabId = targetTabId
+        updateBottomDockSelection(targetTabId)
         ViewCompat.requestApplyInsets(binding.rootMainContainer)
         backToHomeCallback.isEnabled = (targetTabId != R.id.nav_home)
     }

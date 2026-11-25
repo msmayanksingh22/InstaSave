@@ -61,6 +61,17 @@ class ProfileExplorerActivity : AppCompatActivity() {
             context.startActivity(intent)
         }
 
+        fun openFeed(context: Context) {
+            val intent = Intent(context, ProfileExplorerActivity::class.java).apply {
+                putExtra(EXTRA_TARGET_URL, "https://www.instagram.com/")
+                putExtra(EXTRA_RAW_INPUT, "https://www.instagram.com/")
+                putExtra(EXTRA_USERNAME, "")
+                putExtra(EXTRA_PREFER_CREATOR_PROFILE, false)
+                putExtra(EXTRA_SIGN_IN_MODE, false)
+            }
+            context.startActivity(intent)
+        }
+
         fun startSignIn(context: Context, afterSignInTarget: String? = null) {
             val intent = Intent(context, ProfileExplorerActivity::class.java).apply {
                 putExtra(EXTRA_TARGET_URL, LOGIN_URL)
@@ -77,6 +88,7 @@ class ProfileExplorerActivity : AppCompatActivity() {
     }
 
     private lateinit var binding: ActivityProfileExplorerBinding
+    private val prefs by lazy { com.instadown.assist.overlay.InstaSavePreferences(applicationContext) }
     private var currentPostUrl: String? = null
     private var currentPostShortcode: String? = null
     private var currentPostAuthor: String? = null
@@ -288,15 +300,27 @@ class ProfileExplorerActivity : AppCompatActivity() {
         }
         params.bottomMargin = lastInsetNavBottomPx + (clearanceDp * density).toInt()
         pill.layoutParams = params
+        pill.post {
+            if (!isFinishing && !isDestroyed) {
+                pill.clampCurrentPosition()
+            }
+        }
     }
 
     private fun setupHeader(initialUsername: String) {
-        val displayUser = if (initialUsername.isNotBlank()) {
-            if (initialUsername.startsWith("@")) initialUsername else "@$initialUsername"
-        } else {
-            "Profile Explorer"
+        val isFeedRoot = initialUsername.isBlank() &&
+            !isSignInMode &&
+            initialUrl.trimEnd('/') == "https://www.instagram.com"
+        val displayUser = when {
+            initialUsername.isNotBlank() ->
+                if (initialUsername.startsWith("@")) initialUsername else "@$initialUsername"
+            isFeedRoot -> "Instagram"
+            else -> "Profile Explorer"
         }
         binding.tvProfileUsername.text = displayUser
+        if (isFeedRoot) {
+            binding.tvProfileStatus.text = "Home Feed • Scroll to save posts"
+        }
 
         binding.layoutHeaderTitle.setOnClickListener {
             val author = currentPostAuthor
@@ -305,8 +329,10 @@ class ProfileExplorerActivity : AppCompatActivity() {
             }
         }
 
+        // Top header back button always exits Browse Feed / Profile Explorer in one tap.
+        // Android system/gesture Back continues stepping backward inside WebView history.
         binding.btnBack.setOnClickListener {
-            handleBackPress()
+            finish()
         }
 
         binding.btnRefresh.setOnClickListener {
@@ -484,32 +510,72 @@ class ProfileExplorerActivity : AppCompatActivity() {
         binding.btnPillSavePost.text = "Save"
         binding.btnPillSavePost.isEnabled = true
 
-        if (binding.cardFloatingPostAction.visibility != View.VISIBLE) {
-            binding.cardFloatingPostAction.alpha = 0f
-            binding.cardFloatingPostAction.translationY = 64f
-            binding.cardFloatingPostAction.visibility = View.VISIBLE
-            binding.cardFloatingPostAction.animate()
+        val pill = binding.cardFloatingPostAction
+        pill.animate().cancel()
+        if (pill.visibility != View.VISIBLE) {
+            pill.alpha = 0f
+            pill.scaleX = 0.96f
+            pill.scaleY = 0.96f
+            pill.visibility = View.VISIBLE
+            pill.post {
+                if (!isFinishing && !isDestroyed) {
+                    pill.clampCurrentPosition()
+                }
+            }
+            pill.animate()
                 .alpha(1f)
-                .translationY(0f)
-                .setDuration(200)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(180)
                 .start()
+        } else {
+            pill.alpha = 1f
+            pill.scaleX = 1f
+            pill.scaleY = 1f
+            pill.clampCurrentPosition()
         }
     }
 
     private fun hideFloatingPill() {
-        if (binding.cardFloatingPostAction.visibility == View.VISIBLE) {
-            binding.cardFloatingPostAction.animate()
+        val pill = binding.cardFloatingPostAction
+        if (pill.visibility == View.VISIBLE) {
+            pill.animate().cancel()
+            pill.animate()
                 .alpha(0f)
-                .translationY(64f)
-                .setDuration(160)
+                .scaleX(0.96f)
+                .scaleY(0.96f)
+                .setDuration(150)
                 .withEndAction {
-                    binding.cardFloatingPostAction.visibility = View.GONE
+                    pill.visibility = View.GONE
                 }
                 .start()
         }
     }
 
     private fun setupPillActions() {
+        val pill = binding.cardFloatingPostAction
+        val density = resources.displayMetrics.density
+        pill.verticalBoundsProvider = {
+            val topHeaderBottom = binding.layoutTopHeader.bottom.toFloat()
+            val rootBottom = binding.rootProfileExplorer.height.toFloat()
+            val minTopPx = topHeaderBottom + (8f * density)
+            val maxBottomPx = rootBottom - lastInsetNavBottomPx - (10f * density)
+            val viewTop = pill.top.toFloat()
+            val viewBottom = pill.bottom.toFloat()
+            if (pill.height == 0 || rootBottom <= 0f) {
+                -2000f to 200f
+            } else {
+                val minTy = (minTopPx - viewTop).coerceAtMost(0f)
+                val maxTy = (maxBottomPx - viewBottom).coerceAtLeast(0f)
+                minTy to maxTy
+            }
+        }
+        pill.onDragSettled = { ty ->
+            val currentDensity = resources.displayMetrics.density
+            prefs.floatingPillOffsetDp = if (currentDensity > 0f) ty / currentDensity else 0f
+        }
+        pill.setPreferredTranslationY(prefs.floatingPillOffsetDp * density, applyImmediately = false)
+
         binding.btnPillDismiss.setOnClickListener {
             dismissedShortcode = currentPostShortcode
             hideFloatingPill()

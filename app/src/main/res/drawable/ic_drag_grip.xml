@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="14dp"
+    android:height="20dp"
+    android:viewportWidth="14"
+    android:viewportHeight="20">
+    <!-- Minimalist 6-dot drag grip -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M4.2,4.5A1.2,1.2 0 1,0 4.2,6.9A1.2,1.2 0 1,0 4.2,4.5Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M9.8,4.5A1.2,1.2 0 1,0 9.8,6.9A1.2,1.2 0 1,0 9.8,4.5Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M4.2,8.8A1.2,1.2 0 1,0 4.2,11.2A1.2,1.2 0 1,0 4.2,8.8Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M9.8,8.8A1.2,1.2 0 1,0 9.8,11.2A1.2,1.2 0 1,0 9.8,8.8Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M4.2,13.1A1.2,1.2 0 1,0 4.2,15.5A1.2,1.2 0 1,0 4.2,13.1Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M9.8,13.1A1.2,1.2 0 1,0 9.8,15.5A1.2,1.2 0 1,0 9.8,13.1Z" />
+</vector>

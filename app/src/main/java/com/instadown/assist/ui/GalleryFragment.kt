@@ -162,9 +162,8 @@ class GalleryFragment : Fragment() {
                 exitSelectionMode()
             }
             ActivityCompat.setExitSharedElementCallback(requireActivity(), null)
-        } else if (_binding != null) {
+        } else if (_binding != null && isResumed) {
             bindExitRemapper()
-            loadGallery()
         }
     }
 

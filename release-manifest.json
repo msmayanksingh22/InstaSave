@@ -1,13 +1,13 @@
 {
   "packageName": "com.instadown.assist",
-  "versionCode": 32,
-  "versionName": "1.6.2",
-  "tag": "v1.6.2",
-  "releaseNotes": "Automated signed production release.",
-  "apkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.6.2/InstaSave-v1.6.2.apk",
+  "versionCode": 33,
+  "versionName": "1.6.3",
+  "tag": "v1.6.3",
+  "releaseNotes": "Added Browse Feed launcher directly in redesigned 5-slot floating dock, fixed History swipe blank-row bug, made header back button exit Browse Feed immediately, and made the floating action capsule draggable.",
+  "apkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.6.3/InstaSave-v1.6.3.apk",
   "fallbackApkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
-  "fileSizeBytes": 6348166,
-  "sizeBytes": 6348166,
-  "sha256": "05da35cab89a80c1fedc562ebcd18880907b6a80d567ec330212e6ca2f1550b2",
-  "publishedAt": "2026-11-25T13:00:26Z"
+  "fileSizeBytes": 6360502,
+  "sizeBytes": 6360502,
+  "sha256": "0375581a9be3785d4f688879de17825d073bf4972080affb1339916496882a60",
+  "publishedAt": "2026-11-25T13:18:00Z"
 }

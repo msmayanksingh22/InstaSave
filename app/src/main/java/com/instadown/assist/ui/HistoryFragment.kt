@@ -180,17 +180,25 @@ class HistoryFragment : Fragment() {
     }
 
     private fun setupSwipeGestures() {
+        val density = resources.displayMetrics.density
+        val triggerThresholdPx = 56f * density
+        val maxPullPx = 104f * density
+
         val swipeCallback = object : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT) {
             private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
             private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
-                textSize = 12f * resources.displayMetrics.density
+                textSize = 11.5f * density
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                 textAlign = Paint.Align.CENTER
             }
             private val shareIcon = ContextCompat.getDrawable(requireContext(), R.drawable.ic_share)
             private val optionsIcon = ContextCompat.getDrawable(requireContext(), R.drawable.ic_more_vert)
-            private val cornerRadius = 16f * resources.displayMetrics.density
+            private val cornerRadius = 16f * density
+
+            private var activeSwipePos: Int = RecyclerView.NO_POSITION
+            private var lastSwipeDx: Float = 0f
+            private var thresholdHapticFired: Boolean = false
 
             override fun onMove(
                 recyclerView: RecyclerView,
@@ -198,35 +206,60 @@ class HistoryFragment : Fragment() {
                 target: RecyclerView.ViewHolder
             ): Boolean = false
 
-            override fun getSwipeThreshold(viewHolder: RecyclerView.ViewHolder): Float = 0.35f
+            // Never permanently remove/detach rows on swipe so cancelling or closing
+            // the options/share sheet never leaves a blank card slot.
+            override fun getSwipeThreshold(viewHolder: RecyclerView.ViewHolder): Float = 2.0f
+
+            override fun getSwipeEscapeVelocity(defaultValue: Float): Float = Float.MAX_VALUE
+
+            override fun getSwipeVelocityThreshold(defaultValue: Float): Float = Float.MAX_VALUE
+
+            override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
+                super.onSelectedChanged(viewHolder, actionState)
+                if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE && viewHolder != null) {
+                    activeSwipePos = viewHolder.bindingAdapterPosition
+                    lastSwipeDx = 0f
+                    thresholdHapticFired = false
+                    binding.swipeRefreshHistory.isEnabled = false
+                } else if (actionState == ItemTouchHelper.ACTION_STATE_IDLE) {
+                    binding.swipeRefreshHistory.isEnabled = true
+                    val pos = activeSwipePos
+                    val dx = lastSwipeDx
+                    activeSwipePos = RecyclerView.NO_POSITION
+                    lastSwipeDx = 0f
+                    thresholdHapticFired = false
+
+                    if (pos != RecyclerView.NO_POSITION && kotlin.math.abs(dx) >= triggerThresholdPx) {
+                        val record = adapter.getItem(pos)
+                        if (record != null) {
+                            binding.rvHistoryList.post {
+                                if (_binding == null || !isAdded) return@post
+                                if (dx > 0f) {
+                                    shareHistoryRecord(record)
+                                } else {
+                                    showItemOptionsDialog(record)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
                 super.clearView(recyclerView, viewHolder)
                 getDefaultUIUtil().clearView(viewHolder.itemView)
                 viewHolder.itemView.translationX = 0f
+                viewHolder.itemView.alpha = 1f
             }
 
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
-                val position = viewHolder.bindingAdapterPosition
-                val record = adapter.getItem(position)
                 getDefaultUIUtil().clearView(viewHolder.itemView)
                 viewHolder.itemView.translationX = 0f
-                if (record == null) return
-                adapter.notifyItemChanged(position)
-                viewHolder.itemView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-
-                if (direction == ItemTouchHelper.RIGHT) {
-                    try {
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, record.sourceUrl)
-                        }
-                        startActivity(Intent.createChooser(shareIntent, "Share Link"))
-                    } catch (_: Exception) {
-                        Toast.makeText(requireContext(), "Failed to share link", Toast.LENGTH_SHORT).show()
+                val pos = viewHolder.bindingAdapterPosition
+                if (pos != RecyclerView.NO_POSITION) {
+                    binding.rvHistoryList.post {
+                        if (_binding != null && isAdded) adapter.notifyItemChanged(pos)
                     }
-                } else if (direction == ItemTouchHelper.LEFT) {
-                    showItemOptionsDialog(record)
                 }
             }
 
@@ -244,35 +277,60 @@ class HistoryFragment : Fragment() {
                 val itemBottom = itemView.bottom.toFloat()
                 val itemHeight = itemBottom - itemTop
 
-                if (dX > 0) {
-                    bgPaint.color = Color.parseColor("#16233B")
+                val clampedDx = when {
+                    dX > 0f -> kotlin.math.min(dX * 0.75f, maxPullPx)
+                    dX < 0f -> kotlin.math.max(dX * 0.75f, -maxPullPx)
+                    else -> 0f
+                }
+
+                if (isCurrentlyActive) {
+                    lastSwipeDx = clampedDx
+                    val crossed = kotlin.math.abs(clampedDx) >= triggerThresholdPx
+                    if (crossed && !thresholdHapticFired) {
+                        thresholdHapticFired = true
+                        itemView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    } else if (!crossed && thresholdHapticFired) {
+                        thresholdHapticFired = false
+                    }
+                }
+
+                if (clampedDx > 0f) {
+                    bgPaint.color = if (clampedDx >= triggerThresholdPx) {
+                        Color.parseColor("#1D3357")
+                    } else {
+                        Color.parseColor("#16233B")
+                    }
                     val bgRect = RectF(
                         itemView.left.toFloat(),
                         itemTop + 8f,
-                        itemView.left + dX,
+                        itemView.left + clampedDx + cornerRadius,
                         itemBottom - 8f
                     )
                     c.drawRoundRect(bgRect, cornerRadius, cornerRadius, bgPaint)
 
                     shareIcon?.let { icon ->
-                        val iconSize = (24f * resources.displayMetrics.density).toInt()
-                        val iconTop = (itemTop + (itemHeight - iconSize) / 2f).toInt()
-                        val iconLeft = (itemView.left + 24f * resources.displayMetrics.density).toInt()
+                        val iconSize = (22f * density).toInt()
+                        val iconTop = (itemTop + (itemHeight - iconSize) / 2f - 6f * density).toInt()
+                        val iconLeft = (itemView.left + 22f * density).toInt()
                         icon.setBounds(iconLeft, iconTop, iconLeft + iconSize, iconTop + iconSize)
-                        icon.setTint(Color.parseColor("#3897F0"))
+                        icon.setTint(Color.parseColor("#38BDF8"))
                         icon.draw(c)
 
                         c.drawText(
                             "Share",
                             iconLeft + iconSize / 2f,
-                            iconTop + iconSize + 14f * resources.displayMetrics.density,
+                            iconTop + iconSize + 15f * density,
                             textPaint
                         )
                     }
-                } else if (dX < 0) {
-                    bgPaint.color = Color.parseColor("#2A1D34")
+                } else if (clampedDx < 0f) {
+                    bgPaint.color = if (clampedDx <= -triggerThresholdPx) {
+                        Color.parseColor("#3B2148")
+                    } else {
+                        Color.parseColor("#2A1D34")
+                    }
                     val bgRect = RectF(
-                        itemView.right + dX,
+                        itemView.right + clampedDx - cornerRadius,
                         itemTop + 8f,
                         itemView.right.toFloat(),
                         itemBottom - 8f
@@ -280,9 +338,9 @@ class HistoryFragment : Fragment() {
                     c.drawRoundRect(bgRect, cornerRadius, cornerRadius, bgPaint)
 
                     optionsIcon?.let { icon ->
-                        val iconSize = (24f * resources.displayMetrics.density).toInt()
-                        val iconTop = (itemTop + (itemHeight - iconSize) / 2f).toInt()
-                        val iconRight = (itemView.right - 24f * resources.displayMetrics.density).toInt()
+                        val iconSize = (22f * density).toInt()
+                        val iconTop = (itemTop + (itemHeight - iconSize) / 2f - 6f * density).toInt()
+                        val iconRight = (itemView.right - 22f * density).toInt()
                         icon.setBounds(iconRight - iconSize, iconTop, iconRight, iconTop + iconSize)
                         icon.setTint(ContextCompat.getColor(requireContext(), R.color.insta_pink))
                         icon.draw(c)
@@ -290,16 +348,28 @@ class HistoryFragment : Fragment() {
                         c.drawText(
                             "Options",
                             iconRight - iconSize / 2f,
-                            iconTop + iconSize + 14f * resources.displayMetrics.density,
+                            iconTop + iconSize + 15f * density,
                             textPaint
                         )
                     }
                 }
 
-                super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive)
+                super.onChildDraw(c, recyclerView, viewHolder, clampedDx, dY, actionState, isCurrentlyActive)
             }
         }
         ItemTouchHelper(swipeCallback).attachToRecyclerView(binding.rvHistoryList)
+    }
+
+    private fun shareHistoryRecord(record: DownloadRecord) {
+        try {
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, record.sourceUrl)
+            }
+            startActivity(Intent.createChooser(shareIntent, "Share Link"))
+        } catch (_: Exception) {
+            Toast.makeText(requireContext(), "Failed to share link", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun setupListeners() {
@@ -405,6 +475,7 @@ class HistoryFragment : Fragment() {
         }
 
         if (filtered.isEmpty()) {
+            adapter.submitList(emptyList())
             binding.swipeRefreshHistory.visibility = View.GONE
             binding.layoutEmptyHistory.visibility = View.VISIBLE
             binding.tvEmptyHistoryDescription.text = when (currentFilter) {
@@ -624,18 +695,8 @@ class HistoryFragment : Fragment() {
     }
 
     private fun showItemOptionsDialog(record: DownloadRecord) {
+        if (childFragmentManager.findFragmentByTag(HistoryItemOptionsBottomSheet.TAG) != null) return
         val sheet = HistoryItemOptionsBottomSheet.newInstance(record.id)
-        sheet.setListener(object : HistoryItemOptionsBottomSheet.Listener {
-            override fun onHistoryChanged() {
-                loadHistory(forceReconcile = true)
-            }
-            override fun onReDownloadRequested(rec: DownloadRecord) {
-                showReDownloadDialogOrSheet(rec)
-            }
-            override fun onConsentRequired(downloadId: Long, intentSender: IntentSender, itemIds: List<Long>) {
-                launchDeleteConsent(downloadId, intentSender, itemIds)
-            }
-        })
         sheet.show(childFragmentManager, HistoryItemOptionsBottomSheet.TAG)
     }
 

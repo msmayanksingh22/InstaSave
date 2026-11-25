@@ -44,9 +44,18 @@ class DownloadHistoryAdapter(
     private val progressStates = mutableMapOf<Long, CardProgressState>()
 
     fun submitList(newItems: List<DownloadRecord>) {
+        val oldItems = items.toList()
+        val diff = androidx.recyclerview.widget.DiffUtil.calculateDiff(object : androidx.recyclerview.widget.DiffUtil.Callback() {
+            override fun getOldListSize(): Int = oldItems.size
+            override fun getNewListSize(): Int = newItems.size
+            override fun areItemsTheSame(oldPos: Int, newPos: Int): Boolean =
+                oldItems[oldPos].id == newItems[newPos].id
+            override fun areContentsTheSame(oldPos: Int, newPos: Int): Boolean =
+                oldItems[oldPos] == newItems[newPos]
+        })
         items.clear()
         items.addAll(newItems)
-        notifyDataSetChanged()
+        diff.dispatchUpdatesTo(this)
     }
 
     fun getItem(position: Int): DownloadRecord? = items.getOrNull(position)
