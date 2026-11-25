@@ -3,11 +3,11 @@
   "versionCode": 30,
   "versionName": "1.6.0",
   "tag": "v1.6.0",
-  "releaseNotes": "v1.6.0: Stops unwanted clipboard auto-downloads unless explicitly enabled, resolves copied post links directly to the creator's full profile with a 1-tap Profile button on posts, and adds an optional local WebView Instagram sign-in flow with device-matched mobile identity.",
+  "releaseNotes": "Automated signed production release.",
   "apkUrl": "https://github.com/msmayanksingh22/InstaSave/releases/download/v1.6.0/InstaSave-v1.6.0.apk",
   "fallbackApkUrl": "https://raw.githubusercontent.com/msmayanksingh22/InstaSave/main/app-release.apk",
-  "fileSizeBytes": 6334701,
-  "sizeBytes": 6334701,
-  "sha256": "8e0a0a52c1c2696d105df978e95bcae6072c87b5986c0b30f8747ea923917b48",
-  "publishedAt": "2026-11-25T11:40:00Z"
+  "fileSizeBytes": 6334703,
+  "sizeBytes": 6334703,
+  "sha256": "22525d46d7344aba0fa243a8efab895baca3006433944cfb7367df6c8bbcb5b2",
+  "publishedAt": "2026-11-25T11:42:35Z"
 }
